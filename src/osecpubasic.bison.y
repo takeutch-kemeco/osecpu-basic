@@ -188,12 +188,14 @@ void init_all(void)
 {
         puts("#include \"osecpu_ask.h\"\n");
 
-        puts("SInt32 msk15:R06;");
-        puts("msk15 = 1;");
-        puts("msk15 <<= 15;");
-        puts("msk15 -= 1;\n");
+        puts("SInt32 one15:R06;");
+        puts("one15 = 1;");
+        puts("one15 <<= 15;");
 
-        puts("SInt32 tmp:R07;\n");
+        puts("SInt32 msk15:R07;");
+        puts("msk15 = one15 - 1;\n");
+
+        puts("SInt32 tmp:R08;\n");
 
         puts(init_heap);
         puts(init_stack);
@@ -406,12 +408,42 @@ operation
         ;
 
 comparison
-        : expression __OPE_COMPARISON expression {}
-        | expression __OPE_NOT_COMPARISON expression {}
-        | expression __OPE_ISSMALL expression {}
-        | expression __OPE_ISSMALL_COMP expression {}
-        | expression __OPE_ISLARGE expression {}
-        | expression __OPE_ISLARGE_COMP expression {}
+        : expression __OPE_COMPARISON expression {
+                puts(read_eoe_arg);
+
+                puts("if (fixL == fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts(push_stack);
+        }
+        | expression __OPE_NOT_COMPARISON expression {
+                puts(read_eoe_arg);
+
+                puts("if (fixL != fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts(push_stack);
+        }
+        | expression __OPE_ISSMALL expression {
+                puts(read_eoe_arg);
+
+                puts("if (fixL < fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts(push_stack);
+        }
+        | expression __OPE_ISSMALL_COMP expression {
+                puts(read_eoe_arg);
+
+                puts("if (fixL <= fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts(push_stack);
+        }
+        | expression __OPE_ISLARGE expression {
+                puts(read_eoe_arg);
+
+                puts("if (fixL > fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts(push_stack);
+        }
+        | expression __OPE_ISLARGE_COMP expression {
+                puts(read_eoe_arg);
+
+                puts("if (fixL >= fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts(push_stack);
+        }
         ;
 
 read_variable
