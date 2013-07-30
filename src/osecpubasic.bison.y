@@ -95,7 +95,8 @@ static void write_heap(char* dst, char* iden)
 
         sprintf(dst, "heap_seek = %d;\n"
                      "heap_seek += heap_offset;\n"
-                     "heap_seek >>= 12;\n"
+                     "heap_seek >>= 15;\n"
+                     "heap_seek &= msk15;\n"
                      "PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);\n",
                      v->head_ptr);
 }
@@ -116,7 +117,8 @@ static void read_heap(char* dst, char* iden)
 
         sprintf(dst, "heap_seek = %d;\n"
                      "heap_seek += heap_offset;\n"
-                     "heap_seek >>= 12;\n"
+                     "heap_seek >>= 15;\n"
+                     "heap_seek &= msk15;\n"
                      "PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);\n",
                      v->head_ptr);
 }
@@ -164,8 +166,14 @@ static char init_stack[] = {
 void init_all(void)
 {
         puts("#include \"osecpu_ask.h\"\n");
-        puts("SInt32 msk:R06;");
-        puts("SInt32 tmp:R07;");
+
+        puts("SInt32 msk15:R06;");
+        puts("msk15 = 1;");
+        puts("msk15 <<= 15;");
+        puts("msk15 -= 1;\n");
+
+        puts("SInt32 tmp:R07;\n");
+
         puts(init_heap);
         puts(init_stack);
 }
@@ -248,19 +256,15 @@ func_print
         : __FUNC_PRINT expression {
                 puts(pop_stack);
 
-                puts("msk = 1;");
-                puts("msk <<= 15;");
-                puts("msk -= 1;");
-
                 puts("tmp = stack_socket;");
                 puts("tmp >>= 15;");
-                puts("tmp &= msk;");
+                puts("tmp &= msk15;");
                 puts("junkApi_putStringDec('\\1', tmp, 6, 1);");
 
                 puts("junkApi_putConstString('.');");
 
                 puts("tmp = stack_socket;");
-                puts("tmp &= msk;");
+                puts("tmp &= msk15;");
                 puts("junkApi_putStringDec('\\1', tmp, 6, 1);\n");
         }
         ;
