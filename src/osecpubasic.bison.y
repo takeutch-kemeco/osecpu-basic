@@ -94,9 +94,9 @@ static void write_heap(char* dst, char* iden)
         }
 
         sprintf(dst, "heap_seek = %d;\n"
+                     "heap_offset >>= 15;\n"
+                     "heap_offset &= msk15;\n"
                      "heap_seek += heap_offset;\n"
-                     "heap_seek >>= 15;\n"
-                     "heap_seek &= msk15;\n"
                      "PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);\n",
                      v->head_ptr);
 }
@@ -116,9 +116,9 @@ static void read_heap(char* dst, char* iden)
         }
 
         sprintf(dst, "heap_seek = %d;\n"
+                     "heap_offset >>= 15;\n"
+                     "heap_offset &= msk15;\n"
                      "heap_seek += heap_offset;\n"
-                     "heap_seek >>= 15;\n"
-                     "heap_seek &= msk15;\n"
                      "PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);\n",
                      v->head_ptr);
 }
