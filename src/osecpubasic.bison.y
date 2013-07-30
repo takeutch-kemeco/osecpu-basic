@@ -146,9 +146,12 @@ static char push_stack[] = {
 /* スタックから int32 をポップする
  * ポップした値は stack_socket に格納される。
  */
-static char pop_stack[] = {
-        "stack_head--;\n"
+#define __POP_STACK                                                     \
+        "stack_head--;\n"                                               \
         "PALMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);\n"
+
+static char pop_stack[] = {
+        __POP_STACK
 };
 
 /* スタックの初期化
@@ -159,6 +162,24 @@ static char init_stack[] = {
         "SInt32 stack_socket:R10;\n"
         "SInt32 stack_head:R11;\n"
         "stack_head = 0;\n"
+};
+
+/* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
+ */
+static char read_eoe_arg[] = {
+        __POP_STACK
+        "fixR = stack_socket;"
+        __POP_STACK
+        "fixL = stack_socket;"
+};
+
+/* read_eoe_arg 用変数の初期化
+ */
+static char init_eoe_arg[] = {
+        "SInt32 fixL:R20;"
+        "SInt32 fixR:R21;"
+        "SInt32 fixLx:R22;"
+        "SInt32 fixRx:R23;"
 };
 
 /* 全ての初期化
@@ -174,13 +195,9 @@ void init_all(void)
 
         puts("SInt32 tmp:R07;\n");
 
-        puts("SInt32 fix0:R20;");
-        puts("SInt32 fix1:R21;");
-        puts("SInt32 fix0x:R22;");
-        puts("SInt32 fix1x:R23;\n");
-
         puts(init_heap);
         puts(init_stack);
+        puts(init_eoe_arg);
 }
 
 %}
@@ -328,23 +345,17 @@ const_variable
 
 operation
         : expression __OPE_ADD expression {
-                puts(pop_stack);
-                puts("fix1 = stack_socket;");
-                puts(pop_stack);
-                puts("fix0 = stack_socket;");
+                puts(read_eoe_arg);
 
-                puts("stack_socket = fix0;");
-                puts("stack_socket += fix1;");
+                puts("stack_socket = fixL;");
+                puts("stack_socket += fixR;");
                 puts(push_stack);
         }
         | expression __OPE_SUB expression {
-                puts(pop_stack);
-                puts("fix1 = stack_socket;");
-                puts(pop_stack);
-                puts("fix0 = stack_socket;");
+                puts(read_eoe_arg);
 
-                puts("stack_socket = fix0;");
-                puts("stack_socket -= fix1;");
+                puts("stack_socket = fixL;");
+                puts("stack_socket -= fixR;");
                 puts(push_stack);
         }
         | expression __OPE_MUL expression {}
