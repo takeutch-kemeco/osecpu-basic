@@ -391,11 +391,18 @@ operation
                 puts("stack_socket ^= tmp;");
                 puts(push_stack);
         }
+        | __OPE_ADD expression %prec __OPE_PLUS {
+                /* 何もしない */
+        }
+        | __OPE_SUB expression %prec __OPE_MINUS {
+                puts(pop_stack);
 
-        | __OPE_ADD expression %prec __OPE_PLUS {}
-        | __OPE_SUB expression %prec __OPE_MINUS {}
-
-        | __LB expression __RB {}
+                puts("stack_socket = -stack_socket;");
+                puts(push_stack);
+        }
+        | __LB expression __RB {
+                /* 何もしない */
+        }
         ;
 
 comparison
