@@ -174,6 +174,11 @@ void init_all(void)
 
         puts("SInt32 tmp:R07;\n");
 
+        puts("SInt32 fix0:R20;");
+        puts("SInt32 fix1:R21;");
+        puts("SInt32 fix0x:R22;");
+        puts("SInt32 fix1x:R23;\n");
+
         puts(init_heap);
         puts(init_stack);
 }
@@ -322,8 +327,26 @@ const_variable
         ;
 
 operation
-        : expression __OPE_ADD expression {}
-        | expression __OPE_SUB expression {}
+        : expression __OPE_ADD expression {
+                puts(pop_stack);
+                puts("fix1 = stack_socket;");
+                puts(pop_stack);
+                puts("fix0 = stack_socket;");
+
+                puts("stack_socket = fix0;");
+                puts("stack_socket += fix1;");
+                puts(push_stack);
+        }
+        | expression __OPE_SUB expression {
+                puts(pop_stack);
+                puts("fix1 = stack_socket;");
+                puts(pop_stack);
+                puts("fix0 = stack_socket;");
+
+                puts("stack_socket = fix0;");
+                puts("stack_socket -= fix1;");
+                puts(push_stack);
+        }
         | expression __OPE_MUL expression {}
         | expression __OPE_DIV expression {}
         | expression __OPE_POWER expression {}
