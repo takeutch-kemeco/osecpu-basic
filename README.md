@@ -1,7 +1,7 @@
 ## OsecpuBasic
 
 OsecpuBasic は古典的な BASIC 言語のコンパイラーです。
-コンパイルによって osecpu-aska（マクロアセンブラー）によってコンパイルできるソースを出力します。
+osecpu-aska（マクロアセンブラー）によってコンパイルできるソースを出力します。
 ライセンスはflex/bisonの義理を感じるので GPL2 です。
 
 ***
