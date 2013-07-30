@@ -164,7 +164,8 @@ static char init_stack[] = {
 void init_all(void)
 {
         puts("#include \"osecpu_ask.h\"\n");
-        puts("SInt32 tmp:R07;\n");
+        puts("SInt32 msk:R06;");
+        puts("SInt32 tmp:R07;");
         puts(init_heap);
         puts(init_stack);
 }
@@ -247,15 +248,20 @@ func_print
         : __FUNC_PRINT expression {
                 puts(pop_stack);
 
-                puts("tmp = stack_socket;\n");
-                puts("tmp >>= 12;\n");
-                puts("junkApi_putStringDec('\\1', tmp, 16, 1);");
+                puts("msk = 1;");
+                puts("msk <<= 15;");
+                puts("msk -= 1;");
+
+                puts("tmp = stack_socket;");
+                puts("tmp >>= 15;");
+                puts("tmp &= msk;");
+                puts("junkApi_putStringDec('\\1', tmp, 6, 1);");
 
                 puts("junkApi_putConstString('.');");
 
-                puts("tmp = stack_socket;\n");
-                puts("tmp &= 0x00000fff;\n");
-                puts("junkApi_putStringDec('\\1', tmp, 16, 1);");
+                puts("tmp = stack_socket;");
+                puts("tmp &= msk;");
+                puts("junkApi_putStringDec('\\1', tmp, 6, 1);\n");
         }
         ;
 
@@ -299,14 +305,14 @@ const_variable
         | __CONST_FLOAT {
                 double a;
                 double b = modf($1, &a);
-                int32_t ia = ((int32_t)a) << 12;
-                int32_t ib = (int32_t)((1 << 12) * b);
+                int32_t ia = (((int32_t)a) & ((1 << 15) - 1)) << 15;
+                int32_t ib = (int32_t)((1 << 15) * b);
 
                 printf("stack_socket = %d;\n", ia | ib);
                 puts(push_stack);
         }
         | __CONST_INTEGER {
-                printf("stack_socket = %d;\n", $1 << 12);
+                printf("stack_socket = %d;\n", ($1 & ((1 << 15) - 1)) << 15);
                 puts(push_stack);
         }
         ;
