@@ -42,6 +42,9 @@ struct Var {
 #define VARLIST_LEN 0x1000
 static struct Var varlist[VARLIST_LEN];
 
+/* 変数リストに既に同名が登録されているかを確認する。
+ * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
+ */
 static struct Var* varlist_search(const char* str)
 {
         int i;
@@ -53,6 +56,10 @@ static struct Var* varlist_search(const char* str)
         return NULL;
 }
 
+/* 変数リストに新たに変数を追加する。
+ * 既に同名の変数が存在した場合は何もしない。
+ * array_len : この変数の配列サイズを指定する。スカラーならば 1 とすべき。 この値はint32型。（fix32型では”ない”ので注意）
+ */
 static void varlist_add(const char* str, const int32_t array_len)
 {
         if (varlist_search(str) != NULL)
@@ -75,8 +82,8 @@ static void varlist_add(const char* str, const int32_t array_len)
 
 /* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置へ int32 を書き込む
  * 事前に以下のレジスタに値をセットしておくこと
- * heap_socket : ヒープに書き込みたい値
- * heap_offset : identifier に割り当てられた領域中でのインデックス。int32単位。
+ * heap_socket : ヒープに書き込みたい値。fix32型単位なので注意。
+ * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
  */
 static void write_heap(char* dst, char* iden)
 {
@@ -88,15 +95,16 @@ static void write_heap(char* dst, char* iden)
 
         sprintf(dst, "heap_seek = %d;\n"
                      "heap_seek += heap_offset;\n"
+                     "heap_seek >>= 12;\n"
                      "PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);\n",
                      v->head_ptr);
 }
 
 /* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置から int32 を読み込む
  * 事前に以下のレジスタに値をセットしておくこと
- * heap_offset : identifier に割り当てられた領域中でのインデックス。int32単位。
+ * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
  *
- * 読み込んだ値は heap_socket へ格納される。
+ * 読み込んだ値は heap_socket へ格納される。これはfix32型なので注意。
  */
 static void read_heap(char* dst, char* iden)
 {
@@ -108,6 +116,7 @@ static void read_heap(char* dst, char* iden)
 
         sprintf(dst, "heap_seek = %d;\n"
                      "heap_seek += heap_offset;\n"
+                     "heap_seek >>= 12;\n"
                      "PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);\n",
                      v->head_ptr);
 }
@@ -155,6 +164,7 @@ static char init_stack[] = {
 void init_all(void)
 {
         puts("#include \"osecpu_ask.h\"\n");
+        puts("SInt32 tmp:R07;\n");
         puts(init_heap);
         puts(init_stack);
 }
@@ -236,7 +246,16 @@ function
 func_print
         : __FUNC_PRINT expression {
                 puts(pop_stack);
-                printf("junkApi_putStringDec('\\1', stack_socket, 16, 1);\n");
+
+                puts("tmp = stack_socket;\n");
+                puts("tmp >>= 12;\n");
+                puts("junkApi_putStringDec('\\1', tmp, 16, 1);");
+
+                puts("junkApi_putConstString('.');");
+
+                puts("tmp = stack_socket;\n");
+                puts("tmp &= 0x00000fff;\n");
+                puts("junkApi_putStringDec('\\1', tmp, 16, 1);");
         }
         ;
 
@@ -277,9 +296,17 @@ assignment
 
 const_variable
         : __CONST_STRING
-        | __CONST_FLOAT
+        | __CONST_FLOAT {
+                double a;
+                double b = modf($1, &a);
+                int32_t ia = ((int32_t)a) << 12;
+                int32_t ib = (int32_t)((1 << 12) * b);
+
+                printf("stack_socket = %d;\n", ia | ib);
+                puts(push_stack);
+        }
         | __CONST_INTEGER {
-                printf("stack_socket = %d;\n", $1);
+                printf("stack_socket = %d;\n", $1 << 12);
                 puts(push_stack);
         }
         ;
