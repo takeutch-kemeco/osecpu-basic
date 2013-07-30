@@ -363,10 +363,34 @@ operation
         | expression __OPE_POWER expression {}
         | expression __OPE_MOD expression {}
 
-        | expression __OPE_OR expression {}
-        | expression __OPE_AND expression {}
-        | expression __OPE_XOR expression {}
-        | __OPE_NOT expression {}
+        | expression __OPE_OR expression {
+                puts(read_eoe_arg);
+
+                puts("stack_socket = fixL;");
+                puts("stack_socket |= fixR;");
+                puts(push_stack);
+        }
+        | expression __OPE_AND expression {
+                puts(read_eoe_arg);
+
+                puts("stack_socket = fixL;");
+                puts("stack_socket &= fixR;");
+                puts(push_stack);
+        }
+        | expression __OPE_XOR expression {
+                puts(read_eoe_arg);
+
+                puts("stack_socket = fixL;");
+                puts("stack_socket ^= fixR;");
+                puts(push_stack);
+        }
+        | __OPE_NOT expression {
+                puts(pop_stack);
+
+                puts("tmp = -1;");
+                puts("stack_socket ^= tmp;");
+                puts(push_stack);
+        }
 
         | __OPE_ADD expression %prec __OPE_PLUS {}
         | __OPE_SUB expression %prec __OPE_MINUS {}
