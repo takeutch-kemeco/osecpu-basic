@@ -274,17 +274,17 @@ void init_all(void)
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER __OPE_OR __OPE_AND __OPE_XOR __OPE_NOT
 %token __OPE_PLUS __OPE_MINUS
-%token __LB __RB __DECL_END __IDENTIFIER __LABEL __EOF
+%token __LB __RB __DECL_END __IDENTIFIER __LABEL __DEFINE_LABEL __EOF
 %token __CONST_STRING __CONST_FLOAT __CONST_INTEGER
 
 %type <ival> __CONST_INTEGER
 %type <fval> __CONST_FLOAT
-%type <sval> __CONST_STRING __IDENTIFIER __LABEL
+%type <sval> __CONST_STRING __IDENTIFIER __LABEL __DEFINE_LABEL
 
 %type <sval> func_print
 %type <sval> operation const_variable read_variable
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
-%type <sval> iterator_for initializer expression assignment jump label function
+%type <sval> iterator_for initializer expression assignment jump define_label function
 %type <sval> syntax_tree declaration_list declaration
 
 %start syntax_tree
@@ -309,7 +309,7 @@ declaration
         | selection_if __DECL_END
         | iterator_for
         | jump __DECL_END
-        | label __DECL_END
+        | define_label __DECL_END
         | __DECL_END
         ;
 
@@ -573,18 +573,21 @@ iterator_for
         }
         ;
 
-label
-        : __LABEL {
+define_label
+        : __DEFINE_LABEL {
                 labellist_add($1);
+                printf("LB0(LOCAL(%d));\n", labellist_search($1));
         }
         ;
 
 jump
-        : __OPE_GOTO __IDENTIFIER {}
-        | __OPE_GOSUB __IDENTIFIER {}
+        : __OPE_GOTO __LABEL {
+                printf("JMP(LOCAL(%d));\n", labellist_search($2));
+        }
+        | __OPE_GOSUB __LABEL {}
         | __OPE_RETURN {}
-        | __OPE_ON expression __OPE_GOTO __IDENTIFIER {}
-        | __OPE_ON expression __OPE_GOSUB __IDENTIFIER {}
+        | __OPE_ON expression __OPE_GOTO __LABEL {}
+        | __OPE_ON expression __OPE_GOSUB __LABEL {}
         ;
 
 %%
