@@ -182,11 +182,22 @@ static char init_eoe_arg[] = {
         "SInt32 fixRx:R23;"
 };
 
+/* 現在の使用可能なラベルインデックスのヘッド
+ * この値から LABEL_INDEX_LEN 未満までの間が、まだ未使用なユニークラベルのサフィックス番号。
+ * ユニークラベルをどこかに設定する度に、この値をインクリメントすること。
+ */
+static int32_t cur_label_index_head = 0;
+
+/* ラベルの仕様可能最大数 */
+#define LABEL_INDEX_LEN 1024
+
 /* 全ての初期化
  */
 void init_all(void)
 {
         puts("#include \"osecpu_ask.h\"\n");
+
+        printf("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
 
         puts("SInt32 tmp0:R08;\n");
         puts("SInt32 tmp1:R09;\n");
@@ -204,7 +215,8 @@ void init_all(void)
         char sval[0x1000];
 }
 
-%token __STATE_IF __STATE_THEN __STATE_ELSE __STATE_FOR __STATE_TO __STATE_NEXT __STATE_END
+%token __STATE_IF __STATE_THEN __STATE_ELSE
+%token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT __STATE_END
 %token __STATE_READ __STATE_DATA __STATE_MAT __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
 %token __STATE_LET __OPE_SUBST
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
@@ -505,10 +517,22 @@ selection_if_e
         ;
 
 iterator_for
-        : __STATE_FOR expression __STATE_TO expression __DECL_END declaration_list __STATE_NEXT {}
+        : __STATE_FOR __IDENTIFIER __STATE_TO expression __STATE_STEP expression {
+        } declaration_list __STATE_NEXT {
+        }
         ;
 
-label : __LABEL {};
+label
+        : __LABEL {
+                if (cur_label_index_head >= LABEL_INDEX_LEN) {
+                        printf("system err: コンパイラーが設定可能なラベルの数を越えました。\n");
+                        exit(EXIT_FAILURE);
+                }
+
+                printf("LB0(LOCAL(%d));\n", cur_label_index_head);
+                cur_label_index_head++;
+        }
+        ;
 
 jump
         : __OPE_GOTO __IDENTIFIER {}

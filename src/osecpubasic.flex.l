@@ -81,6 +81,7 @@
 
 <main_process>"for"     return(__STATE_FOR);
 <main_process>"to"      return(__STATE_TO);
+<main_process>"step"    return(__STATE_STEP);
 <main_process>"next"    return(__STATE_NEXT);
 
 <main_process>"end"     return(__STATE_END);
