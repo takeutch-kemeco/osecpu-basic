@@ -80,8 +80,8 @@ static void varlist_add(const char* str, const int32_t array_len)
         }
 }
 
-/* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置へ int32 を書き込む
- * 事前に以下のレジスタに値をセットしておくこと
+/* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置へfix32型を書き込む。
+ * 事前に以下のレジスタに値をセットしておくこと:
  * heap_socket : ヒープに書き込みたい値。fix32型単位なので注意。
  * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
  */
@@ -94,15 +94,15 @@ static void write_heap(char* dst, char* iden)
         }
 
         sprintf(dst, "heap_seek = %d;\n"
-                     "heap_offset >>= 15;\n"
-                     "heap_offset &= msk15;\n"
+                     "heap_offset >>= 16;\n"
+                     "heap_offset &= 0x0000ffff;\n"
                      "heap_seek += heap_offset;\n"
                      "PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);\n",
                      v->head_ptr);
 }
 
-/* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置から int32 を読み込む
- * 事前に以下のレジスタに値をセットしておくこと
+/* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置からfix32型を読み込む。
+ * 事前に以下のレジスタに値をセットしておくこと:
  * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
  *
  * 読み込んだ値は heap_socket へ格納される。これはfix32型なので注意。
@@ -116,8 +116,8 @@ static void read_heap(char* dst, char* iden)
         }
 
         sprintf(dst, "heap_seek = %d;\n"
-                     "heap_offset >>= 15;\n"
-                     "heap_offset &= msk15;\n"
+                     "heap_offset >>= 16;\n"
+                     "heap_offset &= 0x0000ffff;\n"
                      "heap_seek += heap_offset;\n"
                      "PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);\n",
                      v->head_ptr);
@@ -134,7 +134,7 @@ static char init_heap[] = {
         "heap_seek = 0;\n"
 };
 
-/* スタックに int32 をプッシュする
+/* スタックにint32型（またはfix32型）をプッシュする
  * 事前に以下のレジスタをセットしておくこと:
  * stack_socket : プッシュしたい値。（int32型）
  */
@@ -143,7 +143,7 @@ static char push_stack[] = {
         "stack_head++;\n"
 };
 
-/* スタックから int32 をポップする
+/* スタックからint32型（またはfix32型）をポップする
  * ポップした値は stack_socket に格納される。
  */
 #define __POP_STACK                                                     \
@@ -188,14 +188,8 @@ void init_all(void)
 {
         puts("#include \"osecpu_ask.h\"\n");
 
-        puts("SInt32 one15:R06;");
-        puts("one15 = 1;");
-        puts("one15 <<= 15;");
-
-        puts("SInt32 msk15:R07;");
-        puts("msk15 = one15 - 1;\n");
-
-        puts("SInt32 tmp:R08;\n");
+        puts("SInt32 tmp0:R08;\n");
+        puts("SInt32 tmp1:R09;\n");
 
         puts(init_heap);
         puts(init_stack);
@@ -280,16 +274,28 @@ func_print
         : __FUNC_PRINT expression {
                 puts(pop_stack);
 
-                puts("tmp = stack_socket;");
-                puts("tmp >>= 15;");
-                puts("tmp &= msk15;");
-                puts("junkApi_putStringDec('\\1', tmp, 6, 1);");
+                puts("tmp0 = stack_socket >> 16;");
+                puts("junkApi_putStringDec('\\1', tmp0, 6, 1);");
 
                 puts("junkApi_putConstString('.');");
 
-                puts("tmp = stack_socket;");
-                puts("tmp &= msk15;");
-                puts("junkApi_putStringDec('\\1', tmp, 6, 1);\n");
+                puts("tmp0 = stack_socket;");
+                puts("tmp1 = 0;");
+                puts("if ((tmp0 & 0x00008000) != 0) {tmp1 += 5000;}");
+                puts("if ((tmp0 & 0x00004000) != 0) {tmp1 += 2500;}");
+                puts("if ((tmp0 & 0x00002000) != 0) {tmp1 += 1250;}");
+                puts("if ((tmp0 & 0x00001000) != 0) {tmp1 += 625;}");
+                puts("if ((tmp0 & 0x00000800) != 0) {tmp1 += 312;}");
+                puts("if ((tmp0 & 0x00000400) != 0) {tmp1 += 156;}");
+                puts("if ((tmp0 & 0x00000200) != 0) {tmp1 += 78;}");
+                puts("if ((tmp0 & 0x00000100) != 0) {tmp1 += 39;}");
+                puts("if ((tmp0 & 0x00000080) != 0) {tmp1 += 19;}");
+                puts("if ((tmp0 & 0x00000040) != 0) {tmp1 += 10;}");
+                puts("if ((tmp0 & 0x00000020) != 0) {tmp1 += 5;}");
+                puts("if ((tmp0 & 0x00000010) != 0) {tmp1 += 2;}");
+                puts("if ((tmp0 & 0x00000008) != 0) {tmp1 += 1;}");
+                puts("if ((tmp0 & 0x00000004) != 0) {tmp1 += 1;}");
+                puts("junkApi_putStringDec('\\1', tmp1, 4, 6);\n");
         }
         ;
 
@@ -333,14 +339,14 @@ const_variable
         | __CONST_FLOAT {
                 double a;
                 double b = modf($1, &a);
-                int32_t ia = (((int32_t)a) & ((1 << 15) - 1)) << 15;
-                int32_t ib = (int32_t)((1 << 15) * b);
+                int32_t ia = ((int32_t)a) << 16;
+                int32_t ib = ((int32_t)(0x0000ffff * b)) & 0x0000ffff;
 
                 printf("stack_socket = %d;\n", ia | ib);
                 puts(push_stack);
         }
         | __CONST_INTEGER {
-                printf("stack_socket = %d;\n", ($1 & ((1 << 15) - 1)) << 15);
+                printf("stack_socket = %d;\n", $1 << 16);
                 puts(push_stack);
         }
         ;
@@ -411,37 +417,37 @@ comparison
         : expression __OPE_COMPARISON expression {
                 puts(read_eoe_arg);
 
-                puts("if (fixL == fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 puts(push_stack);
         }
         | expression __OPE_NOT_COMPARISON expression {
                 puts(read_eoe_arg);
 
-                puts("if (fixL != fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts("if (fixL != fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 puts(push_stack);
         }
         | expression __OPE_ISSMALL expression {
                 puts(read_eoe_arg);
 
-                puts("if (fixL < fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts("if (fixL < fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 puts(push_stack);
         }
         | expression __OPE_ISSMALL_COMP expression {
                 puts(read_eoe_arg);
 
-                puts("if (fixL <= fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts("if (fixL <= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 puts(push_stack);
         }
         | expression __OPE_ISLARGE expression {
                 puts(read_eoe_arg);
 
-                puts("if (fixL > fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts("if (fixL > fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 puts(push_stack);
         }
         | expression __OPE_ISLARGE_COMP expression {
                 puts(read_eoe_arg);
 
-                puts("if (fixL >= fixR) {stack_socket = one15;} else {stack_socket = 0;}");
+                puts("if (fixL >= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 puts(push_stack);
         }
         ;
