@@ -191,6 +191,57 @@ static int32_t cur_label_index_head = 0;
 /* ラベルの仕様可能最大数 */
 #define LABEL_INDEX_LEN 1024
 
+#define LABEL_STR_LEN 0x100
+struct Label {
+        char str[LABEL_STR_LEN];
+        int32_t val;
+};
+
+static struct Label labellist[LABEL_INDEX_LEN];
+
+/* ラベルリストに既に同名が登録されているかを確認し、そのラベルのLOCAL(x)のxに相当する値を得る。
+ * 無ければ -1 を返す。
+ */
+static int32_t labellist_search(const char* str)
+{
+        int i;
+        for (i = 0; i < LABEL_INDEX_LEN; i++) {
+                if (strcmp(str, labellist[i].str) == 0)
+                        return labellist[i].val;
+        }
+
+        return -1;
+}
+
+/* ラベルリストに新たにラベルを追加し、LOCAL(x)のxに相当する値を結びつける。
+ * これは名前と、LOCAL(x)のxに相当する値とを結びつけた連想配列。
+ * 既に同名の変数が存在した場合はエラー終了する。
+ */
+static void labellist_add(const char* str)
+{
+        if (labellist_search(str) != -1) {
+                printf("syntax err: 既に同名のラベルが存在します\n");
+                exit(EXIT_FAILURE);
+        }
+
+        if (cur_label_index_head >= LABEL_INDEX_LEN) {
+                printf("system err: コンパイラーが設定可能なラベルの数を越えました。\n");
+                exit(EXIT_FAILURE);
+        }
+
+        int i;
+        for (i = 0; i < LABEL_INDEX_LEN; i++) {
+                if (labellist[i].str[0] == '\0') {
+                        strcpy(labellist[i].str, str);
+
+                        labellist[i].val = cur_label_index_head;
+                        cur_label_index_head++;
+
+                        return;
+                }
+        }
+}
+
 /* 全ての初期化
  */
 void init_all(void)
@@ -524,13 +575,7 @@ iterator_for
 
 label
         : __LABEL {
-                if (cur_label_index_head >= LABEL_INDEX_LEN) {
-                        printf("system err: コンパイラーが設定可能なラベルの数を越えました。\n");
-                        exit(EXIT_FAILURE);
-                }
-
-                printf("LB0(LOCAL(%d));\n", cur_label_index_head);
-                cur_label_index_head++;
+                labellist_add($1);
         }
         ;
 
