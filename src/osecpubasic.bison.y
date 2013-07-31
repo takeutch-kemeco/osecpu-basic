@@ -220,7 +220,8 @@ void init_all(void)
 
 %type <sval> func_print
 %type <sval> operation const_variable read_variable
-%type <sval> selection_if iterator_for initializer expression assignment jump label function
+%type <sval> selection_if selection_if_v selection_if_t selection_if_e
+%type <sval> iterator_for initializer expression assignment jump label function
 %type <sval> syntax_tree declaration_list declaration
 
 %start syntax_tree
@@ -242,7 +243,7 @@ declaration
         : initializer __DECL_END
         | assignment __DECL_END
         | expression __DECL_END
-        | selection_if
+        | selection_if __DECL_END
         | iterator_for
         | jump __DECL_END
         | label __DECL_END
@@ -477,8 +478,30 @@ read_variable
         ;
 
 selection_if
-        : __STATE_IF expression __STATE_THEN expression __STATE_ELSE expression {}
-        | __STATE_IF expression __STATE_THEN expression {}
+        : selection_if_v selection_if_t selection_if_e
+        | selection_if_v selection_if_t {
+                putchar('\n');
+        }
+        ;
+
+selection_if_v
+        : __STATE_IF expression {
+                puts(pop_stack);
+                puts("if (stack_socket == 0x00010000) {");
+        }
+        ;
+
+selection_if_t
+        : __STATE_THEN declaration {
+                putchar('}');
+        }
+
+selection_if_e
+        : __STATE_ELSE {
+                puts(" else {");
+        } declaration {
+                puts("}");
+        }
         ;
 
 iterator_for
