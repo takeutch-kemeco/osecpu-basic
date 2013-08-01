@@ -256,6 +256,9 @@ void labellist_add(const char* str)
         }
 }
 
+/* gosub での return 先ラベルの保存用に使うポインターレジスター */
+#define CUR_RETURN_LABEL "P11"
+
 /* 全ての初期化
  */
 void init_all(void)
@@ -598,18 +601,30 @@ jump
                 printf("PLIMM(P3F, %d);\n", labellist_search($2));
         }
         | __OPE_GOSUB __LABEL {
-                /* リターン位置として、ここに無名ラベルを作成し、
-                 * そのラベルを適当なポインタ P30 に保存し（これが飛び先でのリターンアドレス参照用）
+                /* まず最初に、リターン先ラベルを CUR_RETURN_LABEL にセットする命令を作成し、
+                 * 次に、普通に __LABEL へと goto する命令を作成する
+                 */
+                printf("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+                printf("PLIMM(P3F, %d);\n", labellist_search($2));
+
+                /* そして、実際に戻り位置としてのラベル（無名ラベル）をここに作成し、
                  * そして、ラベルを作成したので cur_label_index_head を一つ進める
                  */
                 printf("LB(0, %d);\n", cur_label_index_head);
-                printf("PLIMM(P30, %d);\n", cur_label_index_head);
                 cur_label_index_head++;
-
-                /* そして普通に __LABEL へと goto する */
-                printf("PLIMM(P3F, %d);\n", labellist_search($2));
         }
-        | __OPE_RETURN {}
+        | __OPE_RETURN {
+                /* 戻り先ラベルがポインタ CUR_RETURN_LABEL に保存されてる前提で、そこへ goto する。
+                 * すなわち、gosub 先で、さらに gosub すると CUR_RETURN_LABEL が上書きされてしまうので、
+                 * gosub 先で、さらに再帰的に gosub することを現状ではサポートできてません。
+                 *
+                 * いろいろ実験したのだが、ポインタをスタックに積む方法が分からないから、現状では再帰をサポートできてない。
+                 * T_VPtr 型の配列を確保して、 PSPSMEM0() でラベルをスタックに詰めるかと思ったのだが、エラーになってしまう。正解の書式がわからない。
+                 * PSPSMEM0() を使ったサンプルを grep 検索したが見つからない。 wiki にも見つからない。
+                 * ので、とりあえず再帰サポートは断念。
+                 */
+                printf("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
+        }
         | __OPE_ON expression __OPE_GOTO __LABEL {}
         | __OPE_ON expression __OPE_GOSUB __LABEL {}
         ;
