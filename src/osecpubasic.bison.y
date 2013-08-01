@@ -250,7 +250,7 @@ void init_all(void)
 
         printf("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
 
-        puts("SInt32 tmp0:R08;\n");
+        puts("SInt32 tmp0:R08;");
         puts("SInt32 tmp1:R09;\n");
 
         puts(init_heap);
@@ -306,7 +306,7 @@ declaration
         : initializer __DECL_END
         | assignment __DECL_END
         | expression __DECL_END
-        | selection_if __DECL_END
+        | selection_if
         | iterator_for
         | jump __DECL_END
         | define_label __DECL_END
