@@ -625,7 +625,15 @@ jump
                  */
                 printf("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
         }
-        | __OPE_ON expression __OPE_GOTO __LABEL {}
+        | __OPE_ON expression __OPE_GOTO __LABEL {
+                puts(pop_stack);
+                puts("if (stack_socket == 0x00010000) {");
+
+                /* goto と同様（$4が違うだけ）*/
+                printf("PLIMM(P3F, %d);\n", labellist_search($4));
+
+                puts("}");
+        }
         | __OPE_ON expression __OPE_GOSUB __LABEL {}
         ;
 
