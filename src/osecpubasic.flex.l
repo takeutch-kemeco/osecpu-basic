@@ -33,7 +33,7 @@
 
 <pre_process>.                  {}
 
-<main_process>^[rem]            BEGIN(main_process_comment);
+<main_process>^"rem"            BEGIN(main_process_comment);
 <main_process_comment>[\n]      BEGIN(main_process);
 <main_process_comment>.         {}
 
