@@ -391,26 +391,24 @@ initializer
 
 assignment
         : __IDENTIFIER __OPE_SUBST expression {
-                char tmp[0x1000];
-                write_heap(tmp, $1);
-
                 puts(pop_stack);
                 puts("heap_socket = stack_socket;");
 
                 puts("heap_offset = 0;");
 
+                char tmp[0x1000];
+                write_heap(tmp, $1);
                 puts(tmp);
         }
         | __IDENTIFIER __LB expression __RB __OPE_SUBST expression {
-                char tmp[0x1000];
-                write_heap(tmp, $1);
-
                 puts(pop_stack);
                 puts("heap_socket = stack_socket;");
 
                 puts(pop_stack);
                 puts("heap_offset = stack_socket;");
 
+                char tmp[0x1000];
+                write_heap(tmp, $1);
                 puts(tmp);
         }
         ;
