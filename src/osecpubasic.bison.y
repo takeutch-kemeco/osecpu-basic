@@ -202,7 +202,7 @@ static struct Label labellist[LABEL_INDEX_LEN];
 /* ラベルリストに既に同名が登録されているかを確認し、そのラベルのLOCAL(x)のxに相当する値を得る。
  * 無ければ -1 を返す。
  */
-static int32_t labellist_search(const char* str)
+static int32_t labellist_search_unsafe(const char* str)
 {
         int i;
         for (i = 0; i < LABEL_INDEX_LEN; i++) {
@@ -213,13 +213,27 @@ static int32_t labellist_search(const char* str)
         return -1;
 }
 
+/* ラベルリストに既に同名が登録されているかを確認し、そのラベルのLOCAL(x)のxに相当する値を得る。
+ * 無ければエラー出力して終了
+ */
+static int32_t labellist_search(const char* str)
+{
+        const int32_t tmp = labellist_search_unsafe(str);
+        if (tmp == -1) {
+                printf("system err: ラベルが見つかりません\n");
+                exit(EXIT_FAILURE);
+        }
+
+        return tmp;
+}
+
 /* ラベルリストに新たにラベルを追加し、LOCAL(x)のxに相当する値を結びつける。
  * これは名前と、LOCAL(x)のxに相当する値とを結びつけた連想配列。
  * 既に同名の変数が存在した場合はエラー終了する。
  */
 void labellist_add(const char* str)
 {
-        if (labellist_search(str) != -1) {
+        if (labellist_search_unsafe(str) != -1) {
                 printf("syntax err: 既に同名のラベルが存在します\n");
                 exit(EXIT_FAILURE);
         }
@@ -575,23 +589,13 @@ iterator_for
 
 define_label
         : __DEFINE_LABEL {
-                const int32_t tmp = labellist_search($1);
-                if (tmp == -1) {
-                        printf("system err: ラベルが見つかりません\n");
-                        exit(EXIT_FAILURE);
-                }
-                printf("LB(0, %d);\n", tmp);
+                printf("LB(0, %d);\n", labellist_search($1));
         }
         ;
 
 jump
         : __OPE_GOTO __LABEL {
-                const int32_t tmp = labellist_search($2);
-                if (tmp == -1) {
-                        printf("system err: ラベルが見つかりません\n");
-                        exit(EXIT_FAILURE);
-                }
-                printf("PLIMM(P3F, %d);\n", tmp);
+                printf("PLIMM(P3F, %d);\n", labellist_search($2));
         }
         | __OPE_GOSUB __LABEL {
                 /* リターン位置として、ここに無名ラベルを作成し、
@@ -603,12 +607,7 @@ jump
                 cur_label_index_head++;
 
                 /* そして普通に __LABEL へと goto する */
-                const int32_t tmp = labellist_search($2);
-                if (tmp == -1) {
-                        printf("system err: ラベルが見つかりません\n");
-                        exit(EXIT_FAILURE);
-                }
-                printf("PLIMM(P3F, %d);\n", tmp);
+                printf("PLIMM(P3F, %d);\n", labellist_search($2));
         }
         | __OPE_RETURN {
                 /* 戻りアドレスが適当なポインタ P30 に保存されてる前提で、普通に P30 へ goto する。
