@@ -609,18 +609,7 @@ jump
                 /* そして普通に __LABEL へと goto する */
                 printf("PLIMM(P3F, %d);\n", labellist_search($2));
         }
-        | __OPE_RETURN {
-                /* 戻りアドレスが適当なポインタ P30 に保存されてる前提で、普通に P30 へ goto する。
-                 * すなわち、gosub 先で、さらに gosub すると P30 が上書きされてしまうので、
-                 * ようするに gosub 先で、さらに再帰的に gosub することを現状ではサポートできてません。
-                 *
-                 * いろいろ実験したのだが、ポインタをスタックに積む方法が分からないから、再帰をサポートできてない。
-                 * T_VPtr 型の配列を確保して、 PSPSMEM0() でラベルをスタックに詰めるかと思ったのだが、エラーになってしまう。正解の書式がわからない。
-                 * PSPSMEM0() を使ったサンプルを grep 検索したが見つからない。 wiki にも見つからない。
-                 * ので、とりあえず再帰サポートは断念。
-                 */
-                puts("PCP(P3F, P30);");
-        }
+        | __OPE_RETURN {}
         | __OPE_ON expression __OPE_GOTO __LABEL {}
         | __OPE_ON expression __OPE_GOSUB __LABEL {}
         ;
