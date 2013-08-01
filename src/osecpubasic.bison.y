@@ -634,7 +634,18 @@ jump
 
                 puts("}");
         }
-        | __OPE_ON expression __OPE_GOSUB __LABEL {}
+        | __OPE_ON expression __OPE_GOSUB __LABEL {
+                puts(pop_stack);
+                puts("if (stack_socket == 0x00010000) {");
+
+                /* gosub と同様（$4が違うだけ）*/
+                printf("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+                printf("PLIMM(P3F, %d);\n", labellist_search($4));
+                printf("LB(0, %d);\n", cur_label_index_head);
+                cur_label_index_head++;
+
+                puts("}");
+        }
         ;
 
 %%
