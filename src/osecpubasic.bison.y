@@ -575,7 +575,12 @@ iterator_for
 
 define_label
         : __DEFINE_LABEL {
-                printf("LB0(LOCAL(%d));\n", labellist_search($1));
+                const int32_t tmp = labellist_search($1);
+                if (tmp == -1) {
+                        printf("system err: ラベルが見つかりません\n");
+                        exit(EXIT_FAILURE);
+                }
+                printf("LB(0, %d);\n", tmp);
         }
         ;
 
