@@ -584,7 +584,23 @@ jump
         : __OPE_GOTO __LABEL {
                 printf("JMP(LOCAL(%d));\n", labellist_search($2));
         }
-        | __OPE_GOSUB __LABEL {}
+        | __OPE_GOSUB __LABEL {
+                /* リターン位置として、ここに無名ラベルを作成し、
+                 * そのラベルを適当なポインタ P30 に保存し（これが飛び先でのリターンアドレス参照用）
+                 * そして、ラベルを作成したので cur_label_index_head を一つ進める
+                 */
+                printf("LB(0, %d);\n", cur_label_index_head);
+                printf("PLIMM(P30, %d);\n", cur_label_index_head);
+                cur_label_index_head++;
+
+                /* そして普通に __LABEL へと goto する */
+                const int32_t tmp = labellist_search($2);
+                if (tmp == -1) {
+                        printf("system err: ラベルが見つかりません\n");
+                        exit(EXIT_FAILURE);
+                }
+                printf("PLIMM(P3F, %d);\n", tmp);
+        }
         | __OPE_RETURN {}
         | __OPE_ON expression __OPE_GOTO __LABEL {}
         | __OPE_ON expression __OPE_GOSUB __LABEL {}
