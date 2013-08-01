@@ -31,6 +31,7 @@
 
 %%
 
+<pre_process>^[*][_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext);}
 <pre_process>.                  {}
 
 <main_process>^"rem"            BEGIN(main_process_comment);

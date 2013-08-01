@@ -217,7 +217,7 @@ static int32_t labellist_search(const char* str)
  * これは名前と、LOCAL(x)のxに相当する値とを結びつけた連想配列。
  * 既に同名の変数が存在した場合はエラー終了する。
  */
-static void labellist_add(const char* str)
+void labellist_add(const char* str)
 {
         if (labellist_search(str) != -1) {
                 printf("syntax err: 既に同名のラベルが存在します\n");
@@ -575,7 +575,6 @@ iterator_for
 
 define_label
         : __DEFINE_LABEL {
-                labellist_add($1);
                 printf("LB0(LOCAL(%d));\n", labellist_search($1));
         }
         ;
