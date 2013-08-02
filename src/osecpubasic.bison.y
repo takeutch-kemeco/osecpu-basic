@@ -270,6 +270,11 @@ void init_all(void)
         puts("SInt32 tmp0:R08;");
         puts("SInt32 tmp1:R09;\n");
 
+        /* forループ処理の作業用 */
+        puts("SInt32 forfixL: R24;");
+        puts("SInt32 forfixR: R25;");
+        puts("SInt32 forfixtmp: R26;\n");
+
         puts(init_heap);
         puts(init_stack);
         puts(init_eoe_arg);
@@ -583,8 +588,99 @@ selection_if_e
         ;
 
 iterator_for
-        : __STATE_FOR __IDENTIFIER __STATE_TO expression __STATE_STEP expression {
+        : __STATE_FOR __IDENTIFIER __OPE_SUBST expression {
+                /* このセクションはスカラー変数への代入なので、 assignment のスカラー版と同様
+                 * （$2が違うだけ）
+                 */
+                puts(pop_stack);
+                puts("heap_socket = stack_socket;");
+
+                puts("heap_offset = 0;");
+
+                char tmp[0x1000];
+                write_heap(tmp, $2);
+                puts(tmp);
+
+                /* そして、代入後であるここに無名ラベルを作る（このforループは、以降はこの位置へと戻ってくる）
+                 * また、このラベルは next で戻ってくる際に使うので、この構文解析器で参照できるように $$ で出力する。（以降$5で参照できる）
+                 * この $5 ラベル番号で int32 型の値である。
+                 * そして、ラベルを作成したので cur_label_index_head を一つ進める。
+                 */
+                printf("LB(0, %d);\n", cur_label_index_head);
+                $<ival>$ = cur_label_index_head;
+                cur_label_index_head++;
+        } __STATE_TO expression {
+                /* 条件を比較するために
+                 * まずスタックに詰まれてる __STATE_TO expression (の戻り値)を得て、 forfixR（右辺用） へと退避しておく。
+                 * （また、このポップは、変数を読む際に余分なスタックが残っていないように、スタックを掃除しておく意味も兼ねる）
+                 */
+                puts(pop_stack);
+                puts("forfixR = stack_socket;");
+
+                /* 次にスカラー変数から値を読み、 forfixL （左辺用） へと退避しておく。
+                 */
+                puts("heap_offset = 0;");
+
+                char tmp[0x1000];
+                read_heap(tmp, $2);
+                puts(tmp);
+
+                puts("forfixL = heap_socket;");
+        } __STATE_STEP expression {
+                /* 条件比較の方向を判断するために、stepの値を読む必要がある
+                 * そして、最後の next の時点でインクリメントに使用するのに備えて、再びプッシュしておく
+                 */
+                puts(pop_stack);
+                puts("forfixtmp = stack_socket;");
+                puts(push_stack);
+
+                /* step が正の場合は　<= による比較となり、 負の場合は >= による比較となる。
+                 * これは実際には forfixL, forfixR の値を入れ替えることで対応する。（比較の条件式をどちらのケースでも共用できるように）
+                 * したがって、”step が負の場合に forfixL, forfixR を入れ替える命令”をここに書く。
+                 */
+                puts("if (forfixtmp < 0) {forfixtmp = forfixL; forfixL = forfixR; forfixR = forfixtmp;}");
+
+                /* これら forfixL, forfixR を比較し分岐する命令を書く。
+                 * （真の場合の分岐は、そのまま以降の declaration_list となる）
+                 */
+                puts("if (forfixL <= forfixR) {");
         } declaration_list __STATE_NEXT {
+                /* ここは真の場合の命令の続きで、declaration_list の本体が終了した時点 */
+
+                /* ここでスカラー変数の値を step によってインクリメントする。
+                 * まずは step の値をポップして取得し forfixR へと退避し、
+                 * 次に、スカラー変数の値を取得して forfixL へと退避し、
+                 * これら forfixL, forfixR を加算し、結果をスカラー変数へ再び代入する。
+                 */
+                puts(pop_stack);
+                puts("forfixR = stack_socket;");
+
+                /* このセクションはスカラー変数の読み込みなので、read_variable とスカラー版とほぼ同様
+                 */
+                puts("heap_offset = 0;");
+                char tmp[0x1000];
+                read_heap(tmp, $2);
+                puts(tmp);
+                puts("forfixL = heap_socket;");
+
+                /* インクリメントして、その結果をスカラー変数へ代入する
+                 */
+                puts("heap_socket = forfixL + forfixR;");
+
+                puts("heap_offset = 0;");
+                write_heap(tmp, $2);
+                puts(tmp);
+
+                /* その後、先頭で作成したラベル位置へと再び戻るために、 goto させる命令を書く。
+                 * これには $5 により示されるラベル位置を用いる。
+                 * そして、真の場合の命令はここまでとなり、以降は偽の場合の命令となる
+                 */
+                printf("PLIMM(P3F, %d);\n", $<ival>5);
+                puts("} else {");
+
+                /* 偽の場合は、スタックをポップ（stepを捨てるため）して、そのまま終わる */
+                puts(pop_stack);
+                puts("}");
         }
         ;
 
