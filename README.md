@@ -116,10 +116,12 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
     let i
     for i := 1 to 10 step 1
         print i
-        goto *F
+        gosub *F
     next
 
     *F
+    print 1
+    return
 
 
 
@@ -155,12 +157,13 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 ・gosub 内で gosub を行うのは禁止です。（リターンアドレスが壊れます）
 
     gosub *X
-
+    
     goto *END
-
+    
     *X
     print 1
-
+    return
+    
     *END
 
 
