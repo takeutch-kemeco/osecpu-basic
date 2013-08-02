@@ -361,6 +361,7 @@ func_print
                 puts(pop_stack);
 
                 puts("tmp0 = stack_socket >> 16;");
+                puts("if (tmp0 < 0) {tmp0 += 1;}");
                 puts("junkApi_putStringDec('\\1', tmp0, 6, 1);");
 
                 puts("junkApi_putConstString('.');");
@@ -381,7 +382,11 @@ func_print
                 puts("if ((tmp0 & 0x00000010) != 0) {tmp1 += 2;}");
                 puts("if ((tmp0 & 0x00000008) != 0) {tmp1 += 1;}");
                 puts("if ((tmp0 & 0x00000004) != 0) {tmp1 += 1;}");
+
+                puts("if (stack_socket < 0) {tmp1 = 10000 - tmp1;}");
                 puts("junkApi_putStringDec('\\1', tmp1, 4, 6);\n");
+
+                puts("junkApi_putConstString(' ');");
         }
         ;
 
