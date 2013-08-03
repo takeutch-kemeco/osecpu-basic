@@ -192,6 +192,7 @@ static int32_t cur_label_index_head = 0;
 
 /* ラベルの仕様可能最大数 */
 #define LABEL_INDEX_LEN 1024
+#define LABEL_INDEX_LEN_STR "1024"
 
 #define LABEL_STR_LEN 0x100
 struct Label {
@@ -261,6 +262,43 @@ void labellist_add(const char* str)
 /* gosub での return 先ラベルの保存用に使うポインターレジスター */
 #define CUR_RETURN_LABEL "P11"
 
+/* ラベルスタックにラベル型（VPtr型）をプッシュする
+ * 事前に以下のレジスタをセットしておくこと:
+ * labelstack_socket : プッシュしたい値。（VPtr型）
+ */
+static char push_labelstack[] = {
+        "PAPSMEM0(labelstack_socket, T_VPTR, labelstack_ptr, labelstack_head);\n"
+        "labelstack_head++;\n"
+};
+
+/* ラベルスタックからラベル型（VPtr型）をポップする
+ * ポップした値は labelstack_socket に格納される。
+ */
+static char pop_labelstack[] = {
+        "labelstack_head--;\n"
+        "PAPLMEM0(labelstack_socket, T_VPTR, labelstack_ptr, labelstack_head);\n"
+};
+
+/* ラベルスタックの初期化
+ * gosub, return の実装において、呼び出しを再帰的に行った場合でも return での戻りラベルを正しく扱えるように、
+ * ラベルをスタックに積むためのもの。
+ *
+ * labelstack_socket は CUR_RETURN_LABELが指すレジスターと同一なので、
+ * （命令次元におけるVPtr型と、コンパイル次元における文字列型との、次元の違いこそあるが）
+ * 感覚としてはこれら２つの名前は union の関係。
+ *
+ * ラベルは、一般的なプログラムにおけるジャンプ先アドレスと考えて問題ない。
+ * （ただしこのジャンプ先は、予め明示的に指定する必要が有り、それ以外へのジャンプ方法が存在しないという制限がかかる。
+ * また特殊なレジスタでしか扱えない）
+ */
+static char init_labelstack[] = {
+        "VPtr labelstack_ptr:P14;\n"
+        "junkApi_malloc(labelstack_ptr, T_VPTR, " LABEL_INDEX_LEN_STR ");\n"
+        "VPtr labelstack_socket:" CUR_RETURN_LABEL ";\n"
+        "SInt32 labelstack_head:R15;\n"
+        "labelstack_head = 0;\n"
+};
+
 /* 全ての初期化
  */
 void init_all(void)
@@ -279,6 +317,7 @@ void init_all(void)
 
         puts(init_heap);
         puts(init_stack);
+        puts(init_labelstack);
         puts(init_eoe_arg);
 }
 
@@ -838,9 +877,11 @@ jump
         }
         | __OPE_GOSUB __LABEL {
                 /* まず最初に、リターン先ラベルを CUR_RETURN_LABEL にセットする命令を作成し、
+                 * その CUR_RETURN_LABEL の内容をラベルスタックへプッシュし、
                  * 次に、普通に __LABEL へと goto する命令を作成する
                  */
                 printf("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+                puts(push_labelstack);
                 printf("PLIMM(P3F, %d);\n", labellist_search($2));
 
                 /* そして、実際に戻り位置としてのラベル（無名ラベル）をここに作成し、
@@ -850,15 +891,12 @@ jump
                 cur_label_index_head++;
         }
         | __OPE_RETURN {
-                /* 戻り先ラベルがポインタ CUR_RETURN_LABEL に保存されてる前提で、そこへ goto する。
-                 * すなわち、gosub 先で、さらに gosub すると CUR_RETURN_LABEL が上書きされてしまうので、
-                 * gosub 先で、さらに再帰的に gosub することを現状ではサポートできてません。
-                 *
-                 * いろいろ実験したのだが、ポインタをスタックに積む方法が分からないから、現状では再帰をサポートできてない。
-                 * T_VPtr 型の配列を確保して、 PSPSMEM0() でラベルをスタックに詰めるかと思ったのだが、エラーになってしまう。正解の書式がわからない。
-                 * PSPSMEM0() を使ったサンプルを grep 検索したが見つからない。 wiki にも見つからない。
-                 * ので、とりあえず再帰サポートは断念。
+                /* 戻り先ラベルがラベルスタックに保存されてる前提で、 そこからポップし（その値は CUR_RETURN_LABEL 入る）
+                 * その CUR_RETURN_LABEL が指すラベル位置へと goto する。
+                 * すなわち、gosub 先で、さらに gosub しても、戻りアドレスはラベルスタックへ詰まれるので、
+                 * gosub 先で、さらに再帰的に gosub することが可能。
                  */
+                puts(pop_labelstack);
                 printf("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
         }
         | __OPE_ON expression __OPE_GOTO __LABEL {
@@ -876,6 +914,7 @@ jump
 
                 /* gosub と同様（$4が違うだけ）*/
                 printf("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+                puts(push_labelstack);
                 printf("PLIMM(P3F, %d);\n", labellist_search($4));
                 printf("LB(0, %d);\n", cur_label_index_head);
                 cur_label_index_head++;

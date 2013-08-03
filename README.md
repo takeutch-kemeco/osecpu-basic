@@ -9,6 +9,17 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 
 ***
+## 重要:
+
+現在の osecpu-basic が吐くアセンブラコードは、 2013.8.2 現在での最新版である osecpu067d 以上用です。
+
+（ osecpu067d で修正されたコードに全面依存しているため）
+
+osecpu067d 未満のバージョンでは正常動作しません。
+
+
+
+***
 
 ビルド方法:
 
@@ -75,10 +86,10 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
     let a
     a := 10
-    
+
     let b(100)
     b(a) := -3.14
-    
+
     print b(a)
 
 
@@ -156,25 +167,30 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ラベルへの gosub, return
 
-・現在 gosub は再帰をサポートできてません
-
-・gosub 内で gosub を行うのは禁止です。（リターンアドレスが壊れます）
+・gosub の中でさらに gosub しても、正常に return できます。
 
     gosub *X
-    
+    print 4
+
     goto *END
-    
+
     *X
     print 1
+    gosub *Y
+    print 3
     return
-    
+
+    *Y
+    print 2
+    return
+
     *END
 
 
 
 ***
 
-条件分岐 goto, gosub  
+条件分岐 goto, gosub
 
     on a = 1 goto *L
     on a < 1 gosub *E
