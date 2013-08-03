@@ -181,7 +181,7 @@ static char init_eoe_arg[] = {
         "SInt32 fixLx:R22;"
         "SInt32 fixRx:R23;"
         "SInt32 fixT:R27;"
-        "SInt32 fixTx:R28;"
+        "SInt32 fixS:R28;"
 };
 
 /* 現在の使用可能なラベルインデックスのヘッド
@@ -460,11 +460,14 @@ operation
         | expression __OPE_MUL expression {
                 puts(read_eoe_arg);
 
-                puts("if (fixL < 0) {if (fixR < 0) {fixL = -fixL; fixR = -fixR;}}");
+                /* 符号を保存しておき、+へ変換する*/
+                puts("fixS = 0;");
+                puts("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
+                puts("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
 
                 /* L * R -> T */
 
-                puts("fixTx = 0;");
+                puts("stack_socket = 0;");
 
 #if 1
                 /* R.Decimal * L -> L.Decimal */
@@ -474,14 +477,14 @@ operation
                 puts("fixLx = fixL & 0x0000ffff;");
                 puts("fixT = fixLx * fixRx;");
                 puts("fixT >>= 16;");
-                puts("fixTx += fixT;");
+                puts("stack_socket += fixT;");
 
                 /* R.Decimal * L.Integer -> T.Integer */
                 puts("fixRx = fixR & 0x0000ffff;");
                 puts("fixLx = fixL & 0xffff0000;");
                 puts("fixLx >>= 16;");
                 puts("fixT = fixLx * fixRx;");
-                puts("fixTx += fixT;");
+                puts("stack_socket += fixT;");
 #endif
 
 #if 1
@@ -492,17 +495,20 @@ operation
                 puts("fixLx = fixL & 0x0000ffff;");
                 puts("fixRx >>= 16;");
                 puts("fixT = fixLx * fixRx;");
-                puts("fixTx += fixT;");
+                puts("stack_socket += fixT;");
 
                 /* R.Integer * L.Integer -> T.Integer */
                 puts("fixRx = fixR & 0xffff0000;");
                 puts("fixLx = fixL & 0xffff0000;");
                 puts("fixRx >>= 16;");
                 puts("fixT = fixLx * fixRx;");
-                puts("fixTx += fixT;");
+                puts("stack_socket += fixT;");
 #endif
 
-                puts("stack_socket = fixTx;");
+                /* 符号を元に戻す */
+                puts("if ((fixS &= 0x00000003) == 0x00000001) {stack_socket = -stack_socket;}");
+                puts("if ((fixS &= 0x00000003) == 0x00000002) {stack_socket = -stack_socket;}");
+
                 puts(push_stack);
         }
         | expression __OPE_DIV expression {}
