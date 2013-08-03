@@ -525,7 +525,75 @@ operation
 
                 puts(push_stack);
         }
-        | expression __OPE_DIV expression {}
+        | expression __OPE_DIV expression {
+                puts(read_eoe_arg);
+
+                /* 符号を保存しておき、+へ変換する*/
+                puts("fixS = 0;");
+                puts("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
+                puts("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
+
+                /* R の逆数を得る
+                 *
+                 * （通常は 0x00010000 を 1 と考えるが、）
+                 * 0x40000000 を 1 と考えると、通常との差は << 14 なので、
+                 * 0x40000000 / R の結果も << 14 に対する演算結果として得られ、
+                 * （除算の場合は単位分 >> するので（すなわち >> 16））、
+                 * したがって結果を << 2 すれば（16 - 14 = 2だから） 0x00010000 を 1 とした場合での値となるはず。
+                 */
+                puts("fixRx = 0x40000000 / fixR;");
+                puts("fixR = fixRx << 2;");
+
+                /* 逆数を乗算することで除算とする
+                 * （以下は __OPE_MUL と同様）
+                 */
+
+                /* L * R -> T */
+
+                puts("stack_socket = 0;");
+
+#if 1
+                /* R.Decimal * L -> L.Decimal */
+
+                /* R.Decimal * L.Decimal -> T.Decimal */
+                puts("fixRx = fixR & 0x0000ffff;");
+                puts("fixLx = fixL & 0x0000ffff;");
+                puts("fixT = fixLx * fixRx;");
+                puts("fixT >>= 16;");
+                puts("stack_socket += fixT;");
+
+                /* R.Decimal * L.Integer -> T.Integer */
+                puts("fixRx = fixR & 0x0000ffff;");
+                puts("fixLx = fixL & 0xffff0000;");
+                puts("fixLx >>= 16;");
+                puts("fixT = fixLx * fixRx;");
+                puts("stack_socket += fixT;");
+#endif
+
+#if 1
+                /* R.Integer * L -> L.Integer */
+
+                /* R.Integer * L.Decimal -> T.Decimal */
+                puts("fixRx = fixR & 0xffff0000;");
+                puts("fixLx = fixL & 0x0000ffff;");
+                puts("fixRx >>= 16;");
+                puts("fixT = fixLx * fixRx;");
+                puts("stack_socket += fixT;");
+
+                /* R.Integer * L.Integer -> T.Integer */
+                puts("fixRx = fixR & 0xffff0000;");
+                puts("fixLx = fixL & 0xffff0000;");
+                puts("fixRx >>= 16;");
+                puts("fixT = fixLx * fixRx;");
+                puts("stack_socket += fixT;");
+#endif
+
+                /* 符号を元に戻す */
+                puts("if ((fixS &= 0x00000003) == 0x00000001) {stack_socket = -stack_socket;}");
+                puts("if ((fixS &= 0x00000003) == 0x00000002) {stack_socket = -stack_socket;}");
+
+                puts(push_stack);
+        }
         | expression __OPE_POWER expression {}
         | expression __OPE_MOD expression {}
 
