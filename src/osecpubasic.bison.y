@@ -180,6 +180,8 @@ static char init_eoe_arg[] = {
         "SInt32 fixR:R21;"
         "SInt32 fixLx:R22;"
         "SInt32 fixRx:R23;"
+        "SInt32 fixT:R27;"
+        "SInt32 fixTx:R28;"
 };
 
 /* 現在の使用可能なラベルインデックスのヘッド
@@ -455,7 +457,54 @@ operation
                 puts("stack_socket -= fixR;");
                 puts(push_stack);
         }
-        | expression __OPE_MUL expression {}
+        | expression __OPE_MUL expression {
+                puts(read_eoe_arg);
+
+                puts("if (fixL < 0) {if (fixR < 0) {fixL = -fixL; fixR = -fixR;}}");
+
+                /* L * R -> T */
+
+                puts("fixTx = 0;");
+
+#if 1
+                /* R.Decimal * L -> L.Decimal */
+
+                /* R.Decimal * L.Decimal -> T.Decimal */
+                puts("fixRx = fixR & 0x0000ffff;");
+                puts("fixLx = fixL & 0x0000ffff;");
+                puts("fixT = fixLx * fixRx;");
+                puts("fixT >>= 16;");
+                puts("fixTx += fixT;");
+
+                /* R.Decimal * L.Integer -> T.Integer */
+                puts("fixRx = fixR & 0x0000ffff;");
+                puts("fixLx = fixL & 0xffff0000;");
+                puts("fixLx >>= 16;");
+                puts("fixT = fixLx * fixRx;");
+                puts("fixTx += fixT;");
+#endif
+
+#if 1
+                /* R.Integer * L -> L.Integer */
+
+                /* R.Integer * L.Decimal -> T.Decimal */
+                puts("fixRx = fixR & 0xffff0000;");
+                puts("fixLx = fixL & 0x0000ffff;");
+                puts("fixRx >>= 16;");
+                puts("fixT = fixLx * fixRx;");
+                puts("fixTx += fixT;");
+
+                /* R.Integer * L.Integer -> T.Integer */
+                puts("fixRx = fixR & 0xffff0000;");
+                puts("fixLx = fixL & 0xffff0000;");
+                puts("fixRx >>= 16;");
+                puts("fixT = fixLx * fixRx;");
+                puts("fixTx += fixT;");
+#endif
+
+                puts("stack_socket = fixTx;");
+                puts(push_stack);
+        }
         | expression __OPE_DIV expression {}
         | expression __OPE_POWER expression {}
         | expression __OPE_MOD expression {}
