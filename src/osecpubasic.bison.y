@@ -364,11 +364,22 @@ func_print
         : __FUNC_PRINT expression {
                 puts(pop_stack);
 
+                /* 整数側の表示 */
+
                 puts("tmp0 = stack_socket >> 16;");
                 puts("if (tmp0 < 0) {tmp0 += 1;}");
+
+                /* 整数部が0の負の数の場合は、junkApi_putStringDec()に0として処理させるので符号が付かない。
+                 * 従って、その場合は手動で符号を付ける必要がある
+                 */
+                puts("if (stack_socket < 0) {if (tmp0 == 0) {junkApi_putConstString('-');}}");
+
                 puts("junkApi_putStringDec('\\1', tmp0, 6, 1);");
 
+                /* 小数点を表示 */
                 puts("junkApi_putConstString('.');");
+
+                /* 小数側の表示 */
 
                 puts("tmp0 = stack_socket;");
                 puts("tmp1 = 0;");
@@ -390,6 +401,7 @@ func_print
                 puts("if (stack_socket < 0) {tmp1 = 10000 - tmp1;}");
                 puts("junkApi_putStringDec('\\1', tmp1, 4, 6);\n");
 
+                /* 自動改行はさせない （最後にスペースを表示するのみ） */
                 puts("junkApi_putConstString(' ');");
         }
         ;
