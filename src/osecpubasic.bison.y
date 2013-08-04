@@ -447,11 +447,6 @@ static void __func_mul(void)
  */
 static void __func_div(void)
 {
-        /* 符号を保存しておき、+へ変換する*/
-        pA("fixS = 0;");
-        pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
-        pA("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
-
         /* R の逆数を得る
          *
          * （通常は 0x00010000 を 1 と考えるが、）
@@ -469,9 +464,7 @@ static void __func_div(void)
         /* 逆数を乗算することで除算とする */
         __func_mul();
 
-        /* この段階で fixA に答えが入っている */
-
-        /* スタックを掃除 */
+        /* eoe を復帰（スタックを掃除するため） */
         pA(pop_eoe);
 }
 
