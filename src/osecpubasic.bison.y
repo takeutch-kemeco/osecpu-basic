@@ -23,6 +23,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <math.h>
 
 #define YYMAXDEPTH 0x10000000
@@ -32,6 +33,18 @@ void yyerror(const char *s) {printf("%s\n",s); exit(EXIT_FAILURE);}
 extern FILE* yyin;
 extern FILE* yyout;
 FILE* yyaskA;
+
+/* 出力ファイル yyaskA へ文字列を書き出す関数 */
+static void pA(const char* fmt, ...)
+{
+        va_list ap;
+        va_start(ap, fmt);
+
+        vfprintf(yyaskA, fmt, ap);
+        va_end(ap);
+
+        fputs("\n", yyaskA);
+}
 
 #define VAR_STR_LEN 0x100
 struct Var {
