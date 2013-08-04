@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 #include "config.h"
 
@@ -54,9 +55,11 @@ static FILE* open_in_file(int argc, char** argv)
                 print_usage();
                 exit(EXIT_FAILURE);
         }
+
+        return fp;
 }
 
-static FILE* open_out_file(void)
+static FILE* open_null_out_file(void)
 {
         FILE* fp = fopen("/dev/null", "w");
         if (fp == NULL) {
@@ -64,15 +67,36 @@ static FILE* open_out_file(void)
                 print_usage();
                 exit(EXIT_FAILURE);
         }
+
+        return fp;
+}
+
+static FILE* open_out_file(int argc, char** argv)
+{
+        char* bas_name = argv[1];
+        char ask_name[0x1000];
+        strcpy(ask_name, bas_name);
+        strcat(ask_name, ".ask");
+
+        FILE* fp = fopen(ask_name, "wt");
+        if (fp == NULL) {
+                print_file_open_err(ask_name);
+                print_usage();
+                exit(EXIT_FAILURE);
+        }
+
+        return fp;
 }
 
 extern FILE* yyin;
 extern FILE* yyout;
+extern FILE* yyaskA;
 
 int main(int argc, char** argv)
 {
         yyin = open_in_file(argc, argv);
-        yyout = open_out_file();
+        yyout = open_null_out_file();
+        yyaskA = open_out_file(argc, argv);
 
         start_pre_process();
         while (yylex() != 0) {

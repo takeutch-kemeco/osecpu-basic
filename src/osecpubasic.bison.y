@@ -31,6 +31,7 @@ void yyerror(const char *s) {printf("%s\n",s); exit(EXIT_FAILURE);}
 
 extern FILE* yyin;
 extern FILE* yyout;
+FILE* yyaskA;
 
 #define VAR_STR_LEN 0x100
 struct Var {
