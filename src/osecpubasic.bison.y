@@ -365,6 +365,195 @@ void init_all(void)
         pA(init_eoe_arg);
 }
 
+/* 以下、各種アキュムレーター */
+
+/* 加算命令を出力する
+ * fixL + fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_add(void)
+{
+        pA("fixA = fixL + fixR;");
+}
+
+/* 減算命令を出力する
+ * fixL - fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_sub(void)
+{
+        pA("fixA = fixL - fixR;");
+}
+
+/* 乗算命令を出力する
+ * fixL * fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_mul(void)
+{
+        /* 符号を保存しておき、+へ変換する*/
+        pA("fixS = 0;");
+        pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
+        pA("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
+
+        /* L * R -> T */
+
+        pA("fixA = 0;");
+
+#if 1
+        /* R.Decimal * L -> L.Decimal */
+
+        /* R.Decimal * L.Decimal -> T.Decimal */
+        pA("fixRx = fixR & 0x0000ffff;");
+        pA("fixLx = fixL & 0x0000ffff;");
+        pA("fixT = fixLx * fixRx;");
+        pA("fixT >>= 16;");
+        pA("fixA += fixT;");
+
+        /* R.Decimal * L.Integer -> T.Integer */
+        pA("fixRx = fixR & 0x0000ffff;");
+        pA("fixLx = fixL & 0xffff0000;");
+        pA("fixLx >>= 16;");
+        pA("fixT = fixLx * fixRx;");
+        pA("fixA += fixT;");
+#endif
+
+#if 1
+        /* R.Integer * L -> L.Integer */
+
+        /* R.Integer * L.Decimal -> T.Decimal */
+        pA("fixRx = fixR & 0xffff0000;");
+        pA("fixLx = fixL & 0x0000ffff;");
+        pA("fixRx >>= 16;");
+        pA("fixT = fixLx * fixRx;");
+        pA("fixA += fixT;");
+
+        /* R.Integer * L.Integer -> T.Integer */
+        pA("fixRx = fixR & 0xffff0000;");
+        pA("fixLx = fixL & 0xffff0000;");
+        pA("fixRx >>= 16;");
+        pA("fixT = fixLx * fixRx;");
+        pA("fixA += fixT;");
+#endif
+
+        /* 符号を元に戻す */
+        pA("if ((fixS &= 0x00000003) == 0x00000001) {fixA = -fixA;}");
+        pA("if ((fixS &= 0x00000003) == 0x00000002) {fixA = -fixA;}");
+}
+
+/* 除算命令を出力する
+ * fixL / fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_div(void)
+{
+        /* 符号を保存しておき、+へ変換する*/
+        pA("fixS = 0;");
+        pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
+        pA("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
+
+        /* R の逆数を得る
+         *
+         * （通常は 0x00010000 を 1 と考えるが、）
+         * 0x40000000 を 1 と考えると、通常との差は << 14 なので、
+         * 0x40000000 / R の結果も << 14 に対する演算結果として得られ、
+         * （除算の場合は単位分 >> するので（すなわち >> 16））、
+         * したがって結果を << 2 すれば（16 - 14 = 2だから） 0x00010000 を 1 とした場合での値となるはず。
+         */
+        pA("fixRx = 0x40000000 / fixR;");
+        pA("fixR = fixRx << 2;");
+
+        /* 他アキュムレーターを呼び出す前に eoe を退避しておく */
+        pA(push_eoe);
+
+        /* 逆数を乗算することで除算とする */
+        __func_mul();
+
+        /* この段階で fixA に答えが入っている */
+
+        /* スタックを掃除 */
+        pA(pop_eoe);
+}
+
+/* 符号付き剰余命令を出力する
+ * fixL mod fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_mod(void)
+{
+        /* 符号付き剰余 */
+
+        /* fixL, fixR それぞれの絶対値 */
+        pA("if (fixL >= 0) {fixLx = fixL;} else {fixLx = -fixL;}");
+        pA("if (fixR >= 0) {fixRx = fixR;} else {fixRx = -fixR;}");
+
+        pA("fixS = 0;");
+
+        /* fixL, fixR の符号が異なる場合の検出 */
+        pA("if (fixL > 0) {if (fixR < 0) {fixS = 1;}}");
+        pA("if (fixL < 0) {if (fixR > 0) {fixS = 2;}}");
+
+        /* 符号が異なり、かつ、絶対値比較で fixL の方が小さい場合 */
+        pA("if (fixLx < fixRx) {");
+        pA("if (fixS == 1) {fixS = 3; fixA = fixL + fixR;}");
+        pA("if (fixS == 2) {fixS = 3; fixA = fixL + fixR;}");
+        pA("}");
+
+        /* それ以外の場合 */
+        pA("if (fixS != 3) {");
+        pA("fixT = fixL / fixR;");
+        /* floor */
+        pA("if (fixT < 0) {fixT -= 1;}");
+        pA("fixRx = fixT * fixR;");
+        pA("fixA = fixL - fixRx;");
+        pA("}");
+}
+
+/* and命令を出力する
+ * fixL & fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_and(void)
+{
+        pA("fixA = fixL & fixR;");
+}
+
+/* or命令を出力する
+ * fixL | fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_or(void)
+{
+        pA("fixA = fixL | fixR;");
+}
+
+/* xor命令を出力する
+ * fixL ^ fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_xor(void)
+{
+        pA("fixA = fixL ^ fixR;");
+}
+
+/* not命令を出力する
+ * fixL -> fixA
+ * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_not(void)
+{
+        pA("fixA = fixL ^ (-1);");
+}
+
+/* 符号反転命令を出力する
+ * fixL -> fixA
+ * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_minus(void)
+{
+        pA("fixA = -fixL;");
+}
+
 %}
 
 %union {
@@ -542,201 +731,58 @@ const_variable
 operation
         : expression __OPE_ADD expression {
                 pA(read_eoe_arg);
-
-                pA("stack_socket = fixL;");
-                pA("stack_socket += fixR;");
+                __func_add();
+                pA("stack_socket = fixA;\n");
                 pA(push_stack);
         }
         | expression __OPE_SUB expression {
                 pA(read_eoe_arg);
-
-                pA("stack_socket = fixL;");
-                pA("stack_socket -= fixR;");
+                __func_sub();
+                pA("stack_socket = fixA;\n");
                 pA(push_stack);
         }
         | expression __OPE_MUL expression {
                 pA(read_eoe_arg);
-
-                /* 符号を保存しておき、+へ変換する*/
-                pA("fixS = 0;");
-                pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
-                pA("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
-
-                /* L * R -> T */
-
-                pA("stack_socket = 0;");
-
-#if 1
-                /* R.Decimal * L -> L.Decimal */
-
-                /* R.Decimal * L.Decimal -> T.Decimal */
-                pA("fixRx = fixR & 0x0000ffff;");
-                pA("fixLx = fixL & 0x0000ffff;");
-                pA("fixT = fixLx * fixRx;");
-                pA("fixT >>= 16;");
-                pA("stack_socket += fixT;");
-
-                /* R.Decimal * L.Integer -> T.Integer */
-                pA("fixRx = fixR & 0x0000ffff;");
-                pA("fixLx = fixL & 0xffff0000;");
-                pA("fixLx >>= 16;");
-                pA("fixT = fixLx * fixRx;");
-                pA("stack_socket += fixT;");
-#endif
-
-#if 1
-                /* R.Integer * L -> L.Integer */
-
-                /* R.Integer * L.Decimal -> T.Decimal */
-                pA("fixRx = fixR & 0xffff0000;");
-                pA("fixLx = fixL & 0x0000ffff;");
-                pA("fixRx >>= 16;");
-                pA("fixT = fixLx * fixRx;");
-                pA("stack_socket += fixT;");
-
-                /* R.Integer * L.Integer -> T.Integer */
-                pA("fixRx = fixR & 0xffff0000;");
-                pA("fixLx = fixL & 0xffff0000;");
-                pA("fixRx >>= 16;");
-                pA("fixT = fixLx * fixRx;");
-                pA("stack_socket += fixT;");
-#endif
-
-                /* 符号を元に戻す */
-                pA("if ((fixS &= 0x00000003) == 0x00000001) {stack_socket = -stack_socket;}");
-                pA("if ((fixS &= 0x00000003) == 0x00000002) {stack_socket = -stack_socket;}");
-
+                __func_mul();
+                pA("stack_socket = fixA;\n");
                 pA(push_stack);
         }
         | expression __OPE_DIV expression {
                 pA(read_eoe_arg);
-
-                /* 符号を保存しておき、+へ変換する*/
-                pA("fixS = 0;");
-                pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
-                pA("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
-
-                /* R の逆数を得る
-                 *
-                 * （通常は 0x00010000 を 1 と考えるが、）
-                 * 0x40000000 を 1 と考えると、通常との差は << 14 なので、
-                 * 0x40000000 / R の結果も << 14 に対する演算結果として得られ、
-                 * （除算の場合は単位分 >> するので（すなわち >> 16））、
-                 * したがって結果を << 2 すれば（16 - 14 = 2だから） 0x00010000 を 1 とした場合での値となるはず。
-                 */
-                pA("fixRx = 0x40000000 / fixR;");
-                pA("fixR = fixRx << 2;");
-
-                /* 逆数を乗算することで除算とする
-                 * （以下は __OPE_MUL と同様）
-                 */
-
-                /* L * R -> T */
-
-                pA("stack_socket = 0;");
-
-#if 1
-                /* R.Decimal * L -> L.Decimal */
-
-                /* R.Decimal * L.Decimal -> T.Decimal */
-                pA("fixRx = fixR & 0x0000ffff;");
-                pA("fixLx = fixL & 0x0000ffff;");
-                pA("fixT = fixLx * fixRx;");
-                pA("fixT >>= 16;");
-                pA("stack_socket += fixT;");
-
-                /* R.Decimal * L.Integer -> T.Integer */
-                pA("fixRx = fixR & 0x0000ffff;");
-                pA("fixLx = fixL & 0xffff0000;");
-                pA("fixLx >>= 16;");
-                pA("fixT = fixLx * fixRx;");
-                pA("stack_socket += fixT;");
-#endif
-
-#if 1
-                /* R.Integer * L -> L.Integer */
-
-                /* R.Integer * L.Decimal -> T.Decimal */
-                pA("fixRx = fixR & 0xffff0000;");
-                pA("fixLx = fixL & 0x0000ffff;");
-                pA("fixRx >>= 16;");
-                pA("fixT = fixLx * fixRx;");
-                pA("stack_socket += fixT;");
-
-                /* R.Integer * L.Integer -> T.Integer */
-                pA("fixRx = fixR & 0xffff0000;");
-                pA("fixLx = fixL & 0xffff0000;");
-                pA("fixRx >>= 16;");
-                pA("fixT = fixLx * fixRx;");
-                pA("stack_socket += fixT;");
-#endif
-
-                /* 符号を元に戻す */
-                pA("if ((fixS &= 0x00000003) == 0x00000001) {stack_socket = -stack_socket;}");
-                pA("if ((fixS &= 0x00000003) == 0x00000002) {stack_socket = -stack_socket;}");
-
+                __func_div();
+                pA("stack_socket = fixA;\n");
                 pA(push_stack);
         }
         | expression __OPE_POWER expression {}
         | expression __OPE_MOD expression {
                 pA(read_eoe_arg);
-
-                /* 符号付き剰余 */
-
-                /* fixL, fixR それぞれの絶対値 */
-                pA("if (fixL >= 0) {fixLx = fixL;} else {fixLx = -fixL;}");
-                pA("if (fixR >= 0) {fixRx = fixR;} else {fixRx = -fixR;}");
-
-                pA("fixS = 0;");
-
-                /* fixL, fixR の符号が異なる場合の検出 */
-                pA("if (fixL > 0) {if (fixR < 0) {fixS = 1;}}");
-                pA("if (fixL < 0) {if (fixR > 0) {fixS = 2;}}");
-
-                /* 符号が異なり、かつ、絶対値比較で fixL の方が小さい場合 */
-                pA("if (fixLx < fixRx) {");
-                pA("if (fixS == 1) {fixS = 3; stack_socket = fixL + fixR;}");
-                pA("if (fixS == 2) {fixS = 3; stack_socket = fixL + fixR;}");
-                pA("}");
-
-                /* それ以外の場合 */
-                pA("if (fixS != 3) {");
-                pA("fixT = fixL / fixR;");
-                /* floor */
-                pA("if (fixT < 0) {fixT -= 1;}");
-                pA("fixRx = fixT * fixR;");
-                pA("stack_socket = fixL - fixRx;");
-                pA("}");
-
+                __func_mod();
+                pA("stack_socket = fixA;\n");
                 pA(push_stack);
         }
-
         | expression __OPE_OR expression {
                 pA(read_eoe_arg);
-
-                pA("stack_socket = fixL;");
-                pA("stack_socket |= fixR;");
+                __func_or();
+                pA("stack_socket = fixA;\n");
                 pA(push_stack);
         }
         | expression __OPE_AND expression {
                 pA(read_eoe_arg);
-
-                pA("stack_socket = fixL;");
-                pA("stack_socket &= fixR;");
+                __func_and();
+                pA("stack_socket = fixA;\n");
                 pA(push_stack);
         }
         | expression __OPE_XOR expression {
                 pA(read_eoe_arg);
-
-                pA("stack_socket = fixL;");
-                pA("stack_socket ^= fixR;");
+                __func_xor();
+                pA("stack_socket = fixA;\n");
                 pA(push_stack);
         }
         | __OPE_NOT expression {
                 pA(pop_stack);
-
-                pA("tmp = -1;");
-                pA("stack_socket ^= tmp;");
+                pA("fixL = stack_socket;\n");
+                __func_not();
+                pA("stack_socket = fixA;\n");
                 pA(push_stack);
         }
         | __OPE_ADD expression %prec __OPE_PLUS {
@@ -744,8 +790,9 @@ operation
         }
         | __OPE_SUB expression %prec __OPE_MINUS {
                 pA(pop_stack);
-
-                pA("stack_socket = -stack_socket;");
+                pA("fixL = stack_socket;\n");
+                __func_minus();
+                pA("stack_socket = fixA;\n");
                 pA(push_stack);
         }
         | __LB expression __RB {
