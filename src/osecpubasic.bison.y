@@ -317,22 +317,22 @@ static char init_labelstack[] = {
  */
 void init_all(void)
 {
-        puts("#include \"osecpu_ask.h\"\n");
+        pA("#include \"osecpu_ask.h\"\n");
 
-        printf("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
+        pA("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
 
-        puts("SInt32 tmp0:R08;");
-        puts("SInt32 tmp1:R09;\n");
+        pA("SInt32 tmp0:R08;");
+        pA("SInt32 tmp1:R09;\n");
 
         /* forループ処理の作業用 */
-        puts("SInt32 forfixL: R24;");
-        puts("SInt32 forfixR: R25;");
-        puts("SInt32 forfixtmp: R26;\n");
+        pA("SInt32 forfixL: R24;");
+        pA("SInt32 forfixR: R25;");
+        pA("SInt32 forfixtmp: R26;\n");
 
-        puts(init_heap);
-        puts(init_stack);
-        puts(init_labelstack);
-        puts(init_eoe_arg);
+        pA(init_heap);
+        pA(init_stack);
+        pA(init_labelstack);
+        pA(init_eoe_arg);
 }
 
 %}
@@ -415,47 +415,47 @@ function
 
 func_print
         : __FUNC_PRINT expression {
-                puts(pop_stack);
+                pA(pop_stack);
 
                 /* 整数側の表示 */
 
-                puts("tmp0 = stack_socket >> 16;");
-                puts("if (tmp0 < 0) {tmp0 += 1;}");
+                pA("tmp0 = stack_socket >> 16;");
+                pA("if (tmp0 < 0) {tmp0 += 1;}");
 
                 /* 整数部が0の負の数の場合は、junkApi_putStringDec()に0として処理させるので符号が付かない。
                  * 従って、その場合は手動で符号を付ける必要がある
                  */
-                puts("if (stack_socket < 0) {if (tmp0 == 0) {junkApi_putConstString('-');}}");
+                pA("if (stack_socket < 0) {if (tmp0 == 0) {junkApi_putConstString('-');}}");
 
-                puts("junkApi_putStringDec('\\1', tmp0, 6, 1);");
+                pA("junkApi_putStringDec('\\1', tmp0, 6, 1);");
 
                 /* 小数点を表示 */
-                puts("junkApi_putConstString('.');");
+                pA("junkApi_putConstString('.');");
 
                 /* 小数側の表示 */
 
-                puts("tmp0 = stack_socket;");
-                puts("tmp1 = 0;");
-                puts("if ((tmp0 & 0x00008000) != 0) {tmp1 += 5000;}");
-                puts("if ((tmp0 & 0x00004000) != 0) {tmp1 += 2500;}");
-                puts("if ((tmp0 & 0x00002000) != 0) {tmp1 += 1250;}");
-                puts("if ((tmp0 & 0x00001000) != 0) {tmp1 += 625;}");
-                puts("if ((tmp0 & 0x00000800) != 0) {tmp1 += 312;}");
-                puts("if ((tmp0 & 0x00000400) != 0) {tmp1 += 156;}");
-                puts("if ((tmp0 & 0x00000200) != 0) {tmp1 += 78;}");
-                puts("if ((tmp0 & 0x00000100) != 0) {tmp1 += 39;}");
-                puts("if ((tmp0 & 0x00000080) != 0) {tmp1 += 19;}");
-                puts("if ((tmp0 & 0x00000040) != 0) {tmp1 += 10;}");
-                puts("if ((tmp0 & 0x00000020) != 0) {tmp1 += 5;}");
-                puts("if ((tmp0 & 0x00000010) != 0) {tmp1 += 2;}");
-                puts("if ((tmp0 & 0x00000008) != 0) {tmp1 += 1;}");
-                puts("if ((tmp0 & 0x00000004) != 0) {tmp1 += 1;}");
+                pA("tmp0 = stack_socket;");
+                pA("tmp1 = 0;");
+                pA("if ((tmp0 & 0x00008000) != 0) {tmp1 += 5000;}");
+                pA("if ((tmp0 & 0x00004000) != 0) {tmp1 += 2500;}");
+                pA("if ((tmp0 & 0x00002000) != 0) {tmp1 += 1250;}");
+                pA("if ((tmp0 & 0x00001000) != 0) {tmp1 += 625;}");
+                pA("if ((tmp0 & 0x00000800) != 0) {tmp1 += 312;}");
+                pA("if ((tmp0 & 0x00000400) != 0) {tmp1 += 156;}");
+                pA("if ((tmp0 & 0x00000200) != 0) {tmp1 += 78;}");
+                pA("if ((tmp0 & 0x00000100) != 0) {tmp1 += 39;}");
+                pA("if ((tmp0 & 0x00000080) != 0) {tmp1 += 19;}");
+                pA("if ((tmp0 & 0x00000040) != 0) {tmp1 += 10;}");
+                pA("if ((tmp0 & 0x00000020) != 0) {tmp1 += 5;}");
+                pA("if ((tmp0 & 0x00000010) != 0) {tmp1 += 2;}");
+                pA("if ((tmp0 & 0x00000008) != 0) {tmp1 += 1;}");
+                pA("if ((tmp0 & 0x00000004) != 0) {tmp1 += 1;}");
 
-                puts("if (stack_socket < 0) {tmp1 = 10000 - tmp1;}");
-                puts("junkApi_putStringDec('\\1', tmp1, 4, 6);\n");
+                pA("if (stack_socket < 0) {tmp1 = 10000 - tmp1;}");
+                pA("junkApi_putStringDec('\\1', tmp1, 4, 6);\n");
 
                 /* 自動改行はさせない （最後にスペースを表示するのみ） */
-                puts("junkApi_putConstString(' ');");
+                pA("junkApi_putConstString(' ');");
         }
         ;
 
@@ -470,25 +470,25 @@ initializer
 
 assignment
         : __IDENTIFIER __OPE_SUBST expression {
-                puts(pop_stack);
-                puts("heap_socket = stack_socket;");
+                pA(pop_stack);
+                pA("heap_socket = stack_socket;");
 
-                puts("heap_offset = 0;");
+                pA("heap_offset = 0;");
 
                 char tmp[0x1000];
                 write_heap(tmp, $1);
-                puts(tmp);
+                pA(tmp);
         }
         | __IDENTIFIER __LB expression __RB __OPE_SUBST expression {
-                puts(pop_stack);
-                puts("heap_socket = stack_socket;");
+                pA(pop_stack);
+                pA("heap_socket = stack_socket;");
 
-                puts(pop_stack);
-                puts("heap_offset = stack_socket;");
+                pA(pop_stack);
+                pA("heap_offset = stack_socket;");
 
                 char tmp[0x1000];
                 write_heap(tmp, $1);
-                puts(tmp);
+                pA(tmp);
         }
         ;
 
@@ -500,91 +500,91 @@ const_variable
                 int32_t ia = ((int32_t)a) << 16;
                 int32_t ib = ((int32_t)(0x0000ffff * b)) & 0x0000ffff;
 
-                printf("stack_socket = %d;\n", ia | ib);
-                puts(push_stack);
+                pA("stack_socket = %d;\n", ia | ib);
+                pA(push_stack);
         }
         | __CONST_INTEGER {
-                printf("stack_socket = %d;\n", $1 << 16);
-                puts(push_stack);
+                pA("stack_socket = %d;\n", $1 << 16);
+                pA(push_stack);
         }
         ;
 
 operation
         : expression __OPE_ADD expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("stack_socket = fixL;");
-                puts("stack_socket += fixR;");
-                puts(push_stack);
+                pA("stack_socket = fixL;");
+                pA("stack_socket += fixR;");
+                pA(push_stack);
         }
         | expression __OPE_SUB expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("stack_socket = fixL;");
-                puts("stack_socket -= fixR;");
-                puts(push_stack);
+                pA("stack_socket = fixL;");
+                pA("stack_socket -= fixR;");
+                pA(push_stack);
         }
         | expression __OPE_MUL expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
                 /* 符号を保存しておき、+へ変換する*/
-                puts("fixS = 0;");
-                puts("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
-                puts("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
+                pA("fixS = 0;");
+                pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
+                pA("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
 
                 /* L * R -> T */
 
-                puts("stack_socket = 0;");
+                pA("stack_socket = 0;");
 
 #if 1
                 /* R.Decimal * L -> L.Decimal */
 
                 /* R.Decimal * L.Decimal -> T.Decimal */
-                puts("fixRx = fixR & 0x0000ffff;");
-                puts("fixLx = fixL & 0x0000ffff;");
-                puts("fixT = fixLx * fixRx;");
-                puts("fixT >>= 16;");
-                puts("stack_socket += fixT;");
+                pA("fixRx = fixR & 0x0000ffff;");
+                pA("fixLx = fixL & 0x0000ffff;");
+                pA("fixT = fixLx * fixRx;");
+                pA("fixT >>= 16;");
+                pA("stack_socket += fixT;");
 
                 /* R.Decimal * L.Integer -> T.Integer */
-                puts("fixRx = fixR & 0x0000ffff;");
-                puts("fixLx = fixL & 0xffff0000;");
-                puts("fixLx >>= 16;");
-                puts("fixT = fixLx * fixRx;");
-                puts("stack_socket += fixT;");
+                pA("fixRx = fixR & 0x0000ffff;");
+                pA("fixLx = fixL & 0xffff0000;");
+                pA("fixLx >>= 16;");
+                pA("fixT = fixLx * fixRx;");
+                pA("stack_socket += fixT;");
 #endif
 
 #if 1
                 /* R.Integer * L -> L.Integer */
 
                 /* R.Integer * L.Decimal -> T.Decimal */
-                puts("fixRx = fixR & 0xffff0000;");
-                puts("fixLx = fixL & 0x0000ffff;");
-                puts("fixRx >>= 16;");
-                puts("fixT = fixLx * fixRx;");
-                puts("stack_socket += fixT;");
+                pA("fixRx = fixR & 0xffff0000;");
+                pA("fixLx = fixL & 0x0000ffff;");
+                pA("fixRx >>= 16;");
+                pA("fixT = fixLx * fixRx;");
+                pA("stack_socket += fixT;");
 
                 /* R.Integer * L.Integer -> T.Integer */
-                puts("fixRx = fixR & 0xffff0000;");
-                puts("fixLx = fixL & 0xffff0000;");
-                puts("fixRx >>= 16;");
-                puts("fixT = fixLx * fixRx;");
-                puts("stack_socket += fixT;");
+                pA("fixRx = fixR & 0xffff0000;");
+                pA("fixLx = fixL & 0xffff0000;");
+                pA("fixRx >>= 16;");
+                pA("fixT = fixLx * fixRx;");
+                pA("stack_socket += fixT;");
 #endif
 
                 /* 符号を元に戻す */
-                puts("if ((fixS &= 0x00000003) == 0x00000001) {stack_socket = -stack_socket;}");
-                puts("if ((fixS &= 0x00000003) == 0x00000002) {stack_socket = -stack_socket;}");
+                pA("if ((fixS &= 0x00000003) == 0x00000001) {stack_socket = -stack_socket;}");
+                pA("if ((fixS &= 0x00000003) == 0x00000002) {stack_socket = -stack_socket;}");
 
-                puts(push_stack);
+                pA(push_stack);
         }
         | expression __OPE_DIV expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
                 /* 符号を保存しておき、+へ変換する*/
-                puts("fixS = 0;");
-                puts("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
-                puts("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
+                pA("fixS = 0;");
+                pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
+                pA("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
 
                 /* R の逆数を得る
                  *
@@ -594,8 +594,8 @@ operation
                  * （除算の場合は単位分 >> するので（すなわち >> 16））、
                  * したがって結果を << 2 すれば（16 - 14 = 2だから） 0x00010000 を 1 とした場合での値となるはず。
                  */
-                puts("fixRx = 0x40000000 / fixR;");
-                puts("fixR = fixRx << 2;");
+                pA("fixRx = 0x40000000 / fixR;");
+                pA("fixR = fixRx << 2;");
 
                 /* 逆数を乗算することで除算とする
                  * （以下は __OPE_MUL と同様）
@@ -603,120 +603,120 @@ operation
 
                 /* L * R -> T */
 
-                puts("stack_socket = 0;");
+                pA("stack_socket = 0;");
 
 #if 1
                 /* R.Decimal * L -> L.Decimal */
 
                 /* R.Decimal * L.Decimal -> T.Decimal */
-                puts("fixRx = fixR & 0x0000ffff;");
-                puts("fixLx = fixL & 0x0000ffff;");
-                puts("fixT = fixLx * fixRx;");
-                puts("fixT >>= 16;");
-                puts("stack_socket += fixT;");
+                pA("fixRx = fixR & 0x0000ffff;");
+                pA("fixLx = fixL & 0x0000ffff;");
+                pA("fixT = fixLx * fixRx;");
+                pA("fixT >>= 16;");
+                pA("stack_socket += fixT;");
 
                 /* R.Decimal * L.Integer -> T.Integer */
-                puts("fixRx = fixR & 0x0000ffff;");
-                puts("fixLx = fixL & 0xffff0000;");
-                puts("fixLx >>= 16;");
-                puts("fixT = fixLx * fixRx;");
-                puts("stack_socket += fixT;");
+                pA("fixRx = fixR & 0x0000ffff;");
+                pA("fixLx = fixL & 0xffff0000;");
+                pA("fixLx >>= 16;");
+                pA("fixT = fixLx * fixRx;");
+                pA("stack_socket += fixT;");
 #endif
 
 #if 1
                 /* R.Integer * L -> L.Integer */
 
                 /* R.Integer * L.Decimal -> T.Decimal */
-                puts("fixRx = fixR & 0xffff0000;");
-                puts("fixLx = fixL & 0x0000ffff;");
-                puts("fixRx >>= 16;");
-                puts("fixT = fixLx * fixRx;");
-                puts("stack_socket += fixT;");
+                pA("fixRx = fixR & 0xffff0000;");
+                pA("fixLx = fixL & 0x0000ffff;");
+                pA("fixRx >>= 16;");
+                pA("fixT = fixLx * fixRx;");
+                pA("stack_socket += fixT;");
 
                 /* R.Integer * L.Integer -> T.Integer */
-                puts("fixRx = fixR & 0xffff0000;");
-                puts("fixLx = fixL & 0xffff0000;");
-                puts("fixRx >>= 16;");
-                puts("fixT = fixLx * fixRx;");
-                puts("stack_socket += fixT;");
+                pA("fixRx = fixR & 0xffff0000;");
+                pA("fixLx = fixL & 0xffff0000;");
+                pA("fixRx >>= 16;");
+                pA("fixT = fixLx * fixRx;");
+                pA("stack_socket += fixT;");
 #endif
 
                 /* 符号を元に戻す */
-                puts("if ((fixS &= 0x00000003) == 0x00000001) {stack_socket = -stack_socket;}");
-                puts("if ((fixS &= 0x00000003) == 0x00000002) {stack_socket = -stack_socket;}");
+                pA("if ((fixS &= 0x00000003) == 0x00000001) {stack_socket = -stack_socket;}");
+                pA("if ((fixS &= 0x00000003) == 0x00000002) {stack_socket = -stack_socket;}");
 
-                puts(push_stack);
+                pA(push_stack);
         }
         | expression __OPE_POWER expression {}
         | expression __OPE_MOD expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
                 /* 符号付き剰余 */
 
                 /* fixL, fixR それぞれの絶対値 */
-                puts("if (fixL >= 0) {fixLx = fixL;} else {fixLx = -fixL;}");
-                puts("if (fixR >= 0) {fixRx = fixR;} else {fixRx = -fixR;}");
+                pA("if (fixL >= 0) {fixLx = fixL;} else {fixLx = -fixL;}");
+                pA("if (fixR >= 0) {fixRx = fixR;} else {fixRx = -fixR;}");
 
-                puts("fixS = 0;");
+                pA("fixS = 0;");
 
                 /* fixL, fixR の符号が異なる場合の検出 */
-                puts("if (fixL > 0) {if (fixR < 0) {fixS = 1;}}");
-                puts("if (fixL < 0) {if (fixR > 0) {fixS = 2;}}");
+                pA("if (fixL > 0) {if (fixR < 0) {fixS = 1;}}");
+                pA("if (fixL < 0) {if (fixR > 0) {fixS = 2;}}");
 
                 /* 符号が異なり、かつ、絶対値比較で fixL の方が小さい場合 */
-                puts("if (fixLx < fixRx) {");
-                puts("if (fixS == 1) {fixS = 3; stack_socket = fixL + fixR;}");
-                puts("if (fixS == 2) {fixS = 3; stack_socket = fixL + fixR;}");
-                puts("}");
+                pA("if (fixLx < fixRx) {");
+                pA("if (fixS == 1) {fixS = 3; stack_socket = fixL + fixR;}");
+                pA("if (fixS == 2) {fixS = 3; stack_socket = fixL + fixR;}");
+                pA("}");
 
                 /* それ以外の場合 */
-                puts("if (fixS != 3) {");
-                puts("fixT = fixL / fixR;");
+                pA("if (fixS != 3) {");
+                pA("fixT = fixL / fixR;");
                 /* floor */
-                puts("if (fixT < 0) {fixT -= 1;}");
-                puts("fixRx = fixT * fixR;");
-                puts("stack_socket = fixL - fixRx;");
-                puts("}");
+                pA("if (fixT < 0) {fixT -= 1;}");
+                pA("fixRx = fixT * fixR;");
+                pA("stack_socket = fixL - fixRx;");
+                pA("}");
 
-                puts(push_stack);
+                pA(push_stack);
         }
 
         | expression __OPE_OR expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("stack_socket = fixL;");
-                puts("stack_socket |= fixR;");
-                puts(push_stack);
+                pA("stack_socket = fixL;");
+                pA("stack_socket |= fixR;");
+                pA(push_stack);
         }
         | expression __OPE_AND expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("stack_socket = fixL;");
-                puts("stack_socket &= fixR;");
-                puts(push_stack);
+                pA("stack_socket = fixL;");
+                pA("stack_socket &= fixR;");
+                pA(push_stack);
         }
         | expression __OPE_XOR expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("stack_socket = fixL;");
-                puts("stack_socket ^= fixR;");
-                puts(push_stack);
+                pA("stack_socket = fixL;");
+                pA("stack_socket ^= fixR;");
+                pA(push_stack);
         }
         | __OPE_NOT expression {
-                puts(pop_stack);
+                pA(pop_stack);
 
-                puts("tmp = -1;");
-                puts("stack_socket ^= tmp;");
-                puts(push_stack);
+                pA("tmp = -1;");
+                pA("stack_socket ^= tmp;");
+                pA(push_stack);
         }
         | __OPE_ADD expression %prec __OPE_PLUS {
                 /* 何もしない */
         }
         | __OPE_SUB expression %prec __OPE_MINUS {
-                puts(pop_stack);
+                pA(pop_stack);
 
-                puts("stack_socket = -stack_socket;");
-                puts(push_stack);
+                pA("stack_socket = -stack_socket;");
+                pA(push_stack);
         }
         | __LB expression __RB {
                 /* 何もしない */
@@ -725,64 +725,64 @@ operation
 
 comparison
         : expression __OPE_COMPARISON expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                puts(push_stack);
+                pA("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                pA(push_stack);
         }
         | expression __OPE_NOT_COMPARISON expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("if (fixL != fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                puts(push_stack);
+                pA("if (fixL != fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                pA(push_stack);
         }
         | expression __OPE_ISSMALL expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("if (fixL < fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                puts(push_stack);
+                pA("if (fixL < fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                pA(push_stack);
         }
         | expression __OPE_ISSMALL_COMP expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("if (fixL <= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                puts(push_stack);
+                pA("if (fixL <= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                pA(push_stack);
         }
         | expression __OPE_ISLARGE expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("if (fixL > fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                puts(push_stack);
+                pA("if (fixL > fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                pA(push_stack);
         }
         | expression __OPE_ISLARGE_COMP expression {
-                puts(read_eoe_arg);
+                pA(read_eoe_arg);
 
-                puts("if (fixL >= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                puts(push_stack);
+                pA("if (fixL >= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                pA(push_stack);
         }
         ;
 
 read_variable
         : __IDENTIFIER {
-                puts("heap_offset = 0;");
+                pA("heap_offset = 0;");
 
                 char tmp[0x1000];
                 read_heap(tmp, $1);
-                puts(tmp);
+                pA(tmp);
 
-                puts("stack_socket = heap_socket;");
-                puts(push_stack);
+                pA("stack_socket = heap_socket;");
+                pA(push_stack);
         }
         | __IDENTIFIER __LB expression __RB {
-                puts(pop_stack);
-                puts("heap_offset = stack_socket;");
+                pA(pop_stack);
+                pA("heap_offset = stack_socket;");
 
                 char tmp[0x1000];
                 read_heap(tmp, $1);
-                puts(tmp);
+                pA(tmp);
 
-                puts("stack_socket = heap_socket;");
-                puts(push_stack);
+                pA("stack_socket = heap_socket;");
+                pA(push_stack);
         }
         ;
 
@@ -795,8 +795,8 @@ selection_if
 
 selection_if_v
         : __STATE_IF expression {
-                puts(pop_stack);
-                puts("if (stack_socket == 0x00010000) {");
+                pA(pop_stack);
+                pA("if (stack_socket == 0x00010000) {");
         }
         ;
 
@@ -807,9 +807,9 @@ selection_if_t
 
 selection_if_e
         : __STATE_ELSE {
-                puts(" else {");
+                pA(" else {");
         } declaration {
-                puts("}");
+                pA("}");
         }
         ;
 
@@ -818,21 +818,21 @@ iterator_for
                 /* このセクションはスカラー変数への代入なので、 assignment のスカラー版と同様
                  * （$2が違うだけ）
                  */
-                puts(pop_stack);
-                puts("heap_socket = stack_socket;");
+                pA(pop_stack);
+                pA("heap_socket = stack_socket;");
 
-                puts("heap_offset = 0;");
+                pA("heap_offset = 0;");
 
                 char tmp[0x1000];
                 write_heap(tmp, $2);
-                puts(tmp);
+                pA(tmp);
 
                 /* そして、代入後であるここに無名ラベルを作る（このforループは、以降はこの位置へと戻ってくる）
                  * また、このラベルは next で戻ってくる際に使うので、この構文解析器で参照できるように $$ で出力する。（以降$5で参照できる）
                  * この $5 ラベル番号で int32 型の値である。
                  * そして、ラベルを作成したので cur_label_index_head を一つ進める。
                  */
-                printf("LB(0, %d);\n", cur_label_index_head);
+                pA("LB(0, %d);\n", cur_label_index_head);
                 $<ival>$ = cur_label_index_head;
                 cur_label_index_head++;
         } __STATE_TO expression {
@@ -840,36 +840,36 @@ iterator_for
                  * まずスタックに詰まれてる __STATE_TO expression (の戻り値)を得て、 forfixR（右辺用） へと退避しておく。
                  * （また、このポップは、変数を読む際に余分なスタックが残っていないように、スタックを掃除しておく意味も兼ねる）
                  */
-                puts(pop_stack);
-                puts("forfixR = stack_socket;");
+                pA(pop_stack);
+                pA("forfixR = stack_socket;");
 
                 /* 次にスカラー変数から値を読み、 forfixL （左辺用） へと退避しておく。
                  */
-                puts("heap_offset = 0;");
+                pA("heap_offset = 0;");
 
                 char tmp[0x1000];
                 read_heap(tmp, $2);
-                puts(tmp);
+                pA(tmp);
 
-                puts("forfixL = heap_socket;");
+                pA("forfixL = heap_socket;");
         } __STATE_STEP expression {
                 /* 条件比較の方向を判断するために、stepの値を読む必要がある
                  * そして、最後の next の時点でインクリメントに使用するのに備えて、再びプッシュしておく
                  */
-                puts(pop_stack);
-                puts("forfixtmp = stack_socket;");
-                puts(push_stack);
+                pA(pop_stack);
+                pA("forfixtmp = stack_socket;");
+                pA(push_stack);
 
                 /* step が正の場合は　<= による比較となり、 負の場合は >= による比較となる。
                  * これは実際には forfixL, forfixR の値を入れ替えることで対応する。（比較の条件式をどちらのケースでも共用できるように）
                  * したがって、”step が負の場合に forfixL, forfixR を入れ替える命令”をここに書く。
                  */
-                puts("if (forfixtmp < 0) {forfixtmp = forfixL; forfixL = forfixR; forfixR = forfixtmp;}");
+                pA("if (forfixtmp < 0) {forfixtmp = forfixL; forfixL = forfixR; forfixR = forfixtmp;}");
 
                 /* これら forfixL, forfixR を比較し分岐する命令を書く。
                  * （真の場合の分岐は、そのまま以降の declaration_list となる）
                  */
-                puts("if (forfixL <= forfixR) {");
+                pA("if (forfixL <= forfixR) {");
         } declaration_list __STATE_NEXT {
                 /* ここは真の場合の命令の続きで、declaration_list の本体が終了した時点 */
 
@@ -878,61 +878,61 @@ iterator_for
                  * 次に、スカラー変数の値を取得して forfixL へと退避し、
                  * これら forfixL, forfixR を加算し、結果をスカラー変数へ再び代入する。
                  */
-                puts(pop_stack);
-                puts("forfixR = stack_socket;");
+                pA(pop_stack);
+                pA("forfixR = stack_socket;");
 
                 /* このセクションはスカラー変数の読み込みなので、read_variable とスカラー版とほぼ同様
                  */
-                puts("heap_offset = 0;");
+                pA("heap_offset = 0;");
                 char tmp[0x1000];
                 read_heap(tmp, $2);
-                puts(tmp);
-                puts("forfixL = heap_socket;");
+                pA(tmp);
+                pA("forfixL = heap_socket;");
 
                 /* インクリメントして、その結果をスカラー変数へ代入する
                  */
-                puts("heap_socket = forfixL + forfixR;");
+                pA("heap_socket = forfixL + forfixR;");
 
-                puts("heap_offset = 0;");
+                pA("heap_offset = 0;");
                 write_heap(tmp, $2);
-                puts(tmp);
+                pA(tmp);
 
                 /* その後、先頭で作成したラベル位置へと再び戻るために、 goto させる命令を書く。
                  * これには $5 により示されるラベル位置を用いる。
                  * そして、真の場合の命令はここまでとなり、以降は偽の場合の命令となる
                  */
-                printf("PLIMM(P3F, %d);\n", $<ival>5);
-                puts("} else {");
+                pA("PLIMM(P3F, %d);\n", $<ival>5);
+                pA("} else {");
 
                 /* 偽の場合は、スタックをポップ（stepを捨てるため）して、そのまま終わる */
-                puts(pop_stack);
-                puts("}");
+                pA(pop_stack);
+                pA("}");
         }
         ;
 
 define_label
         : __DEFINE_LABEL {
-                printf("LB(0, %d);\n", labellist_search($1));
+                pA("LB(0, %d);\n", labellist_search($1));
         }
         ;
 
 jump
         : __OPE_GOTO __LABEL {
-                printf("PLIMM(P3F, %d);\n", labellist_search($2));
+                pA("PLIMM(P3F, %d);\n", labellist_search($2));
         }
         | __OPE_GOSUB __LABEL {
                 /* まず最初に、リターン先ラベルを CUR_RETURN_LABEL にセットする命令を作成し、
                  * その CUR_RETURN_LABEL の内容をラベルスタックへプッシュし、
                  * 次に、普通に __LABEL へと goto する命令を作成する
                  */
-                printf("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-                puts(push_labelstack);
-                printf("PLIMM(P3F, %d);\n", labellist_search($2));
+                pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+                pA(push_labelstack);
+                pA("PLIMM(P3F, %d);\n", labellist_search($2));
 
                 /* そして、実際に戻り位置としてのラベル（無名ラベル）をここに作成し、
                  * そして、ラベルを作成したので cur_label_index_head を一つ進める
                  */
-                printf("LB(0, %d);\n", cur_label_index_head);
+                pA("LB(0, %d);\n", cur_label_index_head);
                 cur_label_index_head++;
         }
         | __OPE_RETURN {
@@ -941,30 +941,30 @@ jump
                  * すなわち、gosub 先で、さらに gosub しても、戻りアドレスはラベルスタックへ詰まれるので、
                  * gosub 先で、さらに再帰的に gosub することが可能。
                  */
-                puts(pop_labelstack);
-                printf("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
+                pA(pop_labelstack);
+                pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
         }
         | __OPE_ON expression __OPE_GOTO __LABEL {
-                puts(pop_stack);
-                puts("if (stack_socket == 0x00010000) {");
+                pA(pop_stack);
+                pA("if (stack_socket == 0x00010000) {");
 
                 /* goto と同様（$4が違うだけ）*/
-                printf("PLIMM(P3F, %d);\n", labellist_search($4));
+                pA("PLIMM(P3F, %d);\n", labellist_search($4));
 
-                puts("}");
+                pA("}");
         }
         | __OPE_ON expression __OPE_GOSUB __LABEL {
-                puts(pop_stack);
-                puts("if (stack_socket == 0x00010000) {");
+                pA(pop_stack);
+                pA("if (stack_socket == 0x00010000) {");
 
                 /* gosub と同様（$4が違うだけ）*/
-                printf("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-                puts(push_labelstack);
-                printf("PLIMM(P3F, %d);\n", labellist_search($4));
-                printf("LB(0, %d);\n", cur_label_index_head);
+                pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+                pA(push_labelstack);
+                pA("PLIMM(P3F, %d);\n", labellist_search($4));
+                pA("LB(0, %d);\n", cur_label_index_head);
                 cur_label_index_head++;
 
-                puts("}");
+                pA("}");
         }
         ;
 
