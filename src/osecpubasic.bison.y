@@ -634,7 +634,38 @@ operation
                 puts(push_stack);
         }
         | expression __OPE_POWER expression {}
-        | expression __OPE_MOD expression {}
+        | expression __OPE_MOD expression {
+                puts(read_eoe_arg);
+
+                /* 符号付き剰余 */
+
+                /* fixL, fixR それぞれの絶対値 */
+                puts("if (fixL >= 0) {fixLx = fixL;} else {fixLx = -fixL;}");
+                puts("if (fixR >= 0) {fixRx = fixR;} else {fixRx = -fixR;}");
+
+                puts("fixS = 0;");
+
+                /* fixL, fixR の符号が異なる場合の検出 */
+                puts("if (fixL > 0) {if (fixR < 0) {fixS = 1;}}");
+                puts("if (fixL < 0) {if (fixR > 0) {fixS = 2;}}");
+
+                /* 符号が異なり、かつ、絶対値比較で fixL の方が小さい場合 */
+                puts("if (fixLx < fixRx) {");
+                puts("if (fixS == 1) {fixS = 3; stack_socket = fixL + fixR;}");
+                puts("if (fixS == 2) {fixS = 3; stack_socket = fixL + fixR;}");
+                puts("}");
+
+                /* それ以外の場合 */
+                puts("if (fixS != 3) {");
+                puts("fixT = fixL / fixR;");
+                /* floor */
+                puts("if (fixT < 0) {fixT -= 1;}");
+                puts("fixRx = fixT * fixR;");
+                puts("stack_socket = fixL - fixRx;");
+                puts("}");
+
+                puts(push_stack);
+        }
 
         | expression __OPE_OR expression {
                 puts(read_eoe_arg);
