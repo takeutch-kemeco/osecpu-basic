@@ -152,9 +152,12 @@ static char init_heap[] = {
  * 事前に以下のレジスタをセットしておくこと:
  * stack_socket : プッシュしたい値。（int32型）
  */
-static char push_stack[] = {
-        "PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);\n"
+#define __PUSH_STACK                                                    \
+        "PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);\n"     \
         "stack_head++;\n"
+
+static char push_stack[] = {
+        __PUSH_STACK
 };
 
 /* スタックからint32型（またはfix32型）をポップする
@@ -187,7 +190,33 @@ static char read_eoe_arg[] = {
         "fixL = stack_socket;"
 };
 
+/* eoe用レジスタをスタックへプッシュする
+ */
+static char push_eoe[] = {
+        "stack_socket = fixL;\n"  __PUSH_STACK
+        "stack_socket = fixR;\n"  __PUSH_STACK
+        "stack_socket = fixLx;\n" __PUSH_STACK
+        "stack_socket = fixRx;\n" __PUSH_STACK
+        "stack_socket = fixT;\n"  __PUSH_STACK
+        "stack_socket = fixS;\n"  __PUSH_STACK
+};
+
+/* eoe用レジスタをスタックからポップする
+ */
+static char pop_eoe[] = {
+        "stack_socket = fixS;\n"  __POP_STACK
+        "stack_socket = fixT;\n"  __POP_STACK
+        "stack_socket = fixRx;\n" __POP_STACK
+        "stack_socket = fixLx;\n" __POP_STACK
+        "stack_socket = fixR;\n"  __POP_STACK
+        "stack_socket = fixL;\n"  __POP_STACK
+};
+
 /* read_eoe_arg 用変数の初期化
+ *
+ * push_eoe, pop_eoe ともに、例外として fixA スタックへ退避しない。
+ * この fixA は eoe 間で値を受け渡しする為に用いるので、push_eoe, pop_eoe に影響されないようにしてある。
+ * （push後に行った演算の結果をfixAに入れておくことで、その後にpopした後でも演算結果を引き継げるように）
  */
 static char init_eoe_arg[] = {
         "SInt32 fixL:R20;"
@@ -196,6 +225,7 @@ static char init_eoe_arg[] = {
         "SInt32 fixRx:R23;"
         "SInt32 fixT:R27;"
         "SInt32 fixS:R28;"
+        "SInt32 fixA:R29;"
 };
 
 /* 現在の使用可能なラベルインデックスのヘッド
