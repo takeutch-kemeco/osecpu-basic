@@ -204,12 +204,30 @@ static char push_eoe[] = {
 /* eoe用レジスタをスタックからポップする
  */
 static char pop_eoe[] = {
-        "stack_socket = fixS;\n"  __POP_STACK
-        "stack_socket = fixT;\n"  __POP_STACK
-        "stack_socket = fixRx;\n" __POP_STACK
-        "stack_socket = fixLx;\n" __POP_STACK
-        "stack_socket = fixR;\n"  __POP_STACK
-        "stack_socket = fixL;\n"  __POP_STACK
+        __POP_STACK "fixS  = stack_socket;\n"
+        __POP_STACK "fixT  = stack_socket;\n"
+        __POP_STACK "fixRx = stack_socket;\n"
+        __POP_STACK "fixLx = stack_socket;\n"
+        __POP_STACK "fixR  = stack_socket;\n"
+        __POP_STACK "fixL  = stack_socket;\n"
+};
+
+static char debug_eoe[] = {
+        "junkApi_putConstString('\\nfixR:');"
+        "junkApi_putStringDec('\\1', fixR, 10, 1);"
+        "junkApi_putConstString(' fixL:');"
+        "junkApi_putStringDec('\\1', fixL, 10, 1);"
+        "junkApi_putConstString(' fixRx:');"
+        "junkApi_putStringDec('\\1', fixRx, 10, 1);"
+        "junkApi_putConstString(' fixLx:');"
+        "junkApi_putStringDec('\\1', fixLx, 10, 1);"
+        "junkApi_putConstString(' fixT:');"
+        "junkApi_putStringDec('\\1', fixT, 10, 1);"
+        "junkApi_putConstString(' fixS:');"
+        "junkApi_putStringDec('\\1', fixS, 10, 1);"
+        "junkApi_putConstString(' fixA:');"
+        "junkApi_putStringDec('\\1', fixA, 10, 1);"
+        "junkApi_putConstString('\\n');"
 };
 
 /* read_eoe_arg 用変数の初期化
