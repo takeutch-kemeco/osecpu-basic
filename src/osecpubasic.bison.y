@@ -520,6 +520,62 @@ static void __func_mod(void)
         pA("}");
 }
 
+/* powのバックエンドに用いる sqrt 命令を出力する
+ * fixL, fixR -> fixA
+ * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
+ *
+ * nr x (xn - (xn ^ p - x) / (p * xn ^ (p - 1))
+ *    L  R     R * R    L     2    R     ---
+ */
+
+static void __func_sqrt(void)
+{
+        /* fixL, fixT -> fixT */
+        void __func_sqrt_nr(void)
+        {
+                pA(push_eoe);
+                pA("fixL = fixR;");
+                __func_mul();
+                pA(pop_eoe);
+                pA("fixLx = fixA;");
+                pA("fixLx -= fixL;");
+
+                pA(push_eoe);
+                pA("fixL = 0x00020000;");
+                __func_mul();
+                pA(pop_eoe);
+                pA("fixRx = fixA;");
+
+                pA(push_eoe);
+                pA("fixL = fixLx;");
+                pA("fixR = fixRx;");
+                __func_div();
+                pA(pop_eoe);
+
+                pA("fixA = fixR - fixA;");
+        }
+
+        pA(push_eoe);
+        pA("fixR = 0x00020000;");
+        __func_div();
+        pA(pop_eoe);
+
+        pA("fixR = fixA;");
+        __func_sqrt_nr();
+
+        pA("fixR = fixA;");
+        __func_sqrt_nr();
+
+        pA("fixR = fixA;");
+        __func_sqrt_nr();
+
+        pA("fixR = fixA;");
+        __func_sqrt_nr();
+
+        pA("fixR = fixA;");
+        __func_sqrt_nr();
+}
+
 /* and命令を出力する
  * fixL & fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
