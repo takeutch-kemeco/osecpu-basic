@@ -521,7 +521,7 @@ static void __func_mod(void)
 }
 
 /* powのバックエンドに用いる sqrt 命令を出力する
- * fixL, fixR -> fixA
+ * fixL -> fixA
  * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
  *
  * nr x (xn - (xn ^ p - x) / (p * xn ^ (p - 1))
@@ -531,7 +531,7 @@ static void __func_mod(void)
 static void __func_sqrt(void)
 {
         /* fixL, fixT -> fixT */
-        void __func_sqrt_nr(void)
+        void nr(void)
         {
                 pA(push_eoe);
                 pA("fixL = fixR;");
@@ -560,20 +560,122 @@ static void __func_sqrt(void)
         __func_div();
         pA(pop_eoe);
 
-        pA("fixR = fixA;");
-        __func_sqrt_nr();
+        pA("fixR = fixA;");     nr();
+        pA("fixR = fixA;");     nr();
+        pA("fixR = fixA;");     nr();
+        pA("fixR = fixA;");     nr();
+        pA("fixR = fixA;");     nr();
+}
 
-        pA("fixR = fixA;");
-        __func_sqrt_nr();
+/* powのバックエンドに用いる a ^ +b 限定（bが正の数の場合限定）のpow
+ * fixL ^ fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_pow_p(void)
+{
+        void tt(void)
+        {
+                pA(push_eoe);
+                pA("fixL = fixT;");
+                pA("fixR = fixT;");
+                __func_mul();
+                pA(pop_eoe);
+                pA("fixT = fixA;");
+        }
 
-        pA("fixR = fixA;");
-        __func_sqrt_nr();
+        void rt(void)
+        {
+                pA(push_eoe);
+                pA("fixL = fixT;");
+                __func_sqrt();
+                pA(pop_eoe);
+                pA("fixT = fixA;");
+        }
 
-        pA("fixR = fixA;");
-        __func_sqrt_nr();
+        void st(void)
+        {
+                pA(push_eoe);
+                pA("fixL = fixS;");
+                pA("fixR = fixT;");
+                __func_mul();
+                pA(pop_eoe);
+                pA("fixS = fixA;");
+        }
 
+        pA("fixS = 0x00010000;");
+
+        pA("fixT = fixL;");
+        pA("if ((fixR & 0x00010000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x00020000) != 0) {"); st(); pA("}"); tt();
+/*
+        pA("if ((fixR & 0x00040000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x00080000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x00100000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x00200000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x00400000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x00800000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x01000000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x02000000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x04000000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x08000000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x10000000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x20000000) != 0) {"); st(); pA("}"); tt();
+        pA("if ((fixR & 0x40000000) != 0) {"); st(); pA("}");
+*/
+
+        pA("fixT = fixL;"); rt();
+        pA("if ((fixR & 0x00008000) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00004000) != 0) {"); st(); pA("}"); rt();
+/*
+        pA("if ((fixR & 0x00002000) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00001000) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000800) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000400) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000200) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000010) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000080) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000040) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000020) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000010) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000008) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000004) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000002) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000001) != 0) {"); st(); pA("}");
+*/
+
+        pA("fixA = fixS;");
+}
+
+/* powのバックエンドに用いる a ^ -b 限定（bが負の数の場合限定）のpow
+ * fixL ^ fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_pow_m(void)
+{
+        pA("fixR = -fixR;");
+        __func_pow_p();
+
+        pA("fixL = 0x00010000;");
         pA("fixR = fixA;");
-        __func_sqrt_nr();
+        __func_div();
+}
+
+/* 冪乗命令を出力する
+ * fixL ^ fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_pow(void)
+{
+        pA("if (fixR < 0) {");
+        pA(push_eoe);
+        __func_pow_m();
+        pA(pop_eoe);
+
+        pA("} else {");
+        pA(push_eoe);
+        __func_pow_p();
+        pA(pop_eoe);
+        pA("}");
 }
 
 /* and命令を出力する
@@ -830,7 +932,12 @@ operation
                 pA("stack_socket = fixA;");
                 pA(push_stack);
         }
-        | expression __OPE_POWER expression {}
+        | expression __OPE_POWER expression {
+                pA(read_eoe_arg);
+                __func_pow();
+                pA("stack_socket = fixA;");
+                pA(push_stack);
+        }
         | expression __OPE_MOD expression {
                 pA(read_eoe_arg);
                 __func_mod();
