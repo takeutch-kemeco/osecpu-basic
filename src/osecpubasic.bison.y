@@ -809,57 +809,57 @@ operation
         : expression __OPE_ADD expression {
                 pA(read_eoe_arg);
                 __func_add();
-                pA("stack_socket = fixA;\n");
+                pA("stack_socket = fixA;");
                 pA(push_stack);
         }
         | expression __OPE_SUB expression {
                 pA(read_eoe_arg);
                 __func_sub();
-                pA("stack_socket = fixA;\n");
+                pA("stack_socket = fixA;");
                 pA(push_stack);
         }
         | expression __OPE_MUL expression {
                 pA(read_eoe_arg);
                 __func_mul();
-                pA("stack_socket = fixA;\n");
+                pA("stack_socket = fixA;");
                 pA(push_stack);
         }
         | expression __OPE_DIV expression {
                 pA(read_eoe_arg);
                 __func_div();
-                pA("stack_socket = fixA;\n");
+                pA("stack_socket = fixA;");
                 pA(push_stack);
         }
         | expression __OPE_POWER expression {}
         | expression __OPE_MOD expression {
                 pA(read_eoe_arg);
                 __func_mod();
-                pA("stack_socket = fixA;\n");
+                pA("stack_socket = fixA;");
                 pA(push_stack);
         }
         | expression __OPE_OR expression {
                 pA(read_eoe_arg);
                 __func_or();
-                pA("stack_socket = fixA;\n");
+                pA("stack_socket = fixA;");
                 pA(push_stack);
         }
         | expression __OPE_AND expression {
                 pA(read_eoe_arg);
                 __func_and();
-                pA("stack_socket = fixA;\n");
+                pA("stack_socket = fixA;");
                 pA(push_stack);
         }
         | expression __OPE_XOR expression {
                 pA(read_eoe_arg);
                 __func_xor();
-                pA("stack_socket = fixA;\n");
+                pA("stack_socket = fixA;");
                 pA(push_stack);
         }
         | __OPE_NOT expression {
                 pA(pop_stack);
-                pA("fixL = stack_socket;\n");
+                pA("fixL = stack_socket;");
                 __func_not();
-                pA("stack_socket = fixA;\n");
+                pA("stack_socket = fixA;");
                 pA(push_stack);
         }
         | __OPE_ADD expression %prec __OPE_PLUS {
@@ -867,9 +867,9 @@ operation
         }
         | __OPE_SUB expression %prec __OPE_MINUS {
                 pA(pop_stack);
-                pA("fixL = stack_socket;\n");
+                pA("fixL = stack_socket;");
                 __func_minus();
-                pA("stack_socket = fixA;\n");
+                pA("stack_socket = fixA;");
                 pA(push_stack);
         }
         | __LB expression __RB {
