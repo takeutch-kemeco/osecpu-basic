@@ -253,8 +253,8 @@ static char init_eoe_arg[] = {
 static int32_t cur_label_index_head = 0;
 
 /* ラベルの仕様可能最大数 */
-#define LABEL_INDEX_LEN 1024
-#define LABEL_INDEX_LEN_STR "1024"
+#define LABEL_INDEX_LEN 2048
+#define LABEL_INDEX_LEN_STR "2048"
 
 #define LABEL_STR_LEN 0x100
 struct Label {
@@ -391,6 +391,43 @@ static void retF(void)
         pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
 }
 
+/* beginF, endF
+ * プリセット関数及びアキュムレーターをサブルーチン命令化する仕掛け、を記したマクロ。
+ * このマクロをプリセット関数及びアキュムレーターの先頭に beginF() を書き、最後に endF() を書くだけで、それをサブルーチン命令化できる。
+ *
+ * unique_func_label には、その関数に設定されるユニークラベル番号が設定される。
+ * これは、このマクロが含まれる関数が始めて呼び出された時点での cur_label_index_head が用いられる。
+ * また同時に、内部処理用に unique_func_label + 1 のラベルも消費される。
+ * （つまり、関数辺り、2個のユニークラベルが消費される）
+ * もちろん、cur_label_index_head は、副作用の無さそうなタイミングで +2 される。
+ *
+ * 何故こんなハック的な解決方法を採ってるかというと、ただ単に大げさな方法による全面改修をするのが面倒くさかったから。
+ */
+#define beginF()                                                        \
+        static int32_t unique_func_label;                               \
+                                                                        \
+        static int func_label_init_flag = 0;                            \
+        if (func_label_init_flag == 1) {                                \
+                callF(unique_func_label);                               \
+                return;                                                 \
+        }                                                               \
+                                                                        \
+        unique_func_label = cur_label_index_head;                       \
+        const int32_t end_label = unique_func_label + 1;                \
+        cur_label_index_head += 2;                                      \
+                                                                        \
+        callF(unique_func_label);                                       \
+                                                                        \
+        pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, end_label);            \
+        pA("PLIMM(P3F, %d);\n", end_label);                             \
+                                                                        \
+        pA("LB(0, %d);\n", unique_func_label);
+
+#define endF()                                                          \
+        retF();                                                         \
+        pA("LB(0, %d);\n", end_label);                                  \
+        func_label_init_flag = 1;
+
 /* 全ての初期化
  */
 void init_all(void)
@@ -421,7 +458,11 @@ void init_all(void)
  */
 static void __func_add(void)
 {
+        beginF();
+
         pA("fixA = fixL + fixR;");
+
+        endF();
 }
 
 /* 減算命令を出力する
@@ -430,7 +471,11 @@ static void __func_add(void)
  */
 static void __func_sub(void)
 {
+        beginF();
+
         pA("fixA = fixL - fixR;");
+
+        endF();
 }
 
 /* 乗算命令を出力する
@@ -439,6 +484,8 @@ static void __func_sub(void)
  */
 static void __func_mul(void)
 {
+        beginF();
+
         /* 符号を保存しておき、+へ変換する*/
         pA("fixS = 0;");
         pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
@@ -487,6 +534,8 @@ static void __func_mul(void)
         /* 符号を元に戻す */
         pA("if ((fixS &= 0x00000003) == 0x00000001) {fixA = -fixA;}");
         pA("if ((fixS &= 0x00000003) == 0x00000002) {fixA = -fixA;}");
+
+        endF();
 }
 
 /* 除算命令を出力する
@@ -495,6 +544,8 @@ static void __func_mul(void)
  */
 static void __func_div(void)
 {
+        beginF();
+
         /* R の逆数を得る
          *
          * （通常は 0x00010000 を 1 と考えるが、）
@@ -514,6 +565,8 @@ static void __func_div(void)
 
         /* eoe を復帰（スタックを掃除するため） */
         pA(pop_eoe);
+
+        endF();
 }
 
 /* 符号付き剰余命令を出力する
@@ -522,6 +575,8 @@ static void __func_div(void)
  */
 static void __func_mod(void)
 {
+        beginF();
+
         /* 符号付き剰余 */
 
         /* fixL, fixR それぞれの絶対値 */
@@ -548,6 +603,8 @@ static void __func_mod(void)
         pA("fixRx = fixT * fixR;");
         pA("fixA = fixL - fixRx;");
         pA("}");
+
+        endF();
 }
 
 /* powのバックエンドに用いる sqrt 命令を出力する
@@ -560,6 +617,8 @@ static void __func_mod(void)
 
 static void __func_sqrt(void)
 {
+        beginF();
+
         /* fixL, fixT -> fixT */
         void nr(void)
         {
@@ -595,6 +654,11 @@ static void __func_sqrt(void)
         pA("fixR = fixA;");     nr();
         pA("fixR = fixA;");     nr();
         pA("fixR = fixA;");     nr();
+        pA("fixR = fixA;");     nr();
+        pA("fixR = fixA;");     nr();
+        pA("fixR = fixA;");     nr();
+
+        endF();
 }
 
 /* powのバックエンドに用いる a ^ +b 限定（bが正の数の場合限定）のpow
@@ -603,6 +667,8 @@ static void __func_sqrt(void)
  */
 static void __func_pow_p(void)
 {
+        beginF();
+
         void tt(void)
         {
                 pA(push_eoe);
@@ -637,7 +703,6 @@ static void __func_pow_p(void)
         pA("fixT = fixL;");
         pA("if ((fixR & 0x00010000) != 0) {"); st(); pA("}"); tt();
         pA("if ((fixR & 0x00020000) != 0) {"); st(); pA("}"); tt();
-/*
         pA("if ((fixR & 0x00040000) != 0) {"); st(); pA("}"); tt();
         pA("if ((fixR & 0x00080000) != 0) {"); st(); pA("}"); tt();
         pA("if ((fixR & 0x00100000) != 0) {"); st(); pA("}"); tt();
@@ -651,12 +716,10 @@ static void __func_pow_p(void)
         pA("if ((fixR & 0x10000000) != 0) {"); st(); pA("}"); tt();
         pA("if ((fixR & 0x20000000) != 0) {"); st(); pA("}"); tt();
         pA("if ((fixR & 0x40000000) != 0) {"); st(); pA("}");
-*/
 
         pA("fixT = fixL;"); rt();
         pA("if ((fixR & 0x00008000) != 0) {"); st(); pA("}"); rt();
         pA("if ((fixR & 0x00004000) != 0) {"); st(); pA("}"); rt();
-/*
         pA("if ((fixR & 0x00002000) != 0) {"); st(); pA("}"); rt();
         pA("if ((fixR & 0x00001000) != 0) {"); st(); pA("}"); rt();
         pA("if ((fixR & 0x00000800) != 0) {"); st(); pA("}"); rt();
@@ -671,9 +734,10 @@ static void __func_pow_p(void)
         pA("if ((fixR & 0x00000004) != 0) {"); st(); pA("}"); rt();
         pA("if ((fixR & 0x00000002) != 0) {"); st(); pA("}"); rt();
         pA("if ((fixR & 0x00000001) != 0) {"); st(); pA("}");
-*/
 
         pA("fixA = fixS;");
+
+        endF();
 }
 
 /* powのバックエンドに用いる a ^ -b 限定（bが負の数の場合限定）のpow
@@ -682,12 +746,16 @@ static void __func_pow_p(void)
  */
 static void __func_pow_m(void)
 {
+        beginF();
+
         pA("fixR = -fixR;");
         __func_pow_p();
 
         pA("fixL = 0x00010000;");
         pA("fixR = fixA;");
         __func_div();
+
+        endF();
 }
 
 /* 冪乗命令を出力する
@@ -696,6 +764,8 @@ static void __func_pow_m(void)
  */
 static void __func_pow(void)
 {
+        beginF();
+
         pA("if (fixR < 0) {");
         pA(push_eoe);
         __func_pow_m();
@@ -706,6 +776,8 @@ static void __func_pow(void)
         __func_pow_p();
         pA(pop_eoe);
         pA("}");
+
+        endF();
 }
 
 /* and命令を出力する
@@ -714,7 +786,11 @@ static void __func_pow(void)
  */
 static void __func_and(void)
 {
+        beginF();
+
         pA("fixA = fixL & fixR;");
+
+        endF();
 }
 
 /* or命令を出力する
@@ -723,7 +799,11 @@ static void __func_and(void)
  */
 static void __func_or(void)
 {
+        beginF();
+
         pA("fixA = fixL | fixR;");
+
+        endF();
 }
 
 /* xor命令を出力する
@@ -732,7 +812,11 @@ static void __func_or(void)
  */
 static void __func_xor(void)
 {
+        beginF();
+
         pA("fixA = fixL ^ fixR;");
+
+        endF();
 }
 
 /* not命令を出力する
@@ -741,7 +825,11 @@ static void __func_xor(void)
  */
 static void __func_not(void)
 {
+        beginF();
+
         pA("fixA = fixL ^ (-1);");
+
+        endF();
 }
 
 /* 符号反転命令を出力する
@@ -750,7 +838,11 @@ static void __func_not(void)
  */
 static void __func_minus(void)
 {
+        beginF();
+
         pA("fixA = -fixL;");
+
+        endF();
 }
 
 /* 以下、各種プリセット関数 */
@@ -761,6 +853,8 @@ static void __func_minus(void)
  */
 static void __func_print(void)
 {
+        beginF();
+
         /* 整数側の表示 */
 
         pA("fixLx = fixL >> 16;");
@@ -799,6 +893,8 @@ static void __func_print(void)
 
         /* 自動改行はさせない （最後にスペースを表示するのみ） */
         pA("junkApi_putConstString(' ');");
+
+        endF();
 }
 
 %}
