@@ -361,6 +361,36 @@ static char init_labelstack[] = {
         "labelstack_head = 0;\n"
 };
 
+/* プリセット関数やアキュムレーターを呼び出し命令に対して、追加でさらに共通の定型命令を出力する。
+ * すなわち、関数呼び出しのラッパ。
+ * （ラベルスタックへの戻りラベルのプッシュ、関数実行、関数後位置への戻りラベル設定）
+ *
+ * 呼び出し先の関数は、中でさらに再帰を行っても良いが、
+ * 最終的には必ず pop_labelstack を伴ったリターン（すなわち retF()）をしなければならない。
+ * （さもなくばラベルスタックの整合性が壊れてしまう）
+ * このリターンに関しては別の関数に任す形となる。（callF()からはコントロールできないので）
+ *
+ * 引数 label には、別途、各関数およびアキュムレーターに対してユニークに定義された定数を渡す。
+ */
+static void callF(const int32_t label)
+{
+        pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+        pA(push_labelstack);
+        pA("PLIMM(P3F, %d);\n", label);
+
+        pA("LB(0, %d);\n", cur_label_index_head);
+        cur_label_index_head++;
+}
+
+/* pop_labelstack を伴ったリターンの定型命令を出力する
+ * すなわち、関数リターンのラッパ。
+ */
+static void retF(void)
+{
+        pA(pop_labelstack);
+        pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
+}
+
 /* 全ての初期化
  */
 void init_all(void)
