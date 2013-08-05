@@ -565,6 +565,54 @@ static void __func_minus(void)
         pA("fixA = -fixL;");
 }
 
+/* 以下、各種プリセット関数 */
+
+/* 文字列出力命令を出力する
+ * fixL -> null
+ * 予め fixL に値をセットしておくこと。 演算結果は存在しない。
+ */
+static void __func_print(void)
+{
+        /* 整数側の表示 */
+
+        pA("fixLx = fixL >> 16;");
+        pA("if (fixLx < 0) {fixLx += 1;}");
+
+        /* 整数部が0の負の数の場合は、junkApi_putStringDec()に0として処理させるので符号が付かない。
+         * 従って、その場合は手動で符号を付ける必要がある
+         */
+        pA("if (fixL < 0) {if (fixLx == 0) {junkApi_putConstString('-');}}");
+
+        pA("junkApi_putStringDec('\\1', fixLx, 6, 1);");
+
+        /* 小数点を表示 */
+        pA("junkApi_putConstString('.');");
+
+        /* 小数側の表示 */
+
+        pA("fixR = 0;");
+        pA("if ((fixL & 0x00008000) != 0) {fixR += 5000;}");
+        pA("if ((fixL & 0x00004000) != 0) {fixR += 2500;}");
+        pA("if ((fixL & 0x00002000) != 0) {fixR += 1250;}");
+        pA("if ((fixL & 0x00001000) != 0) {fixR += 625;}");
+        pA("if ((fixL & 0x00000800) != 0) {fixR += 312;}");
+        pA("if ((fixL & 0x00000400) != 0) {fixR += 156;}");
+        pA("if ((fixL & 0x00000200) != 0) {fixR += 78;}");
+        pA("if ((fixL & 0x00000100) != 0) {fixR += 39;}");
+        pA("if ((fixL & 0x00000080) != 0) {fixR += 19;}");
+        pA("if ((fixL & 0x00000040) != 0) {fixR += 10;}");
+        pA("if ((fixL & 0x00000020) != 0) {fixR += 5;}");
+        pA("if ((fixL & 0x00000010) != 0) {fixR += 2;}");
+        pA("if ((fixL & 0x00000008) != 0) {fixR += 1;}");
+        pA("if ((fixL & 0x00000004) != 0) {fixR += 1;}");
+
+        pA("if (fixL < 0) {fixR = 10000 - fixR;}");
+        pA("junkApi_putStringDec('\\1', fixR, 4, 6);\n");
+
+        /* 自動改行はさせない （最後にスペースを表示するのみ） */
+        pA("junkApi_putConstString(' ');");
+}
+
 %}
 
 %union {
@@ -646,46 +694,8 @@ function
 func_print
         : __FUNC_PRINT expression {
                 pA(pop_stack);
-
-                /* 整数側の表示 */
-
-                pA("tmp0 = stack_socket >> 16;");
-                pA("if (tmp0 < 0) {tmp0 += 1;}");
-
-                /* 整数部が0の負の数の場合は、junkApi_putStringDec()に0として処理させるので符号が付かない。
-                 * 従って、その場合は手動で符号を付ける必要がある
-                 */
-                pA("if (stack_socket < 0) {if (tmp0 == 0) {junkApi_putConstString('-');}}");
-
-                pA("junkApi_putStringDec('\\1', tmp0, 6, 1);");
-
-                /* 小数点を表示 */
-                pA("junkApi_putConstString('.');");
-
-                /* 小数側の表示 */
-
-                pA("tmp0 = stack_socket;");
-                pA("tmp1 = 0;");
-                pA("if ((tmp0 & 0x00008000) != 0) {tmp1 += 5000;}");
-                pA("if ((tmp0 & 0x00004000) != 0) {tmp1 += 2500;}");
-                pA("if ((tmp0 & 0x00002000) != 0) {tmp1 += 1250;}");
-                pA("if ((tmp0 & 0x00001000) != 0) {tmp1 += 625;}");
-                pA("if ((tmp0 & 0x00000800) != 0) {tmp1 += 312;}");
-                pA("if ((tmp0 & 0x00000400) != 0) {tmp1 += 156;}");
-                pA("if ((tmp0 & 0x00000200) != 0) {tmp1 += 78;}");
-                pA("if ((tmp0 & 0x00000100) != 0) {tmp1 += 39;}");
-                pA("if ((tmp0 & 0x00000080) != 0) {tmp1 += 19;}");
-                pA("if ((tmp0 & 0x00000040) != 0) {tmp1 += 10;}");
-                pA("if ((tmp0 & 0x00000020) != 0) {tmp1 += 5;}");
-                pA("if ((tmp0 & 0x00000010) != 0) {tmp1 += 2;}");
-                pA("if ((tmp0 & 0x00000008) != 0) {tmp1 += 1;}");
-                pA("if ((tmp0 & 0x00000004) != 0) {tmp1 += 1;}");
-
-                pA("if (stack_socket < 0) {tmp1 = 10000 - tmp1;}");
-                pA("junkApi_putStringDec('\\1', tmp1, 4, 6);\n");
-
-                /* 自動改行はさせない （最後にスペースを表示するのみ） */
-                pA("junkApi_putConstString(' ');");
+                pA("fixL = stack_socket;");
+                __func_print();
         }
         ;
 
