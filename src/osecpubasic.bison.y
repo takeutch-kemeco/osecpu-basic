@@ -417,8 +417,6 @@ static void retF(void)
         cur_label_index_head += 2;                                      \
                                                                         \
         callF(unique_func_label);                                       \
-                                                                        \
-        pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, end_label);            \
         pA("PLIMM(P3F, %d);\n", end_label);                             \
                                                                         \
         pA("LB(0, %d);\n", unique_func_label);
