@@ -140,11 +140,11 @@ static void read_heap(char* dst, char* iden)
 /* ヒープメモリーの初期化
  */
 static char init_heap[] = {
-        "VPtr heap_ptr:P12;\n"
+        "VPtr heap_ptr:P04;\n"
         "junkApi_malloc(heap_ptr, T_SINT32, 0x100000);\n"
-        "SInt32 heap_socket:R12;\n"
-        "SInt32 heap_seek:R13;\n"
-        "SInt32 heap_offset:R14;\n"
+        "SInt32 heap_socket:R04;\n"
+        "SInt32 heap_seek:R06;\n"
+        "SInt32 heap_offset:R05;\n"
         "heap_seek = 0;\n"
 };
 
@@ -174,10 +174,10 @@ static char pop_stack[] = {
 /* スタックの初期化
  */
 static char init_stack[] = {
-        "VPtr stack_ptr:P10;\n"
+        "VPtr stack_ptr:P03;\n"
         "junkApi_malloc(stack_ptr, T_SINT32, 0x100000);\n"
-        "SInt32 stack_socket:R10;\n"
-        "SInt32 stack_head:R11;\n"
+        "SInt32 stack_socket:R02;\n"
+        "SInt32 stack_head:R03;\n"
         "stack_head = 0;\n"
 };
 
@@ -257,7 +257,7 @@ void labellist_add(const char* str)
 }
 
 /* gosub での return 先ラベルの保存用に使うポインターレジスター */
-#define CUR_RETURN_LABEL "P11"
+#define CUR_RETURN_LABEL "P02"
 
 /* ラベルスタックにラベル型（VPtr型）をプッシュする
  * 事前に以下のレジスタをセットしておくこと:
@@ -289,10 +289,10 @@ static char pop_labelstack[] = {
  * また特殊なレジスタでしか扱えない）
  */
 static char init_labelstack[] = {
-        "VPtr labelstack_ptr:P14;\n"
+        "VPtr labelstack_ptr:P01;\n"
         "junkApi_malloc(labelstack_ptr, T_VPTR, " LABEL_INDEX_LEN_STR ");\n"
         "VPtr labelstack_socket:" CUR_RETURN_LABEL ";\n"
-        "SInt32 labelstack_head:R15;\n"
+        "SInt32 labelstack_head:R01;\n"
         "labelstack_head = 0;\n"
 };
 
@@ -427,13 +427,13 @@ static char debug_eoe[] = {
  * （push後に行った演算の結果をfixAに入れておくことで、その後にpopした後でも演算結果を引き継げるように）
  */
 static char init_eoe_arg[] = {
-        "SInt32 fixL:R20;"
-        "SInt32 fixR:R21;"
-        "SInt32 fixLx:R22;"
-        "SInt32 fixRx:R23;"
-        "SInt32 fixT:R27;"
-        "SInt32 fixS:R28;"
-        "SInt32 fixA:R29;"
+        "SInt32 fixL:R0A;"
+        "SInt32 fixR:R0B;"
+        "SInt32 fixLx:R0C;"
+        "SInt32 fixRx:R0D;"
+        "SInt32 fixT:R0E;"
+        "SInt32 fixS:R0F;"
+        "SInt32 fixA:R10;"
 };
 
 /* 全ての初期化
@@ -448,9 +448,9 @@ void init_all(void)
         pA("SInt32 tmp1:R09;\n");
 
         /* forループ処理の作業用 */
-        pA("SInt32 forfixL: R24;");
-        pA("SInt32 forfixR: R25;");
-        pA("SInt32 forfixtmp: R26;\n");
+        pA("SInt32 forfixL: R11;");
+        pA("SInt32 forfixR: R12;");
+        pA("SInt32 forfixtmp: R13;\n");
 
         pA(init_heap);
         pA(init_stack);
