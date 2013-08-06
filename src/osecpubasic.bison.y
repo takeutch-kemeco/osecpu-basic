@@ -926,7 +926,7 @@ static void __func_sin(void)
                 pop_eoe();
         }
 
-        pA("fixT += fixL;");
+        pA("fixT = fixL;");
         u(3, 6);
         pA("fixT -= fixA;");
         u(5, 120);
@@ -960,7 +960,7 @@ static void __func_cos(void)
                 pop_eoe();
         }
 
-        pA("fixT += 0x00010000;");
+        pA("fixT = 0x00010000;");
         u(2, 2);
         pA("fixT -= fixA;");
         u(4, 24);
@@ -998,7 +998,7 @@ static void __func_tan(void)
                 pop_eoe();
         }
 
-        pA("fixT += fixL;");
+        pA("fixT = fixL;");
         u(3, 1, 3);
         pA("fixT += fixA;");
         u(5, 2, 15);
