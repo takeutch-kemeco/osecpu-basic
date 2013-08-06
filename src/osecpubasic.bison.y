@@ -181,71 +181,6 @@ static char init_stack[] = {
         "stack_head = 0;\n"
 };
 
-/* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
- */
-static char read_eoe_arg[] = {
-        __POP_STACK
-        "fixR = stack_socket;"
-        __POP_STACK
-        "fixL = stack_socket;"
-};
-
-/* eoe用レジスタをスタックへプッシュする
- */
-static char push_eoe[] = {
-        "stack_socket = fixL;\n"  __PUSH_STACK
-        "stack_socket = fixR;\n"  __PUSH_STACK
-        "stack_socket = fixLx;\n" __PUSH_STACK
-        "stack_socket = fixRx;\n" __PUSH_STACK
-        "stack_socket = fixT;\n"  __PUSH_STACK
-        "stack_socket = fixS;\n"  __PUSH_STACK
-};
-
-/* eoe用レジスタをスタックからポップする
- */
-static char pop_eoe[] = {
-        __POP_STACK "fixS  = stack_socket;\n"
-        __POP_STACK "fixT  = stack_socket;\n"
-        __POP_STACK "fixRx = stack_socket;\n"
-        __POP_STACK "fixLx = stack_socket;\n"
-        __POP_STACK "fixR  = stack_socket;\n"
-        __POP_STACK "fixL  = stack_socket;\n"
-};
-
-static char debug_eoe[] = {
-        "junkApi_putConstString('\\nfixR:');"
-        "junkApi_putStringDec('\\1', fixR, 10, 1);"
-        "junkApi_putConstString(' fixL:');"
-        "junkApi_putStringDec('\\1', fixL, 10, 1);"
-        "junkApi_putConstString(' fixRx:');"
-        "junkApi_putStringDec('\\1', fixRx, 10, 1);"
-        "junkApi_putConstString(' fixLx:');"
-        "junkApi_putStringDec('\\1', fixLx, 10, 1);"
-        "junkApi_putConstString(' fixT:');"
-        "junkApi_putStringDec('\\1', fixT, 10, 1);"
-        "junkApi_putConstString(' fixS:');"
-        "junkApi_putStringDec('\\1', fixS, 10, 1);"
-        "junkApi_putConstString(' fixA:');"
-        "junkApi_putStringDec('\\1', fixA, 10, 1);"
-        "junkApi_putConstString('\\n');"
-};
-
-/* read_eoe_arg 用変数の初期化
- *
- * push_eoe, pop_eoe ともに、例外として fixA スタックへ退避しない。
- * この fixA は eoe 間で値を受け渡しする為に用いるので、push_eoe, pop_eoe に影響されないようにしてある。
- * （push後に行った演算の結果をfixAに入れておくことで、その後にpopした後でも演算結果を引き継げるように）
- */
-static char init_eoe_arg[] = {
-        "SInt32 fixL:R20;"
-        "SInt32 fixR:R21;"
-        "SInt32 fixLx:R22;"
-        "SInt32 fixRx:R23;"
-        "SInt32 fixT:R27;"
-        "SInt32 fixS:R28;"
-        "SInt32 fixA:R29;"
-};
-
 /* 現在の使用可能なラベルインデックスのヘッド
  * この値から LABEL_INDEX_LEN 未満までの間が、まだ未使用なユニークラベルのサフィックス番号。
  * ユニークラベルをどこかに設定する度に、この値をインクリメントすること。
@@ -426,6 +361,81 @@ static void retF(void)
         pA("LB(0, %d);\n", end_label);                                  \
         func_label_init_flag = 1;
 
+/* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
+ */
+static char read_eoe_arg[] = {
+        __POP_STACK
+        "fixR = stack_socket;"
+        __POP_STACK
+        "fixL = stack_socket;"
+};
+
+/* eoe用レジスタをスタックへプッシュする
+ */
+static void push_eoe(void)
+{
+        beginF();
+
+        pA("stack_socket = fixL;");     pA(push_stack);
+        pA("stack_socket = fixR;");     pA(push_stack);
+        pA("stack_socket = fixLx;");    pA(push_stack);
+        pA("stack_socket = fixRx;");    pA(push_stack);
+        pA("stack_socket = fixT;\n");   pA(push_stack);
+        pA("stack_socket = fixS;\n");   pA(push_stack);
+
+        endF();
+}
+
+/* eoe用レジスタをスタックからポップする
+ */
+static void pop_eoe(void)
+{
+        beginF();
+
+        pA(pop_stack);  pA("fixS  = stack_socket;");
+        pA(pop_stack);  pA("fixT  = stack_socket;");
+        pA(pop_stack);  pA("fixRx = stack_socket;");
+        pA(pop_stack);  pA("fixLx = stack_socket;");
+        pA(pop_stack);  pA("fixR  = stack_socket;");
+        pA(pop_stack);  pA("fixL  = stack_socket;");
+
+        endF();
+};
+
+static char debug_eoe[] = {
+        "junkApi_putConstString('\\nfixR:');"
+        "junkApi_putStringDec('\\1', fixR, 10, 1);"
+        "junkApi_putConstString(' fixL:');"
+        "junkApi_putStringDec('\\1', fixL, 10, 1);"
+        "junkApi_putConstString(' fixRx:');"
+        "junkApi_putStringDec('\\1', fixRx, 10, 1);"
+        "junkApi_putConstString(' fixLx:');"
+        "junkApi_putStringDec('\\1', fixLx, 10, 1);"
+        "junkApi_putConstString(' fixT:');"
+        "junkApi_putStringDec('\\1', fixT, 10, 1);"
+        "junkApi_putConstString(' fixS:');"
+        "junkApi_putStringDec('\\1', fixS, 10, 1);"
+        "junkApi_putConstString(' fixA:');"
+        "junkApi_putStringDec('\\1', fixA, 10, 1);"
+        "junkApi_putConstString('\\n');"
+};
+
+/* read_eoe_arg 用変数の初期化
+ *
+ * push_eoe(), pop_eoe() ともに、例外として fixA スタックへ退避しない。
+ * この fixA は eoe 間で値を受け渡しする為に用いるので、push_eoe(), pop_eoe() に影響されないようにしてある。
+ * （push後に行った演算の結果をfixAに入れておくことで、その後にpopした後でも演算結果を引き継げるように）
+ */
+static char init_eoe_arg[] = {
+        "SInt32 fixL:R20;"
+        "SInt32 fixR:R21;"
+        "SInt32 fixLx:R22;"
+        "SInt32 fixRx:R23;"
+        "SInt32 fixT:R27;"
+        "SInt32 fixS:R28;"
+        "SInt32 fixA:R29;"
+};
+
 /* 全ての初期化
  */
 void init_all(void)
@@ -556,13 +566,13 @@ static void __func_div(void)
         pA("fixR = fixRx << 2;");
 
         /* 他アキュムレーターを呼び出す前に eoe を退避しておく */
-        pA(push_eoe);
+        push_eoe();
 
         /* 逆数を乗算することで除算とする */
         __func_mul();
 
         /* eoe を復帰（スタックを掃除するため） */
-        pA(pop_eoe);
+        pop_eoe();
 
         endF();
 }
@@ -620,32 +630,32 @@ static void __func_sqrt(void)
         /* fixL, fixT -> fixT */
         void nr(void)
         {
-                pA(push_eoe);
+                push_eoe();
                 pA("fixL = fixR;");
                 __func_mul();
-                pA(pop_eoe);
+                pop_eoe();
                 pA("fixLx = fixA;");
                 pA("fixLx -= fixL;");
 
-                pA(push_eoe);
+                push_eoe();
                 pA("fixL = 0x00020000;");
                 __func_mul();
-                pA(pop_eoe);
+                pop_eoe();
                 pA("fixRx = fixA;");
 
-                pA(push_eoe);
+                push_eoe();
                 pA("fixL = fixLx;");
                 pA("fixR = fixRx;");
                 __func_div();
-                pA(pop_eoe);
+                pop_eoe();
 
                 pA("fixA = fixR - fixA;");
         }
 
-        pA(push_eoe);
+        push_eoe();
         pA("fixR = 0x00020000;");
         __func_div();
-        pA(pop_eoe);
+        pop_eoe();
 
         pA("fixR = fixA;");     nr();
         pA("fixR = fixA;");     nr();
@@ -669,30 +679,30 @@ static void __func_pow_p(void)
 
         void tt(void)
         {
-                pA(push_eoe);
+                push_eoe();
                 pA("fixL = fixT;");
                 pA("fixR = fixT;");
                 __func_mul();
-                pA(pop_eoe);
+                pop_eoe();
                 pA("fixT = fixA;");
         }
 
         void rt(void)
         {
-                pA(push_eoe);
+                push_eoe();
                 pA("fixL = fixT;");
                 __func_sqrt();
-                pA(pop_eoe);
+                pop_eoe();
                 pA("fixT = fixA;");
         }
 
         void st(void)
         {
-                pA(push_eoe);
+                push_eoe();
                 pA("fixL = fixS;");
                 pA("fixR = fixT;");
                 __func_mul();
-                pA(pop_eoe);
+                pop_eoe();
                 pA("fixS = fixA;");
         }
 
@@ -765,14 +775,14 @@ static void __func_pow(void)
         beginF();
 
         pA("if (fixR < 0) {");
-        pA(push_eoe);
+        push_eoe();
         __func_pow_m();
-        pA(pop_eoe);
+        pop_eoe();
 
         pA("} else {");
-        pA(push_eoe);
+        push_eoe();
         __func_pow_p();
-        pA(pop_eoe);
+        pop_eoe();
         pA("}");
 
         endF();
