@@ -108,6 +108,9 @@
 <main_process>"mid$"    return(__FUNC_MID_S);
 <main_process>"rnd"     return(__FUNC_RND);
 <main_process>"input$"  return(__FUNC_INPUT_S);
+<main_process>"sin"     return(__FUNC_SIN);
+<main_process>"cos"     return(__FUNC_COS);
+<main_process>"tan"     return(__FUNC_TAN);
 
 <main_process>[_a-zA-Z][_0-9a-zA-Z]* {strcpy(yylval.sval, yytext); return(__IDENTIFIER);}
 

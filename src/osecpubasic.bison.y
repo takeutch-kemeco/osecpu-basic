@@ -905,6 +905,114 @@ static void __func_print(void)
         endF();
 }
 
+/* sin命令を出力する
+ * fixL -> fixA
+ * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_sin(void)
+{
+        beginF();
+
+        /* fixL -> fixA */
+        void u(const int32_t p, const int32_t b)
+        {
+                push_eoe();
+                pA("fixR = %d;", p << 16);
+                __func_pow();
+                pA("fixL = fixA;");
+
+                pA("fixR = %d;", b << 16);
+                __func_div();
+                pop_eoe();
+        }
+
+        pA("fixT += fixL;");
+        u(3, 6);
+        pA("fixT -= fixA;");
+        u(5, 120);
+        pA("fixT += fixA;");
+        u(7, 5040);
+        pA("fixT -= fixA;");
+
+        pA("fixA = fixT;");
+
+        endF();
+}
+
+/* cos命令を出力する
+ * fixL -> fixA
+ * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_cos(void)
+{
+        beginF();
+
+        /* fixL -> fixA */
+        void u(const int32_t p, const int32_t b)
+        {
+                push_eoe();
+                pA("fixR = %d;", p << 16);
+                __func_pow();
+                pA("fixL = fixA;");
+
+                pA("fixR = %d;", b << 16);
+                __func_div();
+                pop_eoe();
+        }
+
+        pA("fixT += 0x00010000;");
+        u(2, 2);
+        pA("fixT -= fixA;");
+        u(4, 24);
+        pA("fixT += fixA;");
+        u(6, 720);
+        pA("fixT -= fixA;");
+
+        pA("fixA = fixT;");
+
+        endF();
+}
+
+/* tan命令を出力する
+ * fixL -> fixA
+ * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_tan(void)
+{
+        beginF();
+
+        /* fixL -> fixA */
+        void u(const int32_t p, const int32_t a, const int32_t b)
+        {
+                push_eoe();
+                pA("fixR = %d;", p << 16);
+                __func_pow();
+                pA("fixL = fixA;");
+
+                pA("fixR = %d;", a << 16);
+                __func_mul();
+                pA("fixL = fixA;");
+
+                pA("fixR = %d;", b << 16);
+                __func_div();
+                pop_eoe();
+        }
+
+        pA("fixT += fixL;");
+        u(3, 1, 3);
+        pA("fixT += fixA;");
+        u(5, 2, 15);
+        pA("fixT += fixA;");
+        u(7, 17, 315);
+        pA("fixT += fixA;");
+        u(9, 62, 2835);
+        pA("fixT += fixA;");
+
+        pA("fixA = fixT;");
+
+        endF();
+}
+
 %}
 
 %union {
@@ -918,6 +1026,7 @@ static void __func_print(void)
 %token __STATE_READ __STATE_DATA __STATE_MAT __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
 %token __STATE_LET __OPE_SUBST
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
+%token __FUNC_SIN __FUNC_COS __FUNC_TAN
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
@@ -931,6 +1040,7 @@ static void __func_print(void)
 %type <sval> __CONST_STRING __IDENTIFIER __LABEL __DEFINE_LABEL
 
 %type <sval> func_print
+%type <sval> func_sin func_cos func_tan
 %type <sval> operation const_variable read_variable
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
@@ -981,6 +1091,9 @@ function
         | __FUNC_RND {}
         | __FUNC_INPUT_S {}
         | __FUNC_PEEK expression {}
+        | func_sin
+        | func_cos
+        | func_tan
         ;
 
 func_print
@@ -988,6 +1101,36 @@ func_print
                 pA(pop_stack);
                 pA("fixL = stack_socket;");
                 __func_print();
+        }
+        ;
+
+func_sin
+        : __FUNC_SIN expression {
+                pA(pop_stack);
+                pA("fixL = stack_socket;");
+                __func_sin();
+                pA("stack_socket = fixA;");
+                pA(push_stack);
+        }
+        ;
+
+func_cos
+        : __FUNC_COS expression {
+                pA(pop_stack);
+                pA("fixL = stack_socket;");
+                __func_cos();
+                pA("stack_socket = fixA;");
+                pA(push_stack);
+        }
+        ;
+
+func_tan
+        : __FUNC_TAN expression {
+                pA(pop_stack);
+                pA("fixL = stack_socket;");
+                __func_tan();
+                pA("stack_socket = fixA;");
+                pA(push_stack);
         }
         ;
 
