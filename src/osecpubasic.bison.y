@@ -723,7 +723,7 @@ static void __func_pow_p(void)
         pA("if ((fixR & 0x00000800) != 0) {"); st(); pA("}"); rt();
         pA("if ((fixR & 0x00000400) != 0) {"); st(); pA("}"); rt();
         pA("if ((fixR & 0x00000200) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000010) != 0) {"); st(); pA("}"); rt();
+        pA("if ((fixR & 0x00000100) != 0) {"); st(); pA("}"); rt();
         pA("if ((fixR & 0x00000080) != 0) {"); st(); pA("}"); rt();
         pA("if ((fixR & 0x00000040) != 0) {"); st(); pA("}"); rt();
         pA("if ((fixR & 0x00000020) != 0) {"); st(); pA("}"); rt();
