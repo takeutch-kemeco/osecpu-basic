@@ -112,7 +112,7 @@
 <main_process>"sin"     return(__FUNC_SIN);
 <main_process>"cos"     return(__FUNC_COS);
 <main_process>"tan"     return(__FUNC_TAN);
-<main_process>"tan"     return(__FUNC_SQRT);
+<main_process>"sqrt"    return(__FUNC_SQRT);
 
 <main_process>[_a-zA-Z][_0-9a-zA-Z]* {strcpy(yylval.sval, yytext); return(__IDENTIFIER);}
 

@@ -1094,6 +1094,7 @@ function
         | func_sin
         | func_cos
         | func_tan
+        | func_sqrt
         ;
 
 func_print
