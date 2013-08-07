@@ -1026,7 +1026,7 @@ static void __func_tan(void)
 %token __STATE_READ __STATE_DATA __STATE_MAT __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
 %token __STATE_LET __OPE_SUBST
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
-%token __FUNC_SIN __FUNC_COS __FUNC_TAN
+%token __FUNC_SIN __FUNC_COS __FUNC_TAN __FUNC_SQRT
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
@@ -1129,6 +1129,16 @@ func_tan
                 pA(pop_stack);
                 pA("fixL = stack_socket;");
                 __func_tan();
+                pA("stack_socket = fixA;");
+                pA(push_stack);
+        }
+        ;
+
+func_sqrt
+        : __FUNC_SQRT expression {
+                pA(pop_stack);
+                pA("fixL = stack_socket;");
+                __func_sqrt();
                 pA("stack_socket = fixA;");
                 pA(push_stack);
         }
