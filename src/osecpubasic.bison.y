@@ -923,8 +923,8 @@ static void __func_sin(void)
                 __func_pow();
                 pA("fixL = fixA;");
 
-                pA("fixR = %d;", b << 16);
-                __func_div();
+                pA("fixR = %d;", b);
+                __func_mul();
                 pop_eoe();
         }
 
@@ -956,11 +956,11 @@ static void __func_sin(void)
         /* sin(0)のテーラー展開式を用いてsinを求める
          */
         pA("fixT = fixL;");
-        u(3, 6);
+        u(3, 10923);
         pA("fixT -= fixA;");
-        u(5, 120);
+        u(5, 546);
         pA("fixT += fixA;");
-        u(7, 5040);
+        u(7, 13);
         pA("fixT -= fixA;");
 
         pA("fixA = fixT;");
