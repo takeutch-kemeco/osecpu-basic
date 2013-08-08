@@ -508,9 +508,11 @@ static void __func_mul(void)
 
         /* R.Decimal * L.Decimal -> T.Decimal */
         pA("fixRx = fixR & 0x0000ffff;");
+        pA("fixRx >>= 1;");
         pA("fixLx = fixL & 0x0000ffff;");
+        pA("fixLx >>= 1;");
         pA("fixT = fixLx * fixRx;");
-        pA("fixT >>= 16;");
+        pA("fixT >>= 14;");
         pA("fixA += fixT;");
 
         /* R.Decimal * L.Integer -> T.Integer */
