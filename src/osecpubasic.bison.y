@@ -776,15 +776,32 @@ static void __func_pow(void)
 {
         beginF();
 
-        pA("if (fixR < 0) {");
-        push_eoe();
-        __func_pow_m();
-        pop_eoe();
+        /* 左辺が0の場合 */
+        pA("if (fixL == 0) {");
+                /* 右辺が0または負の場合は、計算未定義と表示して終了 */
+                pA("if(fixR <= 0) {");
+                        pA("junkApi_putConstString('err: 0^0 or 0^-x. This calculation is undefined.')");
+                        pA("jnukApi_exit(0)");
 
+                /* 右辺が正の場合は、常に0を返す */
+                pA("} else {");
+                        pA("fixA = 0;");
+                pA("}");
+
+        /* 左辺が非0の場合 */
         pA("} else {");
-        push_eoe();
-        __func_pow_p();
-        pop_eoe();
+                /* 右辺が0または正の場合 */
+                pA("if (fixR >= 0) {");
+                        push_eoe();
+                        __func_pow_p();
+                        pop_eoe();
+
+                /* 右辺が負の場合 */
+                pA("} else {");
+                        push_eoe();
+                        __func_pow_p();
+                        pop_eoe();
+                pA("}");
         pA("}");
 
         endF();
@@ -865,23 +882,20 @@ static void __func_print(void)
 {
         beginF();
 
+        /* 符号を保存しておき、正に変換 */
+        pA("if (fixL < 0) {fixS = 1; fixL = -fixL;} else {fixS = 0;}");
+
+        /* 負の場合は-符号を表示する */
+        pA("if (fixS == 1) {junkApi_putConstString('-');}");
+
         /* 整数側の表示 */
-
         pA("fixLx = fixL >> 16;");
-        pA("if (fixLx < 0) {fixLx += 1;}");
-
-        /* 整数部が0の負の数の場合は、junkApi_putStringDec()に0として処理させるので符号が付かない。
-         * 従って、その場合は手動で符号を付ける必要がある
-         */
-        pA("if (fixL < 0) {if (fixLx == 0) {junkApi_putConstString('-');}}");
-
         pA("junkApi_putStringDec('\\1', fixLx, 6, 1);");
 
         /* 小数点を表示 */
         pA("junkApi_putConstString('.');");
 
         /* 小数側の表示 */
-
         pA("fixR = 0;");
         pA("if ((fixL & 0x00008000) != 0) {fixR += 5000;}");
         pA("if ((fixL & 0x00004000) != 0) {fixR += 2500;}");
@@ -898,7 +912,6 @@ static void __func_print(void)
         pA("if ((fixL & 0x00000008) != 0) {fixR += 1;}");
         pA("if ((fixL & 0x00000004) != 0) {fixR += 1;}");
 
-        pA("if (fixL < 0) {fixR = 10000 - fixR;}");
         pA("junkApi_putStringDec('\\1', fixR, 4, 6);\n");
 
         /* 自動改行はさせない （最後にスペースを表示するのみ） */
