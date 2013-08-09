@@ -944,7 +944,7 @@ static void __func_sin(void)
         /* 値を(±π/2)の範囲へ正規化する命令を出力する
          * fixL -> fixL
          *
-         * osecpu-basicでは、正の数の有効桁が15bitしか無いので、6^7すら計算できない（6^7=279936 > 32768）
+         * osecpu-basicでは、整数の有効桁が15bitしか無いので、6^7すら計算できない（6^7=279936 > 32768）
          * その為、2π等をそのまま計算すると、展開式に当てはめた際に計算不能となってしまう。
          * また、整数部が大きければ演算後の小数部の誤差も大きくなる傾向があるので、これらの理由から
          * 整数部は極力小さくした方が計算精度を稼げる。（また、それをしなければ、10^-3程度の精度すら出せない）
@@ -963,7 +963,7 @@ static void __func_sin(void)
 
         pA("if (fixS >= 0) {if (fixS <= %d) {fixL = fixS;}}", pi_h);
         pA("if (fixS >= %d) {if (fixS <= %d) {fixL = %d - fixS;}}", pi_h, pi, pi);
-        pA("if (fixS >= %d) {if (fixS <= %d) {fixL = fixS - %d; fixL = -%d - fixL;}}", pi, pi + pi_h, pi_2, pi_h);
+        pA("if (fixS >= %d) {if (fixS <= %d) {fixL = fixS - %d; fixL = -%d - fixL;}}", pi, pi + pi_h, pi_2, pi);
         pA("if (fixS >= %d) {if (fixS <= %d) {fixL = fixS - %d;}}", pi + pi_h, pi_2, pi_2);
 
         /* sin(0)のテーラー展開式を用いてsinを求める
