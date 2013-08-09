@@ -1060,6 +1060,7 @@ static void __func_tan(void)
 %token __STATE_LET __OPE_SUBST
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
 %token __FUNC_SIN __FUNC_COS __FUNC_TAN __FUNC_SQRT
+%token __FUNC_DRAWLINE
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
@@ -1074,6 +1075,7 @@ static void __func_tan(void)
 
 %type <sval> func_print
 %type <sval> func_sin func_cos func_tan
+%type <sval> func_drawline
 %type <sval> operation const_variable read_variable
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
@@ -1128,6 +1130,7 @@ function
         | func_cos
         | func_tan
         | func_sqrt
+        | func_drawline
         ;
 
 func_print
@@ -1175,6 +1178,41 @@ func_sqrt
                 __func_sqrt();
                 pA("stack_socket = fixA;");
                 pA(push_stack);
+        }
+        ;
+
+func_drawline
+        : __FUNC_DRAWLINE expression expression expression expression expression
+                          expression expression expression
+        {
+                beginF();
+
+                pA(pop_stack);
+                pA("fixL = stack_socket & 0x00ff0000;");     /* B */
+                pA(pop_stack);
+                pA("fixR = stack_socket & 0x00ff0000;");     /* G */
+                pA(pop_stack);
+                pA("fixT = stack_socket & 0x00ff0000;");     /* R */
+
+                /* RGB */
+                pA("fixS = fixL >> 16;");
+                pA("fixS |= fixR >> 8;");
+                pA("fixS |= fixT;");
+
+                pA(pop_stack);
+                pA("fixR = stack_socket >> 16;");     /* y */
+                pA(pop_stack);
+                pA("fixL = stack_socket >> 16;");     /* x */
+                pA(pop_stack);
+                pA("fixRx = stack_socket >> 16;");    /* h */
+                pA(pop_stack);
+                pA("fixLx = stack_socket >> 16;");    /* w */
+                pA(pop_stack);
+                pA("fixT = stack_socket >> 16;");     /* mode */
+
+                pA("junkApi_drawLine(fixT, fixLx, fixRx, fixL, fixR, fixS);");
+
+                endF();
         }
         ;
 
