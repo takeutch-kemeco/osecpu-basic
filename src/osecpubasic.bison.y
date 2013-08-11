@@ -46,7 +46,48 @@ static void pA(const char* fmt, ...)
         fputs("\n", yyaskA);
 }
 
-#define VAR_STR_LEN 0x100
+/* IDENTIFIER 文字列用のスタック */
+#define IDENLIST_STR_LEN 0x100
+#define IDENLIST_LEN 0x1000
+static char* idenlist[IDENLIST_LEN] = {[0 ... IDENLIST_LEN - 1] = NULL};
+static int32_t idenlist_head = 0;
+
+/* idenlist に IDENTIFIER 文字列をプッシュする
+ *
+ * idenlist[idenlist_head]が0の場合はmallocされる。その領域が以後も使いまわされる。
+ * （開放はしない。確保したまま）
+ */
+void idenlist_push(const char* src)
+{
+        if (idenlist_head >= IDENLIST_LEN) {
+                printf("system err: idenlist_push()\n");
+                exit(EXIT_FAILURE);
+        }
+
+        if(idenlist[idenlist_head] == NULL)
+                idenlist[idenlist_head] = malloc(IDENLIST_STR_LEN);
+
+        strcpy(idenlist[idenlist_head], src);
+        idenlist_head++;
+}
+
+/* idenlist から文字列をdstへポップする
+ *
+ * コピー渡しなので、十分な長さが確保されたdstを渡すこと
+ */
+void idenlist_pop(char* dst)
+{
+        idenlist_head--;
+
+        if (idenlist_head < 0) {
+                printf("system err: idenlist_pop()\n");
+                exit(EXIT_FAILURE);
+        }
+
+        strcpy(dst, idenlist[idenlist_head]);
+}
+
+#define VAR_STR_LEN IDENLIST_STR_LEN
 struct Var {
         char str[VAR_STR_LEN];
         int32_t head_ptr;
@@ -513,6 +554,9 @@ static char init_eoe_arg[] = {
         "SInt32 fixS:R0F;"
         "SInt32 fixA:R10;"
 };
+
+/* 関数呼び出し時に、引数の個数を知らせる用 */
+static int32_t function_argc;
 
 /* 全ての初期化
  */
@@ -1160,7 +1204,8 @@ static void __func_tan(void)
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
 %type <sval> syntax_tree declaration_list declaration
-%type <sval> define_function identifier_list
+%type <sval> define_function
+%type <ival> expression_list identifier_list
 
 %start syntax_tree
 
@@ -1195,6 +1240,15 @@ expression
         | read_variable
         | comparison
         | function
+        ;
+
+expression_list
+        : expression {
+                $$ = 1;
+        }
+        | expression __OPE_COMMA expression_list {
+                $$ = 1 + $3;
+        }
         ;
 
 function
@@ -1475,7 +1529,7 @@ read_variable
                 pA("stack_socket = heap_socket;");
                 pA(push_stack);
         }
-        | __IDENTIFIER __LB expression __RB {
+        | __IDENTIFIER __LB expression_list __RB {
                 /* IDENTIFIER がラベル名に存在しなければ、これは配列変数 */
                 if (labellist_search($1) == -1) {
                         pA(pop_stack);
@@ -1490,6 +1544,9 @@ read_variable
 
                 /* IDENTIFIER がラベル名として存在すれば、これは関数実行 */
                 } else {
+                        /* 引数の個数を飛び先の関数に伝えるため */
+                        function_argc = $3;
+
                         /* gosub とほぼ同じ */
                         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
                         pA(push_labelstack);
@@ -1683,19 +1740,47 @@ jump
         ;
 
 identifier_list
-        : __IDENTIFIER
-        | __IDENTIFIER __OPE_COMMA identifier_list
+        : __IDENTIFIER {
+                idenlist_push($1);
+                $$ = 1;
+        }
+        | __IDENTIFIER __OPE_COMMA identifier_list {
+                idenlist_push($1);
+                $$ = 1 + $3;
+        }
         ;
 
 define_function
-        : __STATE_DEF {
-        } __IDENTIFIER __LB identifier_list __RB __OPE_SUBST {
-                /* __STATE_DEF __IDENTIFIER も、ラベルの一種として字句解析の段階で登録されている前提 */
+        : __STATE_DEF __IDENTIFIER __LB identifier_list __RB __OPE_SUBST {
+                /* __STATE_DEF __IDENTIFIER も、ラベルの一種として字句解析の段階で登録されている前提
+                 * ここを、関数呼び出しの際にジャンプしてくる位置とする
+                 */
+                pA("LB(0, %d);\n", labellist_search($2));
 
-                /* ここを、関数呼び出しの際にジャンプしてくる位置とする */
-                pA("LB(0, %d);\n", labellist_search($3));
+                /* 以降の変数をローカル変数とするために、スコープを現時点までに設定 */
+                varlist_scope_push();
+
+                /* identifier_list個だけ expression が stack_push されてる前提で、
+                 * 順番にポップしつつローカル変数へ登録していく
+                 */
+                int32_t i;
+                for (i = 0; i < $4; i++) {
+                        pA(pop_stack);
+                        pA("heap_socket = stack_socket;");
+
+                        char iden[0x1000];
+                        idenlist_pop(iden);
+
+                        varlist_add(iden, 1);
+
+                        pA("heap_offset = 0;");
+                        char tmp[0x1000];
+                        write_heap(tmp, iden);
+                        pA(tmp);
+                }
         } expression {
-                /* expression は実行されて、結果は push_stack される */
+                /* ローカル変数を破棄する */
+                varlist_scope_pop();
 
                 /* 関数呼び出し元の位置まで戻る */
                 pA(pop_labelstack);
