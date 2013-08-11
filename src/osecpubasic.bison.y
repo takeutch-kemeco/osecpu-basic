@@ -1790,8 +1790,32 @@ define_def_function
 
 define_full_function
         : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __DECL_END {
+                /* define_def_function の場合とほぼ同じ
+                 */
+                pA("LB(0, %d);\n", labellist_search($2));
+
+                varlist_scope_push();
+
+                int32_t i;
+                for (i = 0; i < $4; i++) {
+                        pA(pop_stack);
+                        pA("heap_socket = stack_socket;");
+
+                        char iden[0x1000];
+                        idenlist_pop(iden);
+
+                        varlist_add(iden, 1);
+
+                        pA("heap_offset = 0;");
+                        char tmp[0x1000];
+                        write_heap(tmp, iden);
+                        pA(tmp);
+                }
         } declaration_list __STATE_END_FUNCTION {
-                printf("define_full_function\n");
+                varlist_scope_pop();
+
+                pA(pop_labelstack);
+                pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
         }
         ;
 
