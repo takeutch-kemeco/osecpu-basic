@@ -1136,6 +1136,7 @@ static void __func_tan(void)
 %token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT __STATE_END
 %token __STATE_READ __STATE_DATA __STATE_MAT __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
 %token __STATE_LET __OPE_SUBST
+%token __STATE_DEF
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
 %token __FUNC_SIN __FUNC_COS __FUNC_TAN __FUNC_SQRT
 %token __FUNC_DRAWLINE
@@ -1143,6 +1144,7 @@ static void __func_tan(void)
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
 %left  __OPE_OR __OPE_AND __OPE_XOR __OPE_NOT
+%left  __OPE_COMMA
 %token __OPE_PLUS __OPE_MINUS
 %token __LB __RB __DECL_END __IDENTIFIER __LABEL __DEFINE_LABEL __EOF
 %token __CONST_STRING __CONST_FLOAT __CONST_INTEGER
@@ -1158,6 +1160,7 @@ static void __func_tan(void)
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
 %type <sval> syntax_tree declaration_list declaration
+%type <sval> define_function identifier_list
 
 %start syntax_tree
 
@@ -1182,6 +1185,7 @@ declaration
         | iterator_for
         | jump __DECL_END
         | define_label __DECL_END
+        | define_function __DECL_END
         | __DECL_END
         ;
 
@@ -1663,6 +1667,18 @@ jump
                 cur_label_index_head++;
 
                 pA("}");
+        }
+        ;
+
+identifier_list
+        : __IDENTIFIER
+        | __IDENTIFIER __OPE_COMMA identifier_list
+        ;
+
+define_function
+        : __STATE_DEF __IDENTIFIER __LB identifier_list __RB __OPE_SUBST expression {
+                printf("define_function\n");
+                exit(EXIT_FAILURE);
         }
         ;
 

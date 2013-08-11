@@ -94,6 +94,9 @@
 
 <main_process>"mat"     return(__STATE_MAT);
 
+<main_process>"def"     return(__STATE_DEF);
+<main_process>","       return(__OPE_COMMA);
+
 <main_process>"on"      return(__OPE_ON);
 <main_process>"goto"    return(__OPE_GOTO);
 <main_process>"gosub"   return(__OPE_GOSUB);
