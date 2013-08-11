@@ -1241,7 +1241,8 @@ expression
         ;
 
 expression_list
-        : expression {
+        :
+        | expression {
                 $$ = 1;
         }
         | expression __OPE_COMMA expression_list {
@@ -1735,7 +1736,8 @@ jump
         ;
 
 identifier_list
-        : __IDENTIFIER {
+        :
+        | __IDENTIFIER {
                 idenlist_push($1);
                 $$ = 1;
         }
