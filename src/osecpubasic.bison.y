@@ -1160,7 +1160,7 @@ static void __func_tan(void)
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
 %type <sval> syntax_tree declaration_list declaration
-%type <sval> define_function user_function identifier_list
+%type <sval> define_function identifier_list
 
 %start syntax_tree
 
@@ -1198,8 +1198,7 @@ expression
         ;
 
 function
-        : user_function
-        | func_print
+        : func_print
         | __FUNC_INPUT {}
         | __FUNC_PEEK {}
         | __FUNC_POKE expression {}
@@ -1477,15 +1476,27 @@ read_variable
                 pA(push_stack);
         }
         | __IDENTIFIER __LB expression __RB {
-                pA(pop_stack);
-                pA("heap_offset = stack_socket;");
+                /* IDENTIFIER がラベル名に存在しなければ、これは配列変数 */
+                if (labellist_search($1) == -1) {
+                        pA(pop_stack);
+                        pA("heap_offset = stack_socket;");
 
-                char tmp[0x1000];
-                read_heap(tmp, $1);
-                pA(tmp);
+                        char tmp[0x1000];
+                        read_heap(tmp, $1);
+                        pA(tmp);
 
-                pA("stack_socket = heap_socket;");
-                pA(push_stack);
+                        pA("stack_socket = heap_socket;");
+                        pA(push_stack);
+
+                /* IDENTIFIER がラベル名として存在すれば、これは関数実行 */
+                } else {
+                        /* gosub とほぼ同じ */
+                        pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+                        pA(push_labelstack);
+                        pA("PLIMM(P3F, %d);\n", labellist_search($1));
+                        pA("LB(0, %d);\n", cur_label_index_head);
+                        cur_label_index_head++;
+                }
         }
         ;
 
@@ -1689,17 +1700,6 @@ define_function
                 /* 関数呼び出し元の位置まで戻る */
                 pA(pop_labelstack);
                 pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
-        }
-        ;
-
-user_function
-        : __IDENTIFIER __OPE_COMMA __LB identifier_list __RB {
-                /* gosub とほぼ同じ */
-                pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-                pA(push_labelstack);
-                pA("PLIMM(P3F, %d);\n", labellist_search($1));
-                pA("LB(0, %d);\n", cur_label_index_head);
-                cur_label_index_head++;
         }
         ;
 
