@@ -1528,8 +1528,8 @@ read_variable
                 pA(push_stack);
         }
         | __IDENTIFIER __LB expression_list __RB {
-                /* IDENTIFIER がラベル名に存在しなければ、これは配列変数 */
-                if (labellist_search($1) == -1) {
+                /* 変数リストに名前が存在すれば、これは配列変数 */
+                if (varlist_search($1) != NULL) {
                         pA(pop_stack);
                         pA("heap_offset = stack_socket;");
 
@@ -1540,7 +1540,7 @@ read_variable
                         pA("stack_socket = heap_socket;");
                         pA(push_stack);
 
-                /* IDENTIFIER がラベル名として存在すれば、これは関数実行 */
+                /* 変数リストに名前が存在しなければ、これは関数実行 */
                 } else {
                         /* gosub とほぼ同じ */
                         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
