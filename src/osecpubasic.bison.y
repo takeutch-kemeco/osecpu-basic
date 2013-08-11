@@ -121,6 +121,15 @@ static struct Var* varlist_search_local(const char* str)
         return varlist_search_common(str, varlist_scope[varlist_scope_head]);
 }
 
+/* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）からvarlistの先頭まで確認してくる。
+ * 確認する順序は最後尾側から開始して、varlistの先頭側へと向かう方向。
+ * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
+ */
+static struct Var* varlist_search(const char* str)
+{
+        return varlist_search_common(str, 0);
+}
+
 /* 変数リストに新たに変数を無条件に追加する。
  * 既に同名の変数が存在するかの確認は行わない。常に追加する。
  * array_len : この変数の配列サイズを指定する。スカラーならば 1 とすべき。 この値はint32型。（fix32型では”ない”ので注意）
@@ -149,15 +158,6 @@ static void varlist_add_local(const char* str, const int32_t array_len)
                 return;
 
         varlist_add_common(str, array_len);
-}
-
-/* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）からvarlistの先頭まで確認してくる。
- * 確認する順序は最後尾側から開始して、varlistの先頭側へと向かう方向。
- * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
- */
-static struct Var* varlist_search(const char* str)
-{
-        return varlist_search_common(str, 0);
 }
 
 /* 変数リストに新たに変数を追加する。
