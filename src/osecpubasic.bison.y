@@ -95,19 +95,30 @@ static void varlist_scope_pop(void)
         varlist_scope_head--;
 }
 
-/* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）から現在のスコープの範囲内で確認する。
+/* 変数リストに既に同名が登録されているかを、varlist_headからvarlist_bottomの範囲内で確認する。
+ * 確認する順序は varlist_head 側から開始して、varlist_bottomへと向かう方向。
  * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
+ *
+ * varlist_search()とvarlist_search_local()の共通ルーチンを抜き出したもの。
  */
-static struct Var* varlist_search_local(const char* str)
+static struct Var* varlist_search_common(const char* str, const int32_t varlist_bottom)
 {
-        const int32_t cur_scope = varlist_scope[varlist_scope_head];
         int32_t i = varlist_head;
-        while (i-->cur_scope) {
+        while (i-->varlist_bottom) {
                 if (strcmp(str, varlist[i].str) == 0)
                         return &(varlist[i]);
         }
 
         return NULL;
+}
+
+/* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）から現在のスコープの範囲内で確認する。
+ * 確認する順序は最後尾側から開始して、現在のスコープ側へと向かう方向。
+ * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
+ */
+static struct Var* varlist_search_local(const char* str)
+{
+        return varlist_search_common(str, varlist_scope[varlist_scope_head]);
 }
 
 /* 変数リストに新たに変数を無条件に追加する。
@@ -140,18 +151,13 @@ static void varlist_add_local(const char* str, const int32_t array_len)
         __varlist_add(str, array_len);
 }
 
-/* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）から確認してくる。
+/* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）からvarlistの先頭まで確認してくる。
+ * 確認する順序は最後尾側から開始して、varlistの先頭側へと向かう方向。
  * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
  */
 static struct Var* varlist_search(const char* str)
 {
-        int32_t i = varlist_head;
-        while (i-->0) {
-                if (strcmp(str, varlist[i].str) == 0)
-                        return &(varlist[i]);
-        }
-
-        return NULL;
+        return varlist_search_common(str, 0);
 }
 
 /* 変数リストに新たに変数を追加する。
