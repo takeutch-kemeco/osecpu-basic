@@ -59,6 +59,42 @@ static struct Var varlist[VARLIST_LEN];
 /* varlist の現在の先頭から数えて最初の空位置 */
 static int32_t varlist_head = 0;
 
+/* varlist のスコープ位置を記録しておくスタック */
+#define VARLIST_SCOPE_LEN VARLIST_LEN
+static int32_t varlist_scope[VARLIST_SCOPE_LEN] = {[0] = 0};
+static int32_t varlist_scope_head = 0;
+
+/* 現在のvarlist_headの値をvarlist_scopeへプッシュする
+ *
+ * これを現在のスコープ位置と考えることで、
+ * varlist_scope[varlist_scope_head] 位置から varlist_head 未満までをローカル変数と考える場合に便利。
+ * varlist_scope_head に連動させて varlist_head を操作するだけで、ローカル変数を破棄できる。
+ */
+static void varlist_scope_push(void)
+{
+        varlist_scope_head++;
+
+        if (varlist_scope_head >= VARLIST_SCOPE_LEN) {
+                printf("system err: varlist_scope_push()\n");
+                exit(EXIT_FAILURE);
+        }
+
+        varlist_scope[varlist_scope_head] = varlist_head;
+}
+
+/* varlist_scopeからポップし、varlist_headへセットする
+ */
+static void varlist_scope_pop(void)
+{
+        if (varlist_scope_head < 0) {
+                printf("system err: varlist_scope_pop()\n");
+                exit(EXIT_FAILURE);
+        }
+
+        varlist_head = varlist_scope[varlist_scope_head];
+        varlist_scope_head--;
+}
+
 /* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）から確認してくる。
  * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
  */
