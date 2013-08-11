@@ -555,9 +555,6 @@ static char init_eoe_arg[] = {
         "SInt32 fixA:R10;"
 };
 
-/* 関数呼び出し時に、引数の個数を知らせる用 */
-static int32_t function_argc;
-
 /* 全ての初期化
  */
 void init_all(void)
@@ -1544,9 +1541,6 @@ read_variable
 
                 /* IDENTIFIER がラベル名として存在すれば、これは関数実行 */
                 } else {
-                        /* 引数の個数を飛び先の関数に伝えるため */
-                        function_argc = $3;
-
                         /* gosub とほぼ同じ */
                         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
                         pA(push_labelstack);
