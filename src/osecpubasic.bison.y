@@ -1178,6 +1178,7 @@ static void __func_tan(void)
 %token __STATE_READ __STATE_DATA __STATE_MAT __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
 %token __STATE_LET __OPE_SUBST
 %token __STATE_DEF
+%token __STATE_FUNCTION __STATE_END_FUNCTION
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
 %token __FUNC_SIN __FUNC_COS __FUNC_TAN __FUNC_SQRT
 %token __FUNC_DRAWLINE
@@ -1201,7 +1202,7 @@ static void __func_tan(void)
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
 %type <sval> syntax_tree declaration_list declaration
-%type <sval> define_function
+%type <sval> define_function define_def_function define_full_function
 %type <ival> expression_list identifier_list
 
 %start syntax_tree
@@ -1745,6 +1746,11 @@ identifier_list
         ;
 
 define_function
+        : define_def_function
+        | define_full_function
+        ;
+
+define_def_function
         : __STATE_DEF __IDENTIFIER __LB identifier_list __RB __OPE_SUBST {
                 /* __STATE_DEF __IDENTIFIER も、ラベルの一種として字句解析の段階で登録されている前提
                  * ここを、関数呼び出しの際にジャンプしてくる位置とする
@@ -1779,6 +1785,13 @@ define_function
                 /* 関数呼び出し元の位置まで戻る */
                 pA(pop_labelstack);
                 pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
+        }
+        ;
+
+define_full_function
+        : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __DECL_END {
+        } declaration_list __STATE_END_FUNCTION {
+                printf("define_full_function\n");
         }
         ;
 

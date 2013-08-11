@@ -32,11 +32,12 @@
 
 %%
 
+<pre_process>"function"         BEGIN(pre_process_def);
 <pre_process>"def"              BEGIN(pre_process_def);
 <pre_process_def>[_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext); BEGIN(pre_process);}
-<pre_process>.                  BEGIN(pre_process);
 
 <pre_process>^[*][_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext);}
+<pre_process>"end"[ ]*"function" {}
 <pre_process>.                  {}
 
 <main_process>^"rem"            BEGIN(main_process_comment);
@@ -98,6 +99,9 @@
 <main_process>"let"     return(__STATE_LET);
 
 <main_process>"mat"     return(__STATE_MAT);
+
+<main_process>"function"                return(__STATE_FUNCTION);
+<main_process>"end"[ ]*"function"       return(__STATE_END_FUNCTION);
 
 <main_process>"def"     return(__STATE_DEF);
 <main_process>","       return(__OPE_COMMA);
