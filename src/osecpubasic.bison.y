@@ -127,7 +127,7 @@ static struct Var* varlist_search_local(const char* str)
  *
  * varlist_add() および varlist_add_local() の共通ルーチンを抜き出したもの。
  */
-static void __varlist_add(const char* str, const int32_t array_len)
+static void varlist_add_common(const char* str, const int32_t array_len)
 {
         struct Var* cur = varlist + varlist_head;
         struct Var* prev = varlist + varlist_head - 1;
@@ -148,7 +148,7 @@ static void varlist_add_local(const char* str, const int32_t array_len)
         if (varlist_search_local(str) != NULL)
                 return;
 
-        __varlist_add(str, array_len);
+        varlist_add_common(str, array_len);
 }
 
 /* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）からvarlistの先頭まで確認してくる。
@@ -169,7 +169,7 @@ static void varlist_add(const char* str, const int32_t array_len)
         if (varlist_search(str) != NULL)
                 return;
 
-        __varlist_add(str, array_len);
+        varlist_add_common(str, array_len);
 }
 
 /* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置へfix32型を書き込む。
