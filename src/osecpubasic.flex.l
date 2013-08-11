@@ -26,10 +26,15 @@
 %}
 
 %x pre_process
+%x pre_process_def
 %x main_process
 %x main_process_comment
 
 %%
+
+<pre_process>"def"              BEGIN(pre_process_def);
+<pre_process_def>[_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext); BEGIN(pre_process);}
+<pre_process>.                  BEGIN(pre_process);
 
 <pre_process>^[*][_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext);}
 <pre_process>.                  {}

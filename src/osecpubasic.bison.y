@@ -1160,7 +1160,7 @@ static void __func_tan(void)
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
 %type <sval> syntax_tree declaration_list declaration
-%type <sval> define_function identifier_list
+%type <sval> define_function user_function identifier_list
 
 %start syntax_tree
 
@@ -1198,7 +1198,8 @@ expression
         ;
 
 function
-        : func_print
+        : user_function
+        | func_print
         | __FUNC_INPUT {}
         | __FUNC_PEEK {}
         | __FUNC_POKE expression {}
@@ -1676,9 +1677,29 @@ identifier_list
         ;
 
 define_function
-        : __STATE_DEF __IDENTIFIER __LB identifier_list __RB __OPE_SUBST expression {
-                printf("define_function\n");
-                exit(EXIT_FAILURE);
+        : __STATE_DEF {
+        } __IDENTIFIER __LB identifier_list __RB __OPE_SUBST {
+                /* __STATE_DEF __IDENTIFIER も、ラベルの一種として字句解析の段階で登録されている前提 */
+
+                /* ここを、関数呼び出しの際にジャンプしてくる位置とする */
+                pA("LB(0, %d);\n", labellist_search($3));
+        } expression {
+                /* expression は実行されて、結果は push_stack される */
+
+                /* 関数呼び出し元の位置まで戻る */
+                pA(pop_labelstack);
+                pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
+        }
+        ;
+
+user_function
+        : __IDENTIFIER __OPE_COMMA __LB identifier_list __RB {
+                /* gosub とほぼ同じ */
+                pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+                pA(push_labelstack);
+                pA("PLIMM(P3F, %d);\n", labellist_search($1));
+                pA("LB(0, %d);\n", cur_label_index_head);
+                cur_label_index_head++;
         }
         ;
 
