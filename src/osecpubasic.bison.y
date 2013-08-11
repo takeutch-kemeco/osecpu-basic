@@ -110,6 +110,24 @@ static struct Var* varlist_search_local(const char* str)
         return NULL;
 }
 
+/* 変数リストに新たに変数を無条件に追加する。
+ * 既に同名の変数が存在するかの確認は行わない。常に追加する。
+ * array_len : この変数の配列サイズを指定する。スカラーならば 1 とすべき。 この値はint32型。（fix32型では”ない”ので注意）
+ *
+ * varlist_add() および varlist_add_local() の共通ルーチンを抜き出したもの。
+ */
+static void __varlist_add(const char* str, const int32_t array_len)
+{
+        struct Var* cur = varlist + varlist_head;
+        struct Var* prev = varlist + varlist_head - 1;
+
+        strcpy(cur->str, str);
+        cur->array_len = array_len;
+        cur->head_ptr = (varlist_head == 0) ? 0 : prev->head_ptr + prev->array_len;
+
+        varlist_head++;
+}
+
 /* 変数リストに新たにローカル変数を追加する。
  * 現在のスコープ内に重複する同名のローカル変数が存在した場合は何もしない。
  * array_len : この変数の配列サイズを指定する。スカラーならば 1 とすべき。 この値はint32型。（fix32型では”ない”ので注意）
@@ -119,14 +137,7 @@ static void varlist_add_local(const char* str, const int32_t array_len)
         if (varlist_search_local(str) != NULL)
                 return;
 
-        struct Var* cur = varlist + varlist_head;
-        struct Var* prev = varlist + varlist_head - 1;
-
-        strcpy(cur->str, str);
-        cur->array_len = array_len;
-        cur->head_ptr = (varlist_head == 0) ? 0 : prev->head_ptr + prev->array_len;
-
-        varlist_head++;
+        __varlist_add(str, array_len);
 }
 
 /* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）から確認してくる。
@@ -152,14 +163,7 @@ static void varlist_add(const char* str, const int32_t array_len)
         if (varlist_search(str) != NULL)
                 return;
 
-        struct Var* cur = varlist + varlist_head;
-        struct Var* prev = varlist + varlist_head - 1;
-
-        strcpy(cur->str, str);
-        cur->array_len = array_len;
-        cur->head_ptr = (varlist_head == 0) ? 0 : prev->head_ptr + prev->array_len;
-
-        varlist_head++;
+        __varlist_add(str, array_len);
 }
 
 /* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置へfix32型を書き込む。
