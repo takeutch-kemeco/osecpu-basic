@@ -56,13 +56,16 @@ struct Var {
 #define VARLIST_LEN 0x1000
 static struct Var varlist[VARLIST_LEN];
 
-/* 変数リストに既に同名が登録されているかを確認する。
+/* varlist の現在の先頭から数えて最初の空位置 */
+static int32_t varlist_head = 0;
+
+/* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）から確認してくる。
  * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
  */
 static struct Var* varlist_search(const char* str)
 {
-        int i;
-        for (i = 0; i < VARLIST_LEN; i++) {
+        int32_t i = varlist_head;
+        while (i-->0) {
                 if (strcmp(str, varlist[i].str) == 0)
                         return &(varlist[i]);
         }
@@ -79,19 +82,14 @@ static void varlist_add(const char* str, const int32_t array_len)
         if (varlist_search(str) != NULL)
                 return;
 
-        int32_t cur_head_ptr = 0;
-        int i;
-        for (i = 0; i < VARLIST_LEN; i++) {
-                if (varlist[i].str[0] == '\0') {
-                        strcpy(varlist[i].str, str);
-                        varlist[i].head_ptr = cur_head_ptr;
-                        varlist[i].array_len = array_len;
+        struct Var* cur = varlist + varlist_head;
+        struct Var* prev = varlist + varlist_head - 1;
 
-                        return;
-                }
+        strcpy(cur->str, str);
+        cur->array_len = array_len;
+        cur->head_ptr = (varlist_head == 0) ? 0 : prev->head_ptr + prev->array_len;
 
-                cur_head_ptr = varlist[i].head_ptr + varlist[i].array_len;
-        }
+        varlist_head++;
 }
 
 /* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置へfix32型を書き込む。
