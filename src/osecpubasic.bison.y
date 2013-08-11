@@ -95,6 +95,40 @@ static void varlist_scope_pop(void)
         varlist_scope_head--;
 }
 
+/* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）から現在のスコープの範囲内で確認する。
+ * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
+ */
+static struct Var* varlist_search_local(const char* str)
+{
+        const int32_t cur_scope = varlist_scope[varlist_scope_head];
+        int32_t i = varlist_head;
+        while (i-->cur_scope) {
+                if (strcmp(str, varlist[i].str) == 0)
+                        return &(varlist[i]);
+        }
+
+        return NULL;
+}
+
+/* 変数リストに新たにローカル変数を追加する。
+ * 現在のスコープ内に重複する同名のローカル変数が存在した場合は何もしない。
+ * array_len : この変数の配列サイズを指定する。スカラーならば 1 とすべき。 この値はint32型。（fix32型では”ない”ので注意）
+ */
+static void varlist_add_local(const char* str, const int32_t array_len)
+{
+        if (varlist_search_local(str) != NULL)
+                return;
+
+        struct Var* cur = varlist + varlist_head;
+        struct Var* prev = varlist + varlist_head - 1;
+
+        strcpy(cur->str, str);
+        cur->array_len = array_len;
+        cur->head_ptr = (varlist_head == 0) ? 0 : prev->head_ptr + prev->array_len;
+
+        varlist_head++;
+}
+
 /* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）から確認してくる。
  * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
  */
