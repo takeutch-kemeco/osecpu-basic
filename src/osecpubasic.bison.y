@@ -1811,9 +1811,24 @@ define_full_function
                         write_heap(tmp, iden);
                         pA(tmp);
                 }
+
+                /* 戻り値の代入用に、関数名と同名のローカル変数（スカラー）を作成する */
+                varlist_add($2, 1);
         } declaration_list __STATE_END_FUNCTION {
+                /* 関数名と同名のローカル変数の値を、スタックにプッシュして、これを戻り値とする
+                 */
+                pA("heap_offset = 0;");
+                char tmp[0x1000];
+                read_heap(tmp, $2);
+                pA(tmp);
+
+                pA("stack_socket = heap_socket;");
+                pA(push_stack);
+
+                /* ローカル変数を破棄する */
                 varlist_scope_pop();
 
+                /* 関数呼び出し元の位置まで戻る */
                 pA(pop_labelstack);
                 pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
         }
