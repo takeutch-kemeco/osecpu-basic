@@ -605,6 +605,13 @@ void init_all(void)
         pA("SInt32 forfixR: R12;");
         pA("SInt32 forfixtmp: R13;\n");
 
+        /* matの作業用 */
+        pA("SInt32 matfixL: R14;");
+        pA("SInt32 matfixR: R15;");
+        pA("SInt32 matfixtmp: R16;");
+        pA("SInt32 matcountcol: R17;");
+        pA("SInt32 matcountrow: R18;");
+
         pA(init_heap);
         pA(init_stack);
         pA(init_labelstack);
@@ -1235,6 +1242,7 @@ static void __func_tan(void)
 %type <sval> operation const_variable read_variable
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
+%type <sval> ope_matrix
 %type <sval> syntax_tree declaration_list declaration
 %type <sval> define_function define_def_function define_full_function
 %type <ival> expression_list identifier_list
@@ -1257,6 +1265,7 @@ declaration_list
 declaration
         : initializer __DECL_END
         | assignment __DECL_END
+        | ope_matrix __DECL_END
         | expression __DECL_END
         | selection_if
         | iterator_for
@@ -1459,6 +1468,40 @@ assignment
                 } else {
                         yyerror("system err: assignment, col_len の値が不正です");
                 }
+        }
+        ;
+
+ope_matrix
+        : __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER {
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* varL = varlist_search($2);
+                struct Var* varR = varlist_search($4);
+
+                /* コピーする配列の要素数が異なる場合はエラーとする */
+                if ((varL->col_len != varR->col_len) || (varL->row_len != varR->row_len))
+                        yyerror("syntax err: 行か列が異なる行列のコピーは未サポートです");
+
+                /* 要素数をセット（コンパイル時） */
+                pA("matcountrow = %d;", varL->array_len - 1);
+
+                beginF();
+
+                /* 局所ループ用に無名ラベルをセット */
+                const int32_t local_label = cur_label_index_head;
+                cur_label_index_head++;
+                pA("LB(0, %d);\n", local_label);
+
+                pA("if (matcountrow >= 0) {");
+                        pA("heap_offset = matcountrow << 16;");
+                        read_heap($4);
+                        pA("heap_offset = matcountrow << 16;");
+                        write_heap($2);
+
+                        pA("matcountrow--;");
+                        pA("PLIMM(P3F, %d);", local_label);
+                pA("}");
+
+                endF();
         }
         ;
 
