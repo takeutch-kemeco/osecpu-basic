@@ -1274,6 +1274,51 @@ static void ope_matrix_scalar(const char* strA)
         endF();
 }
 
+/* 行列に単位行列をセットする
+ * 正方行列でない場合はエラーとなる。
+ */
+static void ope_matrix_idn(const char* strA)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varA = varlist_search(strA);
+
+        /* 正方行列では無い場合はエラーとする */
+        if (varA->col_len != varA->row_len)
+                yyerror("syntax err: 正方行列ではない行列へ単位行列をセットしようとしました\n");
+
+        /* 要素数をセット（コンパイル時） */
+        pA("matcountrow = %d;", varA->array_len - 1);
+
+        /* 対角成分となる要素のインデックスは、 col_len + 1 の倍数インデックスであるはず */
+        pA("matfixtmp = %d;", varA->col_len + 1);
+
+        beginF();
+
+        /* 局所ループ用に無名ラベルをセット */
+        const int32_t local_label = cur_label_index_head;
+        cur_label_index_head++;
+        pA("LB(0, %d);\n", local_label);
+
+        pA("if (matcountrow >= 0) {");
+                /* インデックスが col_len + 1 の倍数であれば対角成分 */
+                pA("if ((matcountrow %% matfixtmp) == 0) {");
+                        pA("heap_socket = 1 << 16;");
+                        pA("heap_offset = matcountrow << 16;");
+                        write_heap(strA);
+                /* 対角成分では無い場合 */
+                pA("} else {");
+                        pA("heap_socket = 0;");
+                        pA("heap_offset = matcountrow << 16;");
+                        write_heap(strA);
+                pA("}");
+
+                pA("matcountrow--;");
+                pA("PLIMM(P3F, %d);", local_label);
+        pA("}");
+
+        endF();
+}
+
 /* 行列同士の加算を行う。ただし strR の各要素は scale 倍されてから加算される。
  * 行および列が同じ大きさの場合のみ、対応する各要素同士を加算する。
  *
@@ -1349,6 +1394,13 @@ static void ope_matrix_sub(const char* strA, const char* strL, const char* strR)
         ope_matrix_add_common(strA, strL, strR, -1);
 }
 
+/* 行列同士の乗算、またはベクトルと行列の乗算を行う。
+ */
+static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
+{
+
+}
+
 %}
 
 %union {
@@ -1360,7 +1412,7 @@ static void ope_matrix_sub(const char* strA, const char* strL, const char* strR)
 %token __STATE_IF __STATE_THEN __STATE_ELSE
 %token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT __STATE_END
 %token __STATE_READ __STATE_DATA __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
-%token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON
+%token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN
 %token __OPE_SUBST
 %token __STATE_LET __STATE_DEF __STATE_DIM
 %token __STATE_FUNCTION __STATE_END_FUNCTION
@@ -1632,11 +1684,17 @@ ope_matrix
                 pA("matfixL = stack_socket;");
                 ope_matrix_scalar($2);
         }
+        | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_IDN {
+                ope_matrix_idn($2);
+        }
         | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_ADD __IDENTIFIER {
                 ope_matrix_add($2, $4, $6);
         }
         | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_SUB __IDENTIFIER {
                 ope_matrix_sub($2, $4, $6);
+        }
+        | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_MUL __IDENTIFIER {
+                ope_matrix_mul($2, $4, $6);
         }
         ;
 

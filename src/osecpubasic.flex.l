@@ -113,6 +113,7 @@ char* linelist[0x10000];
 <main_process>"mat"     return(__STATE_MAT);
 <main_process>"zer"     return(__STATE_MAT_ZER);
 <main_process>"con"     return(__STATE_MAT_CON);
+<main_process>"idn"     return(__STATE_MAT_IDN);
 
 <main_process>"function"                return(__STATE_FUNCTION);
 <main_process>"end"[ ]*"function"       return(__STATE_END_FUNCTION);
