@@ -1539,8 +1539,12 @@ read_variable
                 pA(push_stack);
         }
         | __IDENTIFIER __LB expression_list __RB {
-                /* 変数リストに名前が存在すれば、これは配列変数 */
-                if (varlist_search($1) != NULL) {
+                struct Var* var = varlist_search($1);
+
+                /* 変数リストに名前が存在し、かつ、
+                 * それがスカラーでなければ（2以上の長さをもつ配列であれば）、これは配列変数
+                 */
+                if (var != NULL && var->array_len >= 2) {
                         pA(pop_stack);
                         pA("heap_offset = stack_socket;");
 
@@ -1551,7 +1555,7 @@ read_variable
                         pA("stack_socket = heap_socket;");
                         pA(push_stack);
 
-                /* 変数リストに名前が存在しなければ、これは関数実行 */
+                /* そうでなければ、これは関数実行 */
                 } else {
                         /* gosub とほぼ同じ */
                         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
