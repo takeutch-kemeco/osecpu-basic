@@ -38,9 +38,9 @@ char* linelist[0x10000];
 %%
 
 <linelist_process>^.*[\n] {
-        linenumber++;
         linelist[linenumber] = malloc(yyleng + 1);
         strcpy(linelist[linenumber], yytext);
+        linenumber++;
 }
 
 <pre_process>"function"         BEGIN(pre_process_def);
@@ -150,6 +150,6 @@ char* linelist[0x10000];
 
 %%
 
-void start_linelist_process(void) {linenumber = 0; BEGIN(linelist_process);}
-void start_pre_process(void) {linenumber = 0; BEGIN(pre_process);}
-void start_main_process(void) {linenumber = 0; BEGIN(main_process);}
+void start_linelist_process(void) {linenumber = 1; BEGIN(linelist_process);}
+void start_pre_process(void) {linenumber = 1; BEGIN(pre_process);}
+void start_main_process(void) {linenumber = 1; BEGIN(main_process);}
