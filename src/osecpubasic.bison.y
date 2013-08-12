@@ -46,6 +46,16 @@ static void pA(const char* fmt, ...)
         fputs("\n", yyaskA);
 }
 
+/* 出力ファイル yyaskA へ文字列を書き出す関数（改行無し） */
+static void pA_nl(const char* fmt, ...)
+{
+        va_list ap;
+        va_start(ap, fmt);
+
+        vfprintf(yyaskA, fmt, ap);
+        va_end(ap);
+}
+
 /* IDENTIFIER 文字列用のスタック */
 #define IDENLIST_STR_LEN 0x100
 #define IDENLIST_LEN 0x1000
@@ -1556,7 +1566,7 @@ read_variable
 selection_if
         : selection_if_v selection_if_t selection_if_e
         | selection_if_v selection_if_t {
-                putchar('\n');
+                pA("\n");
         }
         ;
 
@@ -1569,7 +1579,7 @@ selection_if_v
 
 selection_if_t
         : __STATE_THEN declaration {
-                putchar('}');
+                pA_nl("}");
         }
 
 selection_if_e
