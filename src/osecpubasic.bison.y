@@ -1243,17 +1243,17 @@ static void ope_matrix_copy(const char* strL, const char* strR)
 }
 
 /* 行列の全ての要素に任意のスカラー値をセットする
- * valに0を渡せば mat a := zer 相当になる。
- * valに(1 << 16)を渡せば mat a := con 相当になる。
+ * あらかじめ matfixL に値をセットしておくこと（fix32型）
+ * matfixLに0をセットしておけば mat a := zer 相当になる。
+ * matfixLに(1 << 16)をセットしておけば mat a := con 相当になる。
  */
-static void ope_matrix_scalar(const char* strL, const int32_t val)
+static void ope_matrix_scalar(const char* strA)
 {
         /* 変数のスペックを得る。（コンパイル時） */
-        struct Var* varL = varlist_search(strL);
+        struct Var* varA = varlist_search(strA);
 
         /* 要素数をセット（コンパイル時） */
-        pA("matcountrow = %d;", varL->array_len - 1);
-        pA("matfixtmp = %d;", val);
+        pA("matcountrow = %d;", varA->array_len - 1);
 
         beginF();
 
@@ -1263,9 +1263,9 @@ static void ope_matrix_scalar(const char* strL, const int32_t val)
         pA("LB(0, %d);\n", local_label);
 
         pA("if (matcountrow >= 0) {");
-                pA("heap_socket = matfixtmp;");
+                pA("heap_socket = matfixL;");
                 pA("heap_offset = matcountrow << 16;");
-                write_heap(strL);
+                write_heap(strA);
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
@@ -1620,10 +1620,17 @@ ope_matrix
                 ope_matrix_copy($2, $4);
         }
         | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_ZER {
-                ope_matrix_scalar($2, 0);
+                pA("matfixL = 0;");
+                ope_matrix_scalar($2);
         }
         | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_CON {
-                ope_matrix_scalar($2, 1 << 16);
+                pA("matfixL = 1 << 16;");
+                ope_matrix_scalar($2);
+        }
+        | __STATE_MAT __IDENTIFIER __OPE_SUBST expression __OPE_MUL __STATE_MAT_CON {
+                pA(pop_stack);
+                pA("matfixL = stack_socket;");
+                ope_matrix_scalar($2);
         }
         | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_ADD __IDENTIFIER {
                 ope_matrix_add($2, $4, $6);
