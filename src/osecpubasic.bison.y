@@ -28,7 +28,15 @@
 
 #define YYMAXDEPTH 0x10000000
 
-void yyerror(const char *s) {printf("%s\n",s); exit(EXIT_FAILURE);}
+extern int32_t linenumber;
+extern char* linelist[0x10000];
+
+void yyerror(const char *s)
+{
+        printf("line %05d: %s\n", linenumber, s);
+        printf("            %s\n", linelist[linenumber]);
+        exit(EXIT_FAILURE);
+}
 
 extern FILE* yyin;
 extern FILE* yyout;
@@ -73,10 +81,8 @@ static int32_t idenlist_head = 0;
  */
 void idenlist_push(const char* src)
 {
-        if (idenlist_head >= IDENLIST_LEN) {
-                printf("system err: idenlist_push()\n");
-                exit(EXIT_FAILURE);
-        }
+        if (idenlist_head >= IDENLIST_LEN)
+                yyerror("system err: idenlist_push()");
 
         if(idenlist[idenlist_head] == NULL)
                 idenlist[idenlist_head] = malloc(IDENLIST_STR_LEN);
@@ -93,10 +99,8 @@ void idenlist_pop(char* dst)
 {
         idenlist_head--;
 
-        if (idenlist_head < 0) {
-                printf("system err: idenlist_pop()\n");
-                exit(EXIT_FAILURE);
-        }
+        if (idenlist_head < 0)
+                yyerror("system err: idenlist_pop()");
 
         strcpy(dst, idenlist[idenlist_head]);
 }
@@ -131,10 +135,8 @@ static void varlist_scope_push(void)
 {
         varlist_scope_head++;
 
-        if (varlist_scope_head >= VARLIST_SCOPE_LEN) {
-                printf("system err: varlist_scope_push()\n");
-                exit(EXIT_FAILURE);
-        }
+        if (varlist_scope_head >= VARLIST_SCOPE_LEN)
+                yyerror("system err: varlist_scope_push()");
 
         varlist_scope[varlist_scope_head] = varlist_head;
 }
@@ -143,10 +145,8 @@ static void varlist_scope_push(void)
  */
 static void varlist_scope_pop(void)
 {
-        if (varlist_scope_head < 0) {
-                printf("system err: varlist_scope_pop()\n");
-                exit(EXIT_FAILURE);
-        }
+        if (varlist_scope_head < 0)
+                yyerror("system err: varlist_scope_pop()");
 
         varlist_head = varlist_scope[varlist_scope_head];
         varlist_scope_head--;
@@ -199,15 +199,11 @@ static struct Var* varlist_search(const char* str)
  */
 static void varlist_add_common(const char* str, const int32_t col_len, const int32_t row_len)
 {
-        if (col_len <= 0) {
-                printf("syntax err: 配列の行サイズに0を指定しました\n");
-                exit(EXIT_FAILURE);
-        }
+        if (col_len <= 0)
+                yyerror("syntax err: 配列の行サイズに0を指定しました");
 
-        if (row_len <= 0) {
-                printf("syntax err: 配列の列サイズに0を指定しました\n");
-                exit(EXIT_FAILURE);
-        }
+        if (row_len <= 0)
+                yyerror("syntax err: 配列の列サイズに0を指定しました");
 
         struct Var* cur = varlist + varlist_head;
         struct Var* prev = varlist + varlist_head - 1;
@@ -324,10 +320,8 @@ static int32_t labellist_search_unsafe(const char* str)
 static int32_t labellist_search(const char* str)
 {
         const int32_t tmp = labellist_search_unsafe(str);
-        if (tmp == -1) {
-                printf("syntax err: 存在しないラベルを指定しました\n");
-                exit(EXIT_FAILURE);
-        }
+        if (tmp == -1)
+                yyerror("syntax err: 存在しないラベルを指定しました");
 
         return tmp;
 }
@@ -338,15 +332,11 @@ static int32_t labellist_search(const char* str)
  */
 void labellist_add(const char* str)
 {
-        if (labellist_search_unsafe(str) != -1) {
-                printf("syntax err: 既に同名のラベルが存在します\n");
-                exit(EXIT_FAILURE);
-        }
+        if (labellist_search_unsafe(str) != -1)
+                yyerror("syntax err: 既に同名のラベルが存在します");
 
-        if (cur_label_index_head >= LABEL_INDEX_LEN) {
-                printf("system err: コンパイラーが設定可能なラベル数を越えました。\n");
-                exit(EXIT_FAILURE);
-        }
+        if (cur_label_index_head >= LABEL_INDEX_LEN)
+                yyerror("system err: コンパイラーが設定可能なラベル数を越えました");
 
         int i;
         for (i = 0; i < LABEL_INDEX_LEN; i++) {
@@ -474,10 +464,8 @@ static void retF(void)
 static void write_heap(const char* iden)
 {
         struct Var* v = varlist_search(iden);
-        if (v == NULL) {
-                printf("syntax err: identifier が未定義の変数に書き込もうとしました\n");
-                exit(EXIT_FAILURE);
-        }
+        if (v == NULL)
+                yyerror("syntax err: identifier が未定義の変数に書き込もうとしました");
 
         pA("heap_seek = %d;", v->head_ptr);
 
@@ -500,10 +488,8 @@ static void write_heap(const char* iden)
 static void read_heap(const char* iden)
 {
         struct Var* v = varlist_search(iden);
-        if (v == NULL) {
-                printf("syntax err: identifier が未定義の変数から読み込もうとしました\n");
-                exit(EXIT_FAILURE);
-        }
+        if (v == NULL)
+                yyerror("syntax err: identifier が未定義の変数から読み込もうとしました");
 
         pA("heap_seek = %d;", v->head_ptr);
 
@@ -1421,10 +1407,8 @@ assignment
                 struct Var* var = varlist_search_local($1);
 
                 /* 変数が配列な場合はエラー */
-                if (var->col_len != 1 || var->row_len != 1) {
-                        printf("syntax err: 配列変数へスカラーによる書き込みを行おうとしました\n");
-                        exit(EXIT_FAILURE);
-                }
+                if (var->col_len != 1 || var->row_len != 1)
+                        yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
 
                 /* スカラーなので書き込みオフセットは 0 */
                 pA("heap_offset = 0;");
@@ -1439,23 +1423,18 @@ assignment
                 struct Var* var = varlist_search_local($1);
 
                 /* 変数がスカラーな場合はエラー */
-                if (var->col_len == 1 && var->row_len == 1) {
-                        printf("syntax err: スカラー変数へ添字による書き込みを行おうとしました\n");
-                        exit(EXIT_FAILURE);
-                }
+                if (var->col_len == 1 && var->row_len == 1)
+                        yyerror("syntax err: スカラー変数へ添字による書き込みを行おうとしました");
 
                 /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
                  */
                 /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                if (var->col_len == 1 && $3 != 1) {
-                        printf("syntax err: 1次元配列に対して、異なる次元の添字を指定しました\n");
-                        exit(EXIT_FAILURE);
+                if (var->col_len == 1 && $3 != 1)
+                        yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
 
                 /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                } else if (var->col_len >= 2 && $3 != 2) {
-                        printf("syntax err: 2次元配列に対して、異なる次元の添字を指定しました\n");
-                        exit(EXIT_FAILURE);
-                }
+                else if (var->col_len >= 2 && $3 != 2)
+                        yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
 
                 /* 配列の次元によって分岐（コンパイル時）
                  */
@@ -1478,8 +1457,7 @@ assignment
 
                 /* 1,2次元以外の場合はシステムエラー */
                 } else {
-                        printf("system err: assignment, col_len の値が不正です\n");
-                        exit(EXIT_FAILURE);
+                        yyerror("system err: assignment, col_len の値が不正です");
                 }
         }
         ;
@@ -1623,10 +1601,8 @@ read_variable
                 struct Var* var = varlist_search_local($1);
 
                 /* 変数が配列な場合はエラー */
-                if (var->col_len != 1 || var->row_len != 1) {
-                        printf("syntax err: 配列変数へスカラーによる読み込みを行おうとしました\n");
-                        exit(EXIT_FAILURE);
-                }
+                if (var->col_len != 1 || var->row_len != 1)
+                        yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
 
                 /* スカラーなので読み込みオフセットは 0 */
                 pA("heap_offset = 0;");
@@ -1643,23 +1619,18 @@ read_variable
                         struct Var* var = varlist_search_local($1);
 
                         /* 変数がスカラーな場合はエラー */
-                        if (var->col_len == 1 && var->row_len == 1) {
-                                printf("syntax err: スカラー変数へ添字による読み込みを行おうとしました\n");
-                                exit(EXIT_FAILURE);
-                        }
+                        if (var->col_len == 1 && var->row_len == 1)
+                                yyerror("syntax err: スカラー変数へ添字による読み込みを行おうとしました");
 
                         /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
                         */
                         /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                        if (var->col_len == 1 && $3 != 1) {
-                                printf("syntax err: 1次元配列に対して、異なる次元の添字を指定しました\n");
-                                exit(EXIT_FAILURE);
+                        if (var->col_len == 1 && $3 != 1)
+                                yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
 
                         /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                        } else if (var->col_len >= 2 && $3 != 2) {
-                                printf("syntax err: 2次元配列に対して、異なる次元の添字を指定しました\n");
-                                exit(EXIT_FAILURE);
-                        }
+                        else if (var->col_len >= 2 && $3 != 2)
+                                yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
 
                         /* 配列の次元によって分岐（コンパイル時）
                          */
@@ -1682,8 +1653,7 @@ read_variable
 
                         /* 1,2次元以外の場合はシステムエラー */
                         } else {
-                                printf("system err: read_variable, col_len の値が不正です\n");
-                                exit(EXIT_FAILURE);
+                                yyerror("system err: read_variable, col_len の値が不正です");
                         }
 
                         /* 結果をスタックにプッシュする */
@@ -1742,10 +1712,8 @@ iterator_for
                 struct Var* var = varlist_search_local($2);
 
                 /* 変数が配列な場合はエラー */
-                if (var->col_len != 1 || var->row_len != 1) {
-                        printf("syntax err: 配列変数へスカラーによる書き込みを行おうとしました\n");
-                        exit(EXIT_FAILURE);
-                }
+                if (var->col_len != 1 || var->row_len != 1)
+                        yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
 
                 /* スカラーなので書き込みオフセットは 0 */
                 pA("heap_offset = 0;");
@@ -1807,10 +1775,8 @@ iterator_for
                 struct Var* var = varlist_search_local($2);
 
                 /* 変数が配列な場合はエラー */
-                if (var->col_len != 1 || var->row_len != 1) {
-                        printf("syntax err: 配列変数へスカラーによる読み込みを行おうとしました\n");
-                        exit(EXIT_FAILURE);
-                }
+                if (var->col_len != 1 || var->row_len != 1)
+                        yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
 
                 /* スカラーなので読み込みオフセットは 0 */
                 pA("heap_offset = 0;");

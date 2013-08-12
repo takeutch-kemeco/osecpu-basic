@@ -20,17 +20,28 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 #include "osecpubasic.bison.h"
 
+int32_t linenumber;
+char* linelist[0x10000];
+
 %}
 
+%x linelist_process
 %x pre_process
 %x pre_process_def
 %x main_process
 %x main_process_comment
 
 %%
+
+<linelist_process>^.*[\n] {
+        linenumber++;
+        linelist[linenumber] = malloc(yyleng + 1);
+        strcpy(linelist[linenumber], yytext);
+}
 
 <pre_process>"function"         BEGIN(pre_process_def);
 <pre_process>"def"              BEGIN(pre_process_def);
@@ -41,7 +52,7 @@
 <pre_process>.                  {}
 
 <main_process>^"rem"            BEGIN(main_process_comment);
-<main_process_comment>[\n]      BEGIN(main_process);
+<main_process_comment>[\n]      {linenumber++; BEGIN(main_process);}
 <main_process_comment>.         {}
 
 <main_process>["].*["]          {strncpy(yylval.sval, yytext + 1, strlen(yytext + 1) - 1); return(__CONST_STRING);}
@@ -79,7 +90,7 @@
 <main_process>"("       return(__LB);
 <main_process>")"       return(__RB);
 
-<main_process>"\n"      return(__DECL_END);
+<main_process>[\n]      {linenumber++; return(__DECL_END);}
 <main_process>";"       return(__DECL_END);
 
 <main_process>"if"      return(__STATE_IF);
@@ -139,5 +150,6 @@
 
 %%
 
-void start_pre_process(void) {BEGIN(pre_process);}
-void start_main_process(void) {BEGIN(main_process);}
+void start_linelist_process(void) {linenumber = 0; BEGIN(linelist_process);}
+void start_pre_process(void) {linenumber = 0; BEGIN(pre_process);}
+void start_main_process(void) {linenumber = 0; BEGIN(main_process);}

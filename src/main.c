@@ -137,6 +137,13 @@ int main(int argc, char** argv)
         yyout = open_null_out_file();
         yyaskA = open_out_file(out_path);
 
+        start_linelist_process();
+        while (yylex() != 0) {
+        }
+
+        fseek(yyin, 0, SEEK_SET);
+        yyrestart(yyin);
+
         start_pre_process();
         while (yylex() != 0) {
         }
