@@ -111,6 +111,7 @@ char* linelist[0x10000];
 <main_process>"dim"     return(__STATE_DIM);
 
 <main_process>"mat"     return(__STATE_MAT);
+<main_process>"zer"     return(__STATE_MAT_ZERO);
 
 <main_process>"function"                return(__STATE_FUNCTION);
 <main_process>"end"[ ]*"function"       return(__STATE_END_FUNCTION);

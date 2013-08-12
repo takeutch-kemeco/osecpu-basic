@@ -1206,6 +1206,71 @@ static void __func_tan(void)
         endF();
 }
 
+/* 行列のコピー命令を出力する
+ * 行および列が同じ大きさの場合のみ、対応する各要素同士をコピーする。
+ */
+void ope_matrix_copy(const char* strL, const char* strR)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varL = varlist_search(strL);
+        struct Var* varR = varlist_search(strR);
+
+        /* コピーする配列の要素数が異なる場合はエラーとする */
+        if ((varL->col_len != varR->col_len) || (varL->row_len != varR->row_len))
+                yyerror("syntax err: 行か列が異なる行列のコピーは未サポートです");
+
+        /* 要素数をセット（コンパイル時） */
+        pA("matcountrow = %d;", varL->array_len - 1);
+
+        beginF();
+
+        /* 局所ループ用に無名ラベルをセット */
+        const int32_t local_label = cur_label_index_head;
+        cur_label_index_head++;
+        pA("LB(0, %d);\n", local_label);
+
+        pA("if (matcountrow >= 0) {");
+                pA("heap_offset = matcountrow << 16;");
+                read_heap(strR);
+                pA("heap_offset = matcountrow << 16;");
+                write_heap(strL);
+
+                pA("matcountrow--;");
+                pA("PLIMM(P3F, %d);", local_label);
+        pA("}");
+
+        endF();
+}
+
+/* 行列の全ての要素に0をセットする
+ */
+void ope_matrix_zero(const char* strL)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varL = varlist_search(strL);
+
+        /* 要素数をセット（コンパイル時） */
+        pA("matcountrow = %d;", varL->array_len - 1);
+
+        beginF();
+
+        /* 局所ループ用に無名ラベルをセット */
+        const int32_t local_label = cur_label_index_head;
+        cur_label_index_head++;
+        pA("LB(0, %d);\n", local_label);
+
+        pA("if (matcountrow >= 0) {");
+                pA("heap_socket = 0;");
+                pA("heap_offset = matcountrow << 16;");
+                write_heap(strL);
+
+                pA("matcountrow--;");
+                pA("PLIMM(P3F, %d);", local_label);
+        pA("}");
+
+        endF();
+}
+
 %}
 
 %union {
@@ -1216,7 +1281,8 @@ static void __func_tan(void)
 
 %token __STATE_IF __STATE_THEN __STATE_ELSE
 %token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT __STATE_END
-%token __STATE_READ __STATE_DATA __STATE_MAT __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
+%token __STATE_READ __STATE_DATA __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
+%token __STATE_MAT __STATE_MAT_ZERO
 %token __OPE_SUBST
 %token __STATE_LET __STATE_DEF __STATE_DIM
 %token __STATE_FUNCTION __STATE_END_FUNCTION
@@ -1473,35 +1539,10 @@ assignment
 
 ope_matrix
         : __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER {
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* varL = varlist_search($2);
-                struct Var* varR = varlist_search($4);
-
-                /* コピーする配列の要素数が異なる場合はエラーとする */
-                if ((varL->col_len != varR->col_len) || (varL->row_len != varR->row_len))
-                        yyerror("syntax err: 行か列が異なる行列のコピーは未サポートです");
-
-                /* 要素数をセット（コンパイル時） */
-                pA("matcountrow = %d;", varL->array_len - 1);
-
-                beginF();
-
-                /* 局所ループ用に無名ラベルをセット */
-                const int32_t local_label = cur_label_index_head;
-                cur_label_index_head++;
-                pA("LB(0, %d);\n", local_label);
-
-                pA("if (matcountrow >= 0) {");
-                        pA("heap_offset = matcountrow << 16;");
-                        read_heap($4);
-                        pA("heap_offset = matcountrow << 16;");
-                        write_heap($2);
-
-                        pA("matcountrow--;");
-                        pA("PLIMM(P3F, %d);", local_label);
-                pA("}");
-
-                endF();
+                ope_matrix_copy($2, $4);
+        }
+        | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_ZERO {
+                ope_matrix_zero($2);
         }
         ;
 
