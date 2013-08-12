@@ -1539,12 +1539,8 @@ read_variable
                 pA(push_stack);
         }
         | __IDENTIFIER __LB expression_list __RB {
-                struct Var* var = varlist_search($1);
-
-                /* 変数リストに名前が存在し、かつ、
-                 * それがスカラーでなければ（2以上の長さをもつ配列であれば）、これは配列変数
-                 */
-                if (var != NULL && var->array_len >= 2) {
+                /* ラベルリストに名前が存在しなければ、これは配列変数 */
+                if (labellist_search_unsafe($1) == -1) {
                         pA(pop_stack);
                         pA("heap_offset = stack_socket;");
 
