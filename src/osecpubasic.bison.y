@@ -1209,7 +1209,7 @@ static void __func_tan(void)
 /* 行列のコピー命令を出力する
  * 行および列が同じ大きさの場合のみ、対応する各要素同士をコピーする。
  */
-void ope_matrix_copy(const char* strL, const char* strR)
+static void ope_matrix_copy(const char* strL, const char* strR)
 {
         /* 変数のスペックを得る。（コンパイル時） */
         struct Var* varL = varlist_search(strL);
@@ -1246,7 +1246,7 @@ void ope_matrix_copy(const char* strL, const char* strR)
  * valに0を渡せば mat a := zer 相当になる。
  * valに(1 << 16)を渡せば mat a := con 相当になる。
  */
-void ope_matrix_scalar(const char* strL, const int32_t val)
+static void ope_matrix_scalar(const char* strL, const int32_t val)
 {
         /* 変数のスペックを得る。（コンパイル時） */
         struct Var* varL = varlist_search(strL);
@@ -1272,6 +1272,81 @@ void ope_matrix_scalar(const char* strL, const int32_t val)
         pA("}");
 
         endF();
+}
+
+/* 行列同士の加算を行う。ただし strR の各要素は scale 倍されてから加算される。
+ * 行および列が同じ大きさの場合のみ、対応する各要素同士を加算する。
+ *
+ * scale に +1 を渡せば加算相当になる。
+ * scale に -1 を渡せば減算相当になる。
+ */
+static void ope_matrix_add_common(const char* strA, const char* strL, const char* strR,
+                                  const int32_t scale)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varA = varlist_search(strA);
+        struct Var* varL = varlist_search(strL);
+        struct Var* varR = varlist_search(strR);
+
+        /* コピーする配列の要素数が異なる場合はエラーとする */
+        if (!
+                ((varA->col_len == varL->col_len) && (varA->col_len == varR->col_len) &&
+                 (varA->row_len == varL->row_len) && (varA->row_len == varR->row_len))
+        )
+                yyerror("syntax err: 行か列が異なる行列の和または差の演算は未サポートです");
+
+        /* 要素数をセット（コンパイル時） */
+        pA("matcountrow = %d;", varA->array_len - 1);
+
+        /* matfixRに乗算する係数をセット（コンパイル時）
+         * +1なら加算、-1なら減算
+         */
+        pA("matfixtmp = %d;", scale);
+
+        beginF();
+
+        /* 局所ループ用に無名ラベルをセット */
+        const int32_t local_label = cur_label_index_head;
+        cur_label_index_head++;
+        pA("LB(0, %d);\n", local_label);
+
+        pA("if (matcountrow >= 0) {");
+                pA("heap_offset = matcountrow << 16;");
+                read_heap(strL);
+                pA("matfixL = heap_socket;");
+
+                pA("heap_offset = matcountrow << 16;");
+                read_heap(strR);
+                pA("matfixR = heap_socket;");
+
+                /* matfixR に係数を乗算 */
+                pA("matfixR *= matfixtmp;");
+
+                pA("heap_socket = matfixL + matfixR;");
+                pA("heap_offset = matcountrow << 16;");
+                write_heap(strA);
+
+                pA("matcountrow--;");
+                pA("PLIMM(P3F, %d);", local_label);
+        pA("}");
+
+        endF();
+}
+
+/* 行列同士の加算を行う。
+ * 行および列が同じ大きさの場合のみ、対応する各要素同士を加算する。
+ */
+static void ope_matrix_add(const char* strA, const char* strL, const char* strR)
+{
+        ope_matrix_add_common(strA, strL, strR, +1);
+}
+
+/* 行列同士の減算を行う。
+ * 行および列が同じ大きさの場合のみ、対応する各要素同士を減算する。
+ */
+static void ope_matrix_sub(const char* strA, const char* strL, const char* strR)
+{
+        ope_matrix_add_common(strA, strL, strR, -1);
 }
 
 %}
@@ -1549,6 +1624,12 @@ ope_matrix
         }
         | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_CON {
                 ope_matrix_scalar($2, 1 << 16);
+        }
+        | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_ADD __IDENTIFIER {
+                ope_matrix_add($2, $4, $6);
+        }
+        | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_SUB __IDENTIFIER {
+                ope_matrix_sub($2, $4, $6);
         }
         ;
 
