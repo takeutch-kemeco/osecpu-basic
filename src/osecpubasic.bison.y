@@ -1242,15 +1242,18 @@ void ope_matrix_copy(const char* strL, const char* strR)
         endF();
 }
 
-/* 行列の全ての要素に0をセットする
+/* 行列の全ての要素に任意のスカラー値をセットする
+ * valに0を渡せば mat a := zer 相当になる。
+ * valに(1 << 16)を渡せば mat a := con 相当になる。
  */
-void ope_matrix_zero(const char* strL)
+void ope_matrix_scalar(const char* strL, const int32_t val)
 {
         /* 変数のスペックを得る。（コンパイル時） */
         struct Var* varL = varlist_search(strL);
 
         /* 要素数をセット（コンパイル時） */
         pA("matcountrow = %d;", varL->array_len - 1);
+        pA("matfixtmp = %d;", val);
 
         beginF();
 
@@ -1260,7 +1263,7 @@ void ope_matrix_zero(const char* strL)
         pA("LB(0, %d);\n", local_label);
 
         pA("if (matcountrow >= 0) {");
-                pA("heap_socket = 0;");
+                pA("heap_socket = matfixtmp;");
                 pA("heap_offset = matcountrow << 16;");
                 write_heap(strL);
 
@@ -1282,7 +1285,7 @@ void ope_matrix_zero(const char* strL)
 %token __STATE_IF __STATE_THEN __STATE_ELSE
 %token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT __STATE_END
 %token __STATE_READ __STATE_DATA __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
-%token __STATE_MAT __STATE_MAT_ZERO
+%token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON
 %token __OPE_SUBST
 %token __STATE_LET __STATE_DEF __STATE_DIM
 %token __STATE_FUNCTION __STATE_END_FUNCTION
@@ -1541,8 +1544,11 @@ ope_matrix
         : __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER {
                 ope_matrix_copy($2, $4);
         }
-        | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_ZERO {
-                ope_matrix_zero($2);
+        | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_ZER {
+                ope_matrix_scalar($2, 0);
+        }
+        | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_CON {
+                ope_matrix_scalar($2, 1 << 16);
         }
         ;
 
