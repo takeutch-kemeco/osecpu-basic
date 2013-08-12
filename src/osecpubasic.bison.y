@@ -253,58 +253,6 @@ static void varlist_add(const char* str, const int32_t col_len, const int32_t ro
         varlist_add_common(str, col_len, row_len);
 }
 
-/* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置へfix32型を書き込む。
- * 事前に以下のレジスタに値をセットしておくこと:
- * heap_socket : ヒープに書き込みたい値。fix32型単位なので注意。
- * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
- */
-static void write_heap(const char* iden)
-{
-        struct Var* v = varlist_search(iden);
-        if (v == NULL) {
-                printf("syntax err: identifier が未定義の変数に書き込もうとしました\n");
-                exit(EXIT_FAILURE);
-        }
-
-        pA("heap_seek = %d;", v->head_ptr);
-        pA("heap_offset >>= 16;");
-        pA("heap_offset &= 0x0000ffff;");
-        pA("heap_seek += heap_offset;");
-        pA("PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);");
-}
-
-/* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置からfix32型を読み込む。
- * 事前に以下のレジスタに値をセットしておくこと:
- * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
- *
- * 読み込んだ値は heap_socket へ格納される。これはfix32型なので注意。
- */
-static void read_heap(const char* iden)
-{
-        struct Var* v = varlist_search(iden);
-        if (v == NULL) {
-                printf("syntax err: identifier が未定義の変数から読み込もうとしました\n");
-                exit(EXIT_FAILURE);
-        }
-
-        pA("heap_seek = %d;", v->head_ptr);
-        pA("heap_offset >>= 16;");
-        pA("heap_offset &= 0x0000ffff;");
-        pA("heap_seek += heap_offset;");
-        pA("PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);");
-}
-
-/* ヒープメモリーの初期化
- */
-static char init_heap[] = {
-        "VPtr heap_ptr:P04;\n"
-        "junkApi_malloc(heap_ptr, T_SINT32, 0x100000);\n"
-        "SInt32 heap_socket:R04;\n"
-        "SInt32 heap_seek:R06;\n"
-        "SInt32 heap_offset:R05;\n"
-        "heap_seek = 0;\n"
-};
-
 /* スタックにint32型（またはfix32型）をプッシュする
  * 事前に以下のレジスタをセットしておくこと:
  * stack_socket : プッシュしたい値。（int32型）
@@ -517,6 +465,68 @@ static void retF(void)
         retF();                                                         \
         pA("LB(0, %d);\n", end_label);                                  \
         func_label_init_flag = 1;
+
+/* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置へfix32型を書き込む。
+ * 事前に以下のレジスタに値をセットしておくこと:
+ * heap_socket : ヒープに書き込みたい値。fix32型単位なので注意。
+ * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
+ */
+static void write_heap(const char* iden)
+{
+        struct Var* v = varlist_search(iden);
+        if (v == NULL) {
+                printf("syntax err: identifier が未定義の変数に書き込もうとしました\n");
+                exit(EXIT_FAILURE);
+        }
+
+        pA("heap_seek = %d;", v->head_ptr);
+
+        beginF();
+
+        pA("heap_offset >>= 16;");
+        pA("heap_offset &= 0x0000ffff;");
+        pA("heap_seek += heap_offset;");
+        pA("PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);");
+
+        endF();
+}
+
+/* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置からfix32型を読み込む。
+ * 事前に以下のレジスタに値をセットしておくこと:
+ * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
+ *
+ * 読み込んだ値は heap_socket へ格納される。これはfix32型なので注意。
+ */
+static void read_heap(const char* iden)
+{
+        struct Var* v = varlist_search(iden);
+        if (v == NULL) {
+                printf("syntax err: identifier が未定義の変数から読み込もうとしました\n");
+                exit(EXIT_FAILURE);
+        }
+
+        pA("heap_seek = %d;", v->head_ptr);
+
+        beginF();
+
+        pA("heap_offset >>= 16;");
+        pA("heap_offset &= 0x0000ffff;");
+        pA("heap_seek += heap_offset;");
+        pA("PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);");
+
+        endF();
+}
+
+/* ヒープメモリーの初期化
+ */
+static char init_heap[] = {
+        "VPtr heap_ptr:P04;\n"
+        "junkApi_malloc(heap_ptr, T_SINT32, 0x100000);\n"
+        "SInt32 heap_socket:R04;\n"
+        "SInt32 heap_seek:R06;\n"
+        "SInt32 heap_offset:R05;\n"
+        "heap_seek = 0;\n"
+};
 
 /* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
  */
