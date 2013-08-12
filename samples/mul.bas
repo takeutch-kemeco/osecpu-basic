@@ -1,7 +1,7 @@
-let a
+dim a
 a := 3.1415
 
-let b
+dim b
 b := 1.4142
 
 gosub *F
@@ -21,7 +21,7 @@ goto *END
         return
 
 *SWAP
-        let t
+        dim t
         t := a
         a := b
         b := t

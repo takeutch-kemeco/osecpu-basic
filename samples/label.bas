@@ -1,8 +1,8 @@
-let a
+dim a
 
 *label000
 
-a = 123.456
+a := 123.456
 
 *label001
 

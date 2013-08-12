@@ -1,7 +1,7 @@
-let a
+dim a
 a := -0.001
 
-let b
+dim b
 b := 0
 
 print a + b

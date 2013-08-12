@@ -1,28 +1,19 @@
-let v0(3)
-v0(0) := 1
-v0(1) := 2
-v0(2) := 3
+dim a(3)
+a(0) := 1
+a(1) := 2
+a(2) := 3
 
-let v1(3)
-v1(0) := 1
-v1(1) := 2
-v1(2) := 3
+dim b(3)
+b(0) := 1
+b(1) := 2
+b(2) := 3
 
-let ipv
-gosub *innerproduct
-print ipv
+print innerproduct(a(0),a(1),a(2),b(0),b(1),b(2))
 
 goto *END
 
-
-*innerproduct
-        let v2(3)
-        let i
-        for i := 0 to 2 step 1
-                v2(i) := v0(i) + v1(i)
-        next
-
-        ipv := v2(0) + v2(1) + v2(2)
-        return
+function innerproduct(a0,a1,a2,b0,b1,b2)
+        innerproduct := (a0 * b0 + a1 * b1 + a2 * b2) ^ 0.5
+end function
 
 *END

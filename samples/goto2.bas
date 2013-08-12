@@ -1,7 +1,7 @@
-let a
+dim a
 a := 0
 
-let i
+dim i
 i := 1
 *LLL
         a := a + i

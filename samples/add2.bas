@@ -1,8 +1,8 @@
-let a
+dim a
 a := 123.456
 print a
 
-let b
+dim b
 b := 234.567
 print b
 

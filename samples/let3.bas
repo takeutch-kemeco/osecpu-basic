@@ -1,5 +1,5 @@
-let a(100)
-let i
+dim a(100)
+dim i
 
 a(10) := 123
 i := 10

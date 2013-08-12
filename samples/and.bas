@@ -1,6 +1,6 @@
-let a
-let b
-let c
+dim a
+dim b
+dim c
 
 a := 2
 b := 3

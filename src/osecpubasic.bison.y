@@ -46,7 +46,11 @@ static void pA(const char* fmt, ...)
         fputs("\n", yyaskA);
 }
 
-/* 出力ファイル yyaskA へ文字列を書き出す関数（改行無し） */
+/* 出力ファイル yyaskA へ文字列を書き出す関数（改行無し）
+ *
+ * 主に } else { 用。
+ * （elseを挟む中括弧を改行をするとエラーになるので）
+ */
 static void pA_nl(const char* fmt, ...)
 {
         va_list ap;
@@ -101,7 +105,9 @@ void idenlist_pop(char* dst)
 struct Var {
         char str[VAR_STR_LEN];
         int32_t head_ptr;
-        int32_t array_len;
+        int32_t array_len;      /* 配列全体の長さ */
+        int32_t col_len;        /* 行の長さ */
+        int32_t row_len;        /* 列の長さ */
 };
 
 #define VARLIST_LEN 0x1000
@@ -183,17 +189,33 @@ static struct Var* varlist_search(const char* str)
 
 /* 変数リストに新たに変数を無条件に追加する。
  * 既に同名の変数が存在するかの確認は行わない。常に追加する。
- * array_len : この変数の配列サイズを指定する。スカラーならば 1 とすべき。 この値はint32型。（fix32型では”ない”ので注意）
+ * col_len : この変数の行の長さを指定する。スカラーまたは１次元配列の場合は 1 でなければならない。
+ * row_len : この変数の列の長さを指定する。スカラーならば 1 でなければならない。
+ * これらの値はint32型。（fix32型ではないので注意)
+ *
+ * col_len, row_len に 1 未満の数を指定した場合は syntax err となる。
  *
  * varlist_add() および varlist_add_local() の共通ルーチンを抜き出したもの。
  */
-static void varlist_add_common(const char* str, const int32_t array_len)
+static void varlist_add_common(const char* str, const int32_t col_len, const int32_t row_len)
 {
+        if (col_len <= 0) {
+                printf("syntax err: 配列の行サイズに0を指定しました\n");
+                exit(EXIT_FAILURE);
+        }
+
+        if (row_len <= 0) {
+                printf("syntax err: 配列の列サイズに0を指定しました\n");
+                exit(EXIT_FAILURE);
+        }
+
         struct Var* cur = varlist + varlist_head;
         struct Var* prev = varlist + varlist_head - 1;
 
         strcpy(cur->str, str);
-        cur->array_len = array_len;
+        cur->col_len = col_len;
+        cur->row_len = row_len;
+        cur->array_len = col_len * row_len;
         cur->head_ptr = (varlist_head == 0) ? 0 : prev->head_ptr + prev->array_len;
 
         varlist_head++;
@@ -201,26 +223,34 @@ static void varlist_add_common(const char* str, const int32_t array_len)
 
 /* 変数リストに新たにローカル変数を追加する。
  * 現在のスコープ内に重複する同名のローカル変数が存在した場合は何もしない。
- * array_len : この変数の配列サイズを指定する。スカラーならば 1 とすべき。 この値はint32型。（fix32型では”ない”ので注意）
+ * col_len : この変数の行の長さを指定する。スカラーまたは１次元配列の場合は 1 でなければならない。
+ * row_len : この変数の列の長さを指定する。スカラーならば 1 でなければならない。
+ * これらの値はint32型。（fix32型ではないので注意)
+ *
+ * col_len, row_len に 1 未満の数を指定した場合は syntax err となる。
  */
-static void varlist_add_local(const char* str, const int32_t array_len)
+static void varlist_add_local(const char* str, const int32_t col_len, const int32_t row_len)
 {
         if (varlist_search_local(str) != NULL)
                 return;
 
-        varlist_add_common(str, array_len);
+        varlist_add_common(str, col_len, row_len);
 }
 
 /* 変数リストに新たに変数を追加する。
  * 既に同名の変数が存在した場合は何もしない。
- * array_len : この変数の配列サイズを指定する。スカラーならば 1 とすべき。 この値はint32型。（fix32型では”ない”ので注意）
+ * col_len : この変数の行の長さを指定する。スカラーまたは１次元配列の場合は 1 でなければならない。
+ * row_len : この変数の列の長さを指定する。スカラーならば 1 でなければならない。
+ * これらの値はint32型。（fix32型ではないので注意)
+ *
+ * col_len, row_len に 1 未満の数を指定した場合は syntax err となる。
  */
-static void varlist_add(const char* str, const int32_t array_len)
+static void varlist_add(const char* str, const int32_t col_len, const int32_t row_len)
 {
         if (varlist_search(str) != NULL)
                 return;
 
-        varlist_add_common(str, array_len);
+        varlist_add_common(str, col_len, row_len);
 }
 
 /* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置へfix32型を書き込む。
@@ -228,7 +258,7 @@ static void varlist_add(const char* str, const int32_t array_len)
  * heap_socket : ヒープに書き込みたい値。fix32型単位なので注意。
  * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
  */
-static void write_heap(char* dst, char* iden)
+static void write_heap(const char* iden)
 {
         struct Var* v = varlist_search(iden);
         if (v == NULL) {
@@ -236,12 +266,11 @@ static void write_heap(char* dst, char* iden)
                 exit(EXIT_FAILURE);
         }
 
-        sprintf(dst, "heap_seek = %d;\n"
-                     "heap_offset >>= 16;\n"
-                     "heap_offset &= 0x0000ffff;\n"
-                     "heap_seek += heap_offset;\n"
-                     "PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);\n",
-                     v->head_ptr);
+        pA("heap_seek = %d;", v->head_ptr);
+        pA("heap_offset >>= 16;");
+        pA("heap_offset &= 0x0000ffff;");
+        pA("heap_seek += heap_offset;");
+        pA("PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);");
 }
 
 /* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置からfix32型を読み込む。
@@ -250,7 +279,7 @@ static void write_heap(char* dst, char* iden)
  *
  * 読み込んだ値は heap_socket へ格納される。これはfix32型なので注意。
  */
-static void read_heap(char* dst, char* iden)
+static void read_heap(const char* iden)
 {
         struct Var* v = varlist_search(iden);
         if (v == NULL) {
@@ -258,12 +287,11 @@ static void read_heap(char* dst, char* iden)
                 exit(EXIT_FAILURE);
         }
 
-        sprintf(dst, "heap_seek = %d;\n"
-                     "heap_offset >>= 16;\n"
-                     "heap_offset &= 0x0000ffff;\n"
-                     "heap_seek += heap_offset;\n"
-                     "PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);\n",
-                     v->head_ptr);
+        pA("heap_seek = %d;", v->head_ptr);
+        pA("heap_offset >>= 16;");
+        pA("heap_offset &= 0x0000ffff;");
+        pA("heap_seek += heap_offset;");
+        pA("PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);");
 }
 
 /* ヒープメモリーの初期化
@@ -328,7 +356,7 @@ struct Label {
 
 static struct Label labellist[LABEL_INDEX_LEN];
 
-/* ラベルリストに既に同名が登録されているかを確認し、そのラベルのLOCAL(x)のxに相当する値を得る。
+/* ラベルリストに既に同名が登録されているかを確認し、そのラベル番号を得る。
  * 無ければ -1 を返す。
  */
 static int32_t labellist_search_unsafe(const char* str)
@@ -342,22 +370,22 @@ static int32_t labellist_search_unsafe(const char* str)
         return -1;
 }
 
-/* ラベルリストに既に同名が登録されているかを確認し、そのラベルのLOCAL(x)のxに相当する値を得る。
+/* ラベルリストに既に同名が登録されているかを確認し、そのラベル番号を得る。
  * 無ければエラー出力して終了
  */
 static int32_t labellist_search(const char* str)
 {
         const int32_t tmp = labellist_search_unsafe(str);
         if (tmp == -1) {
-                printf("system err: ラベルが見つかりません\n");
+                printf("syntax err: 存在しないラベルを指定しました\n");
                 exit(EXIT_FAILURE);
         }
 
         return tmp;
 }
 
-/* ラベルリストに新たにラベルを追加し、LOCAL(x)のxに相当する値を結びつける。
- * これは名前と、LOCAL(x)のxに相当する値とを結びつけた連想配列。
+/* ラベルリストに新たにラベルを追加し、名前とラベル番号を結びつける。
+ * これは名前とラベル番号による連想配列。
  * 既に同名の変数が存在した場合はエラー終了する。
  */
 void labellist_add(const char* str)
@@ -368,7 +396,7 @@ void labellist_add(const char* str)
         }
 
         if (cur_label_index_head >= LABEL_INDEX_LEN) {
-                printf("system err: コンパイラーが設定可能なラベルの数を越えました。\n");
+                printf("system err: コンパイラーが設定可能なラベル数を越えました。\n");
                 exit(EXIT_FAILURE);
         }
 
@@ -1186,8 +1214,8 @@ static void __func_tan(void)
 %token __STATE_IF __STATE_THEN __STATE_ELSE
 %token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT __STATE_END
 %token __STATE_READ __STATE_DATA __STATE_MAT __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
-%token __STATE_LET __OPE_SUBST
-%token __STATE_DEF
+%token __OPE_SUBST
+%token __STATE_LET __STATE_DEF __STATE_DIM
 %token __STATE_FUNCTION __STATE_END_FUNCTION
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
 %token __FUNC_SIN __FUNC_COS __FUNC_TAN __FUNC_SQRT
@@ -1362,35 +1390,87 @@ func_drawline
         ;
 
 initializer
-        : __STATE_LET __IDENTIFIER {
-                varlist_add($2, 1);
+        : __STATE_DIM __IDENTIFIER {
+                varlist_add($2, 1, 1);
         }
-        | __STATE_LET __IDENTIFIER __LB __CONST_INTEGER __RB {
-                varlist_add($2, $4);
+        | __STATE_DIM __IDENTIFIER __LB __CONST_INTEGER __RB {
+                varlist_add($2, 1, $4);
+        }
+        | __STATE_DIM __IDENTIFIER __LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __RB {
+                varlist_add($2, $4, $6);
         }
         ;
 
 assignment
         : __IDENTIFIER __OPE_SUBST expression {
+                /* 書き込む値を読んでおく */
                 pA(pop_stack);
                 pA("heap_socket = stack_socket;");
 
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search_local($1);
+
+                /* 変数が配列な場合はエラー */
+                if (var->col_len != 1 || var->row_len != 1) {
+                        printf("syntax err: 配列変数へスカラーによる書き込みを行おうとしました\n");
+                        exit(EXIT_FAILURE);
+                }
+
+                /* スカラーなので書き込みオフセットは 0 */
                 pA("heap_offset = 0;");
-
-                char tmp[0x1000];
-                write_heap(tmp, $1);
-                pA(tmp);
+                write_heap($1);
         }
-        | __IDENTIFIER __LB expression __RB __OPE_SUBST expression {
+        | __IDENTIFIER __LB expression_list __RB __OPE_SUBST expression {
+                /* 書き込む値を読んでおく */
                 pA(pop_stack);
                 pA("heap_socket = stack_socket;");
 
-                pA(pop_stack);
-                pA("heap_offset = stack_socket;");
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search_local($1);
 
-                char tmp[0x1000];
-                write_heap(tmp, $1);
-                pA(tmp);
+                /* 変数がスカラーな場合はエラー */
+                if (var->col_len == 1 && var->row_len == 1) {
+                        printf("syntax err: スカラー変数へ添字による書き込みを行おうとしました\n");
+                        exit(EXIT_FAILURE);
+                }
+
+                /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
+                 */
+                /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
+                if (var->col_len == 1 && $3 != 1) {
+                        printf("syntax err: 1次元配列に対して、異なる次元の添字を指定しました\n");
+                        exit(EXIT_FAILURE);
+
+                /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
+                } else if (var->col_len >= 2 && $3 != 2) {
+                        printf("syntax err: 2次元配列に対して、異なる次元の添字を指定しました\n");
+                        exit(EXIT_FAILURE);
+                }
+
+                /* 配列の次元によって分岐（コンパイル時）
+                 */
+                /* １次元配列の場合 */
+                if (var->col_len == 1) {
+                        pA(pop_stack);
+                        pA("heap_offset = stack_socket;");
+                        write_heap($1);
+
+                /* 2次元配列の場合 */
+                } else if (var->col_len >= 2) {
+                        /* これは[行, 列]の行。 変数の行サイズと乗算 */
+                        pA(pop_stack);
+                        pA("heap_offset = stack_socket * %d;", var->col_len);
+
+                        /* これは[行, 列]の列。 これを足すことで、変数の先頭からのオフセット位置 */
+                        pA(pop_stack);
+                        pA("heap_offset += stack_socket;");
+                        write_heap($1);
+
+                /* 1,2次元以外の場合はシステムエラー */
+                } else {
+                        printf("system err: assignment, col_len の値が不正です\n");
+                        exit(EXIT_FAILURE);
+                }
         }
         ;
 
@@ -1529,25 +1609,74 @@ comparison
 
 read_variable
         : __IDENTIFIER {
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search_local($1);
+
+                /* 変数が配列な場合はエラー */
+                if (var->col_len != 1 || var->row_len != 1) {
+                        printf("syntax err: 配列変数へスカラーによる読み込みを行おうとしました\n");
+                        exit(EXIT_FAILURE);
+                }
+
+                /* スカラーなので読み込みオフセットは 0 */
                 pA("heap_offset = 0;");
+                read_heap($1);
 
-                char tmp[0x1000];
-                read_heap(tmp, $1);
-                pA(tmp);
-
+                /* 結果をスタックにプッシュする */
                 pA("stack_socket = heap_socket;");
                 pA(push_stack);
         }
         | __IDENTIFIER __LB expression_list __RB {
                 /* ラベルリストに名前が存在しなければ、これは配列変数 */
                 if (labellist_search_unsafe($1) == -1) {
-                        pA(pop_stack);
-                        pA("heap_offset = stack_socket;");
+                        /* 変数のスペックを得る。（コンパイル時） */
+                        struct Var* var = varlist_search_local($1);
 
-                        char tmp[0x1000];
-                        read_heap(tmp, $1);
-                        pA(tmp);
+                        /* 変数がスカラーな場合はエラー */
+                        if (var->col_len == 1 && var->row_len == 1) {
+                                printf("syntax err: スカラー変数へ添字による読み込みを行おうとしました\n");
+                                exit(EXIT_FAILURE);
+                        }
 
+                        /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
+                        */
+                        /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
+                        if (var->col_len == 1 && $3 != 1) {
+                                printf("syntax err: 1次元配列に対して、異なる次元の添字を指定しました\n");
+                                exit(EXIT_FAILURE);
+
+                        /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
+                        } else if (var->col_len >= 2 && $3 != 2) {
+                                printf("syntax err: 2次元配列に対して、異なる次元の添字を指定しました\n");
+                                exit(EXIT_FAILURE);
+                        }
+
+                        /* 配列の次元によって分岐（コンパイル時）
+                         */
+                        /* １次元配列の場合 */
+                        if (var->col_len == 1) {
+                                pA(pop_stack);
+                                pA("heap_offset = stack_socket;");
+                                read_heap($1);
+
+                        /* 2次元配列の場合 */
+                        } else if (var->col_len >= 2) {
+                                /* これは[行, 列]の行。 変数の行サイズと乗算 */
+                                pA(pop_stack);
+                                pA("heap_offset = stack_socket * %d;", var->col_len);
+
+                                /* これは[行, 列]の列。 これを足すことで、変数の先頭からのオフセット位置 */
+                                pA(pop_stack);
+                                pA("heap_offset += stack_socket;");
+                                read_heap($1);
+
+                        /* 1,2次元以外の場合はシステムエラー */
+                        } else {
+                                printf("system err: read_variable, col_len の値が不正です\n");
+                                exit(EXIT_FAILURE);
+                        }
+
+                        /* 結果をスタックにプッシュする */
                         pA("stack_socket = heap_socket;");
                         pA(push_stack);
 
@@ -1595,14 +1724,22 @@ iterator_for
                 /* このセクションはスカラー変数への代入なので、 assignment のスカラー版と同様
                  * （$2が違うだけ）
                  */
+                /* 書き込む値を読んでおく */
                 pA(pop_stack);
                 pA("heap_socket = stack_socket;");
 
-                pA("heap_offset = 0;");
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search_local($2);
 
-                char tmp[0x1000];
-                write_heap(tmp, $2);
-                pA(tmp);
+                /* 変数が配列な場合はエラー */
+                if (var->col_len != 1 || var->row_len != 1) {
+                        printf("syntax err: 配列変数へスカラーによる書き込みを行おうとしました\n");
+                        exit(EXIT_FAILURE);
+                }
+
+                /* スカラーなので書き込みオフセットは 0 */
+                pA("heap_offset = 0;");
+                write_heap($2);
 
                 /* そして、代入後であるここに無名ラベルを作る（このforループは、以降はこの位置へと戻ってくる）
                  * また、このラベルは next で戻ってくる際に使うので、この構文解析器で参照できるように $$ で出力する。（以降$5で参照できる）
@@ -1623,11 +1760,7 @@ iterator_for
                 /* 次にスカラー変数から値を読み、 forfixL （左辺用） へと退避しておく。
                  */
                 pA("heap_offset = 0;");
-
-                char tmp[0x1000];
-                read_heap(tmp, $2);
-                pA(tmp);
-
+                read_heap($2);
                 pA("forfixL = heap_socket;");
         } __STATE_STEP expression {
                 /* 条件比較の方向を判断するために、stepの値を読む必要がある
@@ -1660,10 +1793,20 @@ iterator_for
 
                 /* このセクションはスカラー変数の読み込みなので、read_variable とスカラー版とほぼ同様
                  */
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search_local($2);
+
+                /* 変数が配列な場合はエラー */
+                if (var->col_len != 1 || var->row_len != 1) {
+                        printf("syntax err: 配列変数へスカラーによる読み込みを行おうとしました\n");
+                        exit(EXIT_FAILURE);
+                }
+
+                /* スカラーなので読み込みオフセットは 0 */
                 pA("heap_offset = 0;");
-                char tmp[0x1000];
-                read_heap(tmp, $2);
-                pA(tmp);
+                read_heap($2);
+
+                /* 結果をforfixLにセットする */
                 pA("forfixL = heap_socket;");
 
                 /* インクリメントして、その結果をスカラー変数へ代入する
@@ -1671,8 +1814,7 @@ iterator_for
                 pA("heap_socket = forfixL + forfixR;");
 
                 pA("heap_offset = 0;");
-                write_heap(tmp, $2);
-                pA(tmp);
+                write_heap($2);
 
                 /* その後、先頭で作成したラベル位置へと再び戻るために、 goto させる命令を書く。
                  * これには $5 により示されるラベル位置を用いる。
@@ -1783,12 +1925,10 @@ define_def_function
                         char iden[0x1000];
                         idenlist_pop(iden);
 
-                        varlist_add(iden, 1);
+                        varlist_add(iden, 1, 1);
 
                         pA("heap_offset = 0;");
-                        char tmp[0x1000];
-                        write_heap(tmp, iden);
-                        pA(tmp);
+                        write_heap(iden);
                 }
         } expression {
                 /* ローカル変数を破棄する */
@@ -1816,23 +1956,19 @@ define_full_function
                         char iden[0x1000];
                         idenlist_pop(iden);
 
-                        varlist_add(iden, 1);
+                        varlist_add(iden, 1, 1);
 
                         pA("heap_offset = 0;");
-                        char tmp[0x1000];
-                        write_heap(tmp, iden);
-                        pA(tmp);
+                        write_heap(iden);
                 }
 
                 /* 戻り値の代入用に、関数名と同名のローカル変数（スカラー）を作成する */
-                varlist_add($2, 1);
+                varlist_add($2, 1, 1);
         } declaration_list __STATE_END_FUNCTION {
                 /* 関数名と同名のローカル変数の値を、スタックにプッシュして、これを戻り値とする
                  */
                 pA("heap_offset = 0;");
-                char tmp[0x1000];
-                read_heap(tmp, $2);
-                pA(tmp);
+                read_heap($2);
 
                 pA("stack_socket = heap_socket;");
                 pA(push_stack);

@@ -1,31 +1,18 @@
-let a
-let b
+dim a
+dim b
 
-b := 2
-gosub *F
-
-b := -2
-gosub *F
-
-b := 0.5
-gosub *F
-
-b := -0.5
-gosub *F
+ff(2)
+ff(-2)
+ff(0.5)
+ff(-0.5)
 
 goto *END
 
-*F
-        a := 2
-        gosub *FF
+def f(x,y) := x ^ y
 
-        a := -2
-        gosub *FF
-
-        return
-
-*FF
-        print a ^ b
-        return
+function ff(y)
+        print f(2, y)
+        print f(-2, y)
+end function
 
 *END

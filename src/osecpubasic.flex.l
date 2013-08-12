@@ -97,6 +97,7 @@
 <main_process>"data"    return(__STATE_DATA);
 
 <main_process>"let"     return(__STATE_LET);
+<main_process>"dim"     return(__STATE_DIM);
 
 <main_process>"mat"     return(__STATE_MAT);
 

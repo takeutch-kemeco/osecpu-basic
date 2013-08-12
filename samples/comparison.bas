@@ -1,5 +1,5 @@
-let a
-let b
+dim a
+dim b
 
 a := 123
 b := 234
