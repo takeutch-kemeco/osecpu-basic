@@ -189,21 +189,21 @@ static struct Var* varlist_search(const char* str)
 
 /* 変数リストに新たに変数を無条件に追加する。
  * 既に同名の変数が存在するかの確認は行わない。常に追加する。
- * col_len : この変数の行の長さを指定する。スカラーまたは１次元配列の場合は 1 でなければならない。
- * row_len : この変数の列の長さを指定する。スカラーならば 1 でなければならない。
+ * row_len : この変数の行（たて方向、y方向）の長さを指定する。 スカラーまたは１次元配列の場合は 1 でなければならない。
+ * col_len : この変数の列（よこ方向、x方向）の長さを指定する。 スカラーならば 1 でなければならない。
  * これらの値はint32型。（fix32型ではないので注意)
  *
  * col_len, row_len に 1 未満の数を指定した場合は syntax err となる。
  *
  * varlist_add() および varlist_add_local() の共通ルーチンを抜き出したもの。
  */
-static void varlist_add_common(const char* str, const int32_t col_len, const int32_t row_len)
+static void varlist_add_common(const char* str, const int32_t row_len, const int32_t col_len)
 {
-        if (col_len <= 0)
-                yyerror("syntax err: 配列の行サイズに0を指定しました");
-
         if (row_len <= 0)
-                yyerror("syntax err: 配列の列サイズに0を指定しました");
+                yyerror("syntax err: 配列の行（たて方向、y方向）サイズに0を指定しました");
+
+        if (col_len <= 0)
+                yyerror("syntax err: 配列の列（よこ方向、x方向）サイズに0を指定しました");
 
         struct Var* cur = varlist + varlist_head;
         struct Var* prev = varlist + varlist_head - 1;
@@ -219,34 +219,34 @@ static void varlist_add_common(const char* str, const int32_t col_len, const int
 
 /* 変数リストに新たにローカル変数を追加する。
  * 現在のスコープ内に重複する同名のローカル変数が存在した場合は何もしない。
- * col_len : この変数の行の長さを指定する。スカラーまたは１次元配列の場合は 1 でなければならない。
- * row_len : この変数の列の長さを指定する。スカラーならば 1 でなければならない。
+ * row_len : この変数の行（たて方向、y方向）の長さを指定する。 スカラーまたは１次元配列の場合は 1 でなければならない。
+ * col_len : この変数の列（よこ方向、x方向）の長さを指定する。 スカラーならば 1 でなければならない。
  * これらの値はint32型。（fix32型ではないので注意)
  *
  * col_len, row_len に 1 未満の数を指定した場合は syntax err となる。
  */
-static void varlist_add_local(const char* str, const int32_t col_len, const int32_t row_len)
+static void varlist_add_local(const char* str, const int32_t row_len, const int32_t col_len)
 {
         if (varlist_search_local(str) != NULL)
                 return;
 
-        varlist_add_common(str, col_len, row_len);
+        varlist_add_common(str, row_len, col_len);
 }
 
 /* 変数リストに新たに変数を追加する。
  * 既に同名の変数が存在した場合は何もしない。
- * col_len : この変数の行の長さを指定する。スカラーまたは１次元配列の場合は 1 でなければならない。
- * row_len : この変数の列の長さを指定する。スカラーならば 1 でなければならない。
+ * row_len : この変数の行（たて方向、y方向）の長さを指定する。 スカラーまたは１次元配列の場合は 1 でなければならない。
+ * col_len : この変数の列（よこ方向、x方向）の長さを指定する。 スカラーならば 1 でなければならない。
  * これらの値はint32型。（fix32型ではないので注意)
  *
  * col_len, row_len に 1 未満の数を指定した場合は syntax err となる。
  */
-static void varlist_add(const char* str, const int32_t col_len, const int32_t row_len)
+static void varlist_add(const char* str, const int32_t row_len, const int32_t col_len)
 {
         if (varlist_search(str) != NULL)
                 return;
 
-        varlist_add_common(str, col_len, row_len);
+        varlist_add_common(str, row_len, col_len);
 }
 
 /* スタックにint32型（またはfix32型）をプッシュする
