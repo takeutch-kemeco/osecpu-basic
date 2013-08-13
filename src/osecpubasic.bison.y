@@ -608,9 +608,12 @@ void init_all(void)
         /* matの作業用 */
         pA("SInt32 matfixL: R14;");
         pA("SInt32 matfixR: R15;");
-        pA("SInt32 matfixtmp: R16;");
-        pA("SInt32 matcountcol: R17;");
-        pA("SInt32 matcountrow: R18;");
+        pA("SInt32 matfixA: R16;");
+        pA("SInt32 matfixtmp: R17;");
+        pA("SInt32 matcountcol: R18;");
+        pA("SInt32 matcountrow: R19;");
+        pA("SInt32 matcol: R1A;");
+        pA("SInt32 matrow: R1B;");
 
         pA(init_heap);
         pA(init_stack);
@@ -1215,7 +1218,7 @@ static void ope_matrix_copy(const char* strL, const char* strR)
         struct Var* varL = varlist_search(strL);
         struct Var* varR = varlist_search(strR);
 
-        /* コピーする配列の要素数が異なる場合はエラーとする */
+        /* コピーする配列の要素数が異なる場合はエラーとする（コンパイル時） */
         if ((varL->col_len != varR->col_len) || (varL->row_len != varR->row_len))
                 yyerror("syntax err: 行か列が異なる行列のコピーは未サポートです");
 
@@ -1227,7 +1230,7 @@ static void ope_matrix_copy(const char* strL, const char* strR)
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);\n", local_label);
+        pA("LB(0, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
                 pA("heap_offset = matcountrow << 16;");
@@ -1260,7 +1263,7 @@ static void ope_matrix_scalar(const char* strA)
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);\n", local_label);
+        pA("LB(0, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
                 pA("heap_socket = matfixL;");
@@ -1282,9 +1285,9 @@ static void ope_matrix_idn(const char* strA)
         /* 変数のスペックを得る。（コンパイル時） */
         struct Var* varA = varlist_search(strA);
 
-        /* 正方行列では無い場合はエラーとする */
+        /* 正方行列では無い場合はエラーとする（コンパイル時） */
         if (varA->col_len != varA->row_len)
-                yyerror("syntax err: 正方行列ではない行列へ単位行列をセットしようとしました\n");
+                yyerror("syntax err: 正方行列ではない行列へ単位行列をセットしようとしました");
 
         /* 要素数をセット（コンパイル時） */
         pA("matcountrow = %d;", varA->array_len - 1);
@@ -1297,7 +1300,7 @@ static void ope_matrix_idn(const char* strA)
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);\n", local_label);
+        pA("LB(0, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
                 /* インデックスが col_len + 1 の倍数であれば対角成分 */
@@ -1319,6 +1322,98 @@ static void ope_matrix_idn(const char* strA)
         endF();
 }
 
+/* 行列の転置行列を得る
+ * 行列strLの転置行列を、行列strAへセットする。
+ *
+ * strAの行サイズとstrLの列サイズが同じで、かつstrAの列サイズとstrLの行サイズが同じ場合のみ動作する。
+ * すなわち転置後の行列サイズが噛み合わない場合はエラーとなる。
+ * 例:
+ * dim a(x,y); dim b(y,x); ならば動作する。
+ * dim a(x,x); dim b(x,x); ならば動作する。
+ * dim a(x,y); dim b(x,y); ならばエラー。 (x != y)
+ *
+ * strA と strL が同じ記憶領域だった場合でも問題無く動作する
+ * （バッファーを噛ませてあるので、スワップによる値の破壊は無い）
+ */
+static void ope_matrix_trn(const char* strA, const char* strL)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varA = varlist_search(strA);
+        struct Var* varL = varlist_search(strL);
+
+        /* 転置後の行列サイズと噛み合わない場合はエラー（コンパイル時） */
+        if ((varA->col_len != varL->row_len) || (varA->row_len != varL->col_len))
+                yyerror("syntax err: 転置後の行列サイズと合いません。列->行、行->列、で要素数が対応している必要があります");
+
+        /* 要素数をセット（コンパイル時） */
+        pA("matcol = %d;", varA->col_len);
+        pA("matrow = %d;", varA->row_len);
+
+        beginF();
+
+        /* 二重のforループ
+         */
+        pA("matcountcol = 0;");
+
+        /* 局所ループ用に無名ラベルをセット （外側forの戻り位置）
+         */
+        const int32_t local_label_col = cur_label_index_head;
+        cur_label_index_head++;
+        pA("LB(0, %d);", local_label_col);
+
+        pA("if (matcountcol < matcol) {");
+                pA("matcountrow = 0;");
+
+                /* 局所ループ用に無名ラベルをセット （内側forの戻り位置）
+                 */
+                const int32_t local_label_row = cur_label_index_head;
+                cur_label_index_head++;
+                pA("LB(0, %d);", local_label_row);
+
+                pA("if (matcountrow < matrow) {");
+                        /* fixL の読み込みオフセットを計算
+                         */
+                        pA("matfixL = matrow * matcountcol;");
+                        pA("matfixL += matcountrow;");
+                        pA("matfixL <<= 16;");
+
+                        /* fixA の書き込みオフセットを計算（fixLの行と列を入れ替えたオフセット）
+                         */
+                        pA("matfixA = matcol * matcountrow;");
+                        pA("matfixA += matcountcol;");
+                        pA("matfixA <<= 16;");
+
+                        /* 要素のスワップ
+                         * fixA, fixL の記憶領域が同一の場合でも動作するように一時変数を噛ませてスワップ
+                         */
+                        pA("heap_offset = matfixA;");
+                        read_heap(strA);
+                        pA("matfixtmp = heap_socket;");
+
+                        pA("heap_offset = matfixL;");
+                        read_heap(strL);
+                        pA("heap_offset = matfixA;");
+                        write_heap(strA);
+
+                        pA("heap_offset = matfixL;");
+                        pA("heap_socket = matfixtmp;");
+                        write_heap(strL);
+
+                        /* 内側forループの復帰
+                         */
+                        pA("matcountrow++;");
+                        pA("PLIMM(P3F, %d);", local_label_row);
+                pA("}");
+
+                /* 外側forループの復帰
+                 */
+                pA("matcountcol++;");
+                pA("PLIMM(P3F, %d);", local_label_col);
+        pA("}");
+
+        endF();
+}
+
 /* 行列同士の加算を行う。ただし strR の各要素は scale 倍されてから加算される。
  * 行および列が同じ大きさの場合のみ、対応する各要素同士を加算する。
  *
@@ -1333,7 +1428,7 @@ static void ope_matrix_add_common(const char* strA, const char* strL, const char
         struct Var* varL = varlist_search(strL);
         struct Var* varR = varlist_search(strR);
 
-        /* コピーする配列の要素数が異なる場合はエラーとする */
+        /* コピーする配列の要素数が異なる場合はエラーとする（コンパイル時） */
         if (!
                 ((varA->col_len == varL->col_len) && (varA->col_len == varR->col_len) &&
                  (varA->row_len == varL->row_len) && (varA->row_len == varR->row_len))
@@ -1353,7 +1448,7 @@ static void ope_matrix_add_common(const char* strA, const char* strL, const char
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);\n", local_label);
+        pA("LB(0, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
                 pA("heap_offset = matcountrow << 16;");
@@ -1412,7 +1507,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __STATE_IF __STATE_THEN __STATE_ELSE
 %token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT __STATE_END
 %token __STATE_READ __STATE_DATA __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
-%token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN
+%token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
 %token __OPE_SUBST
 %token __STATE_LET __STATE_DEF __STATE_DIM
 %token __STATE_FUNCTION __STATE_END_FUNCTION
@@ -1686,6 +1781,9 @@ ope_matrix
         }
         | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_IDN {
                 ope_matrix_idn($2);
+        }
+        | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_TRN __LB __IDENTIFIER __RB {
+                ope_matrix_trn($2, $6);
         }
         | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_ADD __IDENTIFIER {
                 ope_matrix_add($2, $4, $6);
