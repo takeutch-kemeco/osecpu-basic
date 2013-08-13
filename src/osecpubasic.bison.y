@@ -1848,7 +1848,7 @@ assignment
                 pA("heap_socket = stack_socket;");
 
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search_local($1);
+                struct Var* var = varlist_search($1);
                 if (var == NULL)
                         yyerror("syntax err: 未定義のスカラー変数へ代入しようとしました");
 
@@ -1866,7 +1866,7 @@ assignment
                 pA("heap_socket = stack_socket;");
 
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search_local($1);
+                struct Var* var = varlist_search($1);
                 if (var == NULL)
                         yyerror("syntax err: 未定義の配列変数へ代入しようとしました");
 
@@ -2080,7 +2080,7 @@ comparison
 read_variable
         : __IDENTIFIER {
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search_local($1);
+                struct Var* var = varlist_search($1);
                 if (var == NULL)
                         yyerror("syntax err: 未定義のスカラー変数から読もうとしました");
 
@@ -2100,7 +2100,7 @@ read_variable
                 /* ラベルリストに名前が存在しなければ、これは配列変数 */
                 if (labellist_search_unsafe($1) == -1) {
                         /* 変数のスペックを得る。（コンパイル時） */
-                        struct Var* var = varlist_search_local($1);
+                        struct Var* var = varlist_search($1);
                         if (var == NULL)
                                 yyerror("syntax err: 未定義の配列変数から読もうとしました");
 
@@ -2195,7 +2195,7 @@ iterator_for
                 pA("heap_socket = stack_socket;");
 
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search_local($2);
+                struct Var* var = varlist_search($2);
                 if (var == NULL)
                         yyerror("syntax err: 未定義のスカラー変数を参照しようとしました");
 
@@ -2260,7 +2260,7 @@ iterator_for
                 /* このセクションはスカラー変数の読み込みなので、read_variable とスカラー版とほぼ同様
                  */
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search_local($2);
+                struct Var* var = varlist_search($2);
                 if (var == NULL)
                         yyerror("syntax err: 未定義のスカラー変数を参照しようとしました");
 
