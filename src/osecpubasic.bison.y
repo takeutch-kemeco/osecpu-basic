@@ -1495,7 +1495,7 @@ static void ope_matrix_sub(const char* strA, const char* strL, const char* strR)
 }
 
 /* 行列同士の乗算を行う。
- * strA, strR の行および列が同じ大きさで、かつ、strL, strRが転置可能な行および列の関係の場合のみ乗算する。
+ * strA, strL, strR が全て正方行列で、かつ、行および列が同じ大きさの場合のみ乗算する。
  *
  * strAの記憶領域が、strLまたはstrRと重複していた場合は、正常な計算結果は得られない。
  */
@@ -1506,13 +1506,13 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
         struct Var* varR = varlist_search(strR);
         struct Var* varA = varlist_search(strA);
 
-        /* strL と strR が転置可能な関係でない場合はエラー（コンパイル時） */
-        if ((varL->col_len != varR->row_len) || (varL->row_len != varR->col_len))
-                yyerror("syntax err: A=B*Cの行列の積において、B,Cが転置可能な場合のみ演算をサポートします");
-
-        /* strR と strA の行列が異なる場合はエラー（コンパイル時） */
-        if ((varR->col_len != varA->col_len) || (varR->row_len != varA->row_len))
-                yyerror("syntax err: A=B*Cの行列の積において、A,Cが同じ行および列の場合のみ演算をサポートします");
+        /* strA, strL, strR が正方行列で、かつ、行および列が同じ大きさの場合以外はエラーとなる */
+        if (!
+                (varA->col_len == varL->col_len) && (varA->col_len == varL->row_len) &&
+                (varA->col_len == varR->col_len) && (varA->col_len == varR->row_len) &&
+                (varA->col_len == varA->row_len)
+        )
+                yyerror("syntax err: 行または列が異なる、または正方行列以外の積を得ようとしました");
 
         /* 要素数をセット（コンパイル時） */
         pA("matcol = %d;", varA->col_len);
@@ -1523,24 +1523,24 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
 
         /* 3重のforループ
          */
-        pA("matcountcol = 0;");
+        pA("matcountrow = 0;");
 
         /* 局所ループ用に無名ラベルをセット （外側forの戻り位置）
          */
-        const int32_t local_label_col = cur_label_index_head;
+        const int32_t local_label_row = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label_col);
+        pA("LB(0, %d);", local_label_row);
 
-        pA("if (matcountcol < matcol) {");
-                pA("matcountrow = 0;");
+        pA("if (matcountrow < matrow) {");
+                pA("matcountcol = 0;");
 
                 /* 局所ループ用に無名ラベルをセット （中間forの戻り位置）
                  */
-                const int32_t local_label_row = cur_label_index_head;
+                const int32_t local_label_col = cur_label_index_head;
                 cur_label_index_head++;
-                pA("LB(0, %d);", local_label_row);
+                pA("LB(0, %d);", local_label_col);
 
-                pA("if (matcountrow < matrow) {");
+                pA("if (matcountcol < matcol) {");
                         pA("matfixtmp = 0;");
                         pA("matfixA = 0;");
 
@@ -1559,8 +1559,8 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
 
                                 /* strR の読み込みオフセットを計算
                                  */
-                                pA("matfixR = matrow * matfixtmp;");
-                                pA("matfixR += matcountrow;");
+                                pA("matfixR = matcol * matfixtmp;");
+                                pA("matfixR += matcountcol;");
                                 pA("matfixR <<= 16;");
 
                                 /* strLの要素 * strRの要素 の演算を行い、
@@ -1583,14 +1583,16 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                                 __func_mul();
                                 pA("matfixA += fixA;");
 
-pA("junkApi_putConstString('\\n fixL : ');");
-pA("junkApi_putStringDec('\\1', fixL, 6, 0);");
+#ifdef DEBUG_OPE_MATRIX_MUL_MM
+                                pA("junkApi_putConstString('\\n fixL : ');");
+                                pA("junkApi_putStringDec('\\1', fixL, 6, 0);");
 
-pA("junkApi_putConstString(' fixR : ');");
-pA("junkApi_putStringDec('\\1', fixR, 6, 0);");
+                                pA("junkApi_putConstString(' fixR : ');");
+                                pA("junkApi_putStringDec('\\1', fixR, 6, 0);");
 
-pA("junkApi_putConstString(' nmatfixA : ');");
-pA("junkApi_putStringDec('\\1', matfixA, 6, 0);");
+                                pA("junkApi_putConstString(' nmatfixA : ');");
+                                pA("junkApi_putStringDec('\\1', matfixA, 6, 0);");
+#endif /* DEBUG_OPE_MATRIX_MUL_MM */
 
                                 /* 内側forループの復帰
                                  */
@@ -1600,26 +1602,28 @@ pA("junkApi_putStringDec('\\1', matfixA, 6, 0);");
 
                         /* strA へ結果を書き込む
                          */
-                        pA("heap_offset = matrow * matcountcol;");
-                        pA("heap_offset += matcountrow;");
+                        pA("heap_offset = matcol * matcountrow;");
+                        pA("heap_offset += matcountcol;");
                         pA("heap_offset <<= 16;");
                         pA("heap_socket = matfixA;");
 
-pA("junkApi_putConstString('\\nstrA : ');");
-pA("junkApi_putStringDec('\\1', heap_socket, 6, 0);");
+#ifdef DEBUG_OPE_MATRIX_MUL_MM
+                        pA("junkApi_putConstString('\\nstrA : ');");
+                        pA("junkApi_putStringDec('\\1', heap_socket, 6, 0);");
+#endif /* DEBUG_OPE_MATRIX_MUL_MM */
 
                         write_heap(strA);
 
                         /* 中間forループの復帰
                          */
-                        pA("matcountrow++;");
-                        pA("PLIMM(P3F, %d);", local_label_row);
+                        pA("matcountcol++;");
+                        pA("PLIMM(P3F, %d);", local_label_col);
                 pA("}");
 
                 /* 外側forループの復帰
                  */
-                pA("matcountcol++;");
-                pA("PLIMM(P3F, %d);", local_label_col);
+                pA("matcountrow++;");
+                pA("PLIMM(P3F, %d);", local_label_row);
         pA("}");
 
         /* endF(); */
