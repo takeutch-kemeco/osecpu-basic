@@ -1567,7 +1567,7 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                                  * 計算の途中経過をmatfixAへ加算
                                  *
                                  * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
-                                 * 固定小数点数なので、乗算は __func_pow() を使わなければ行えない為。
+                                 * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                                  */
                                 pA("heap_offset = matfixL;");
                                 read_heap(strL);
@@ -1627,6 +1627,17 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
         pA("}");
 
         /* endF(); */
+}
+
+/* ベクトル * 行列 の乗算を行う。
+ * strA, strL は同じ長さのベクトルで、かつ、行列 strR のrow_len(行数)と同じ大きさの場合のみ乗算する。
+ * 左からベクトルを乗算するケース（V * M）に相当。
+ *
+ * strAの記憶領域が、strLと重複していた場合は、正常な計算結果は得られない。
+ */
+static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* strR)
+{
+
 }
 
 %}
@@ -1838,6 +1849,8 @@ assignment
 
                 /* 変数のスペックを得る。（コンパイル時） */
                 struct Var* var = varlist_search_local($1);
+                if (var == NULL)
+                        yyerror("syntax err: 未定義のスカラー変数へ代入しようとしました");
 
                 /* 変数が配列な場合はエラー */
                 if (var->col_len != 1 || var->row_len != 1)
@@ -1854,6 +1867,8 @@ assignment
 
                 /* 変数のスペックを得る。（コンパイル時） */
                 struct Var* var = varlist_search_local($1);
+                if (var == NULL)
+                        yyerror("syntax err: 未定義の配列変数へ代入しようとしました");
 
                 /* 変数がスカラーな場合はエラー */
                 if (var->col_len == 1 && var->row_len == 1)
@@ -2066,6 +2081,8 @@ read_variable
         : __IDENTIFIER {
                 /* 変数のスペックを得る。（コンパイル時） */
                 struct Var* var = varlist_search_local($1);
+                if (var == NULL)
+                        yyerror("syntax err: 未定義のスカラー変数から読もうとしました");
 
                 /* 変数が配列な場合はエラー */
                 if (var->col_len != 1 || var->row_len != 1)
@@ -2084,6 +2101,8 @@ read_variable
                 if (labellist_search_unsafe($1) == -1) {
                         /* 変数のスペックを得る。（コンパイル時） */
                         struct Var* var = varlist_search_local($1);
+                        if (var == NULL)
+                                yyerror("syntax err: 未定義の配列変数から読もうとしました");
 
                         /* 変数がスカラーな場合はエラー */
                         if (var->col_len == 1 && var->row_len == 1)
@@ -2177,6 +2196,8 @@ iterator_for
 
                 /* 変数のスペックを得る。（コンパイル時） */
                 struct Var* var = varlist_search_local($2);
+                if (var == NULL)
+                        yyerror("syntax err: 未定義のスカラー変数を参照しようとしました");
 
                 /* 変数が配列な場合はエラー */
                 if (var->col_len != 1 || var->row_len != 1)
@@ -2240,6 +2261,8 @@ iterator_for
                  */
                 /* 変数のスペックを得る。（コンパイル時） */
                 struct Var* var = varlist_search_local($2);
+                if (var == NULL)
+                        yyerror("syntax err: 未定義のスカラー変数を参照しようとしました");
 
                 /* 変数が配列な場合はエラー */
                 if (var->col_len != 1 || var->row_len != 1)
