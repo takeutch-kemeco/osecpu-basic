@@ -1357,24 +1357,24 @@ static void ope_matrix_trn(const char* strA, const char* strL)
 
         /* 2重のforループ
          */
-        pA("matcountcol = 0;");
+        pA("matcountrow = 0;");
 
         /* 局所ループ用に無名ラベルをセット （外側forの戻り位置）
          */
-        const int32_t local_label_col = cur_label_index_head;
+        const int32_t local_label_row = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label_col);
+        pA("LB(0, %d);", local_label_row);
 
-        pA("if (matcountcol < matcol) {");
-                pA("matcountrow = 0;");
+        pA("if (matcountrow < matrow) {");
+                pA("matcountcol = 0;");
 
                 /* 局所ループ用に無名ラベルをセット （内側forの戻り位置）
                  */
-                const int32_t local_label_row = cur_label_index_head;
+                const int32_t local_label_col = cur_label_index_head;
                 cur_label_index_head++;
-                pA("LB(0, %d);", local_label_row);
+                pA("LB(0, %d);", local_label_col);
 
-                pA("if (matcountrow < matrow) {");
+                pA("if (matcountcol < matcol) {");
                         /* strL の読み込みオフセットを計算
                          */
                         pA("matfixL = matrow * matcountcol;");
@@ -1405,14 +1405,14 @@ static void ope_matrix_trn(const char* strA, const char* strL)
 
                         /* 内側forループの復帰
                          */
-                        pA("matcountrow++;");
-                        pA("PLIMM(P3F, %d);", local_label_row);
+                        pA("matcountcol++;");
+                        pA("PLIMM(P3F, %d);", local_label_col);
                 pA("}");
 
                 /* 外側forループの復帰
                  */
-                pA("matcountcol++;");
-                pA("PLIMM(P3F, %d);", local_label_col);
+                pA("matcountrow++;");
+                pA("PLIMM(P3F, %d);", local_label_row);
         pA("}");
 
         /* endF(); */
@@ -1515,8 +1515,8 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                 yyerror("syntax err: 行または列が異なる、または正方行列以外の積を得ようとしました");
 
         /* 要素数をセット（コンパイル時） */
-        pA("matcol = %d;", varA->col_len);
         pA("matrow = %d;", varA->row_len);
+        pA("matcol = %d;", varA->col_len);
 
         /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
         /* beginF(); */
@@ -1853,7 +1853,7 @@ assignment
                         yyerror("syntax err: 未定義のスカラー変数へ代入しようとしました");
 
                 /* 変数が配列な場合はエラー */
-                if (var->col_len != 1 || var->row_len != 1)
+                if (var->row_len != 1 || var->col_len != 1)
                         yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
 
                 /* スカラーなので書き込みオフセットは 0 */
@@ -1871,41 +1871,44 @@ assignment
                         yyerror("syntax err: 未定義の配列変数へ代入しようとしました");
 
                 /* 変数がスカラーな場合はエラー */
-                if (var->col_len == 1 && var->row_len == 1)
+                if (var->row_len == 1 && var->col_len == 1)
                         yyerror("syntax err: スカラー変数へ添字による書き込みを行おうとしました");
 
                 /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
                  */
                 /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                if (var->col_len == 1 && $3 != 1)
+                if (var->row_len == 1 && $3 != 1)
                         yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
 
                 /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                else if (var->col_len >= 2 && $3 != 2)
+                else if (var->row_len >= 2 && $3 != 2)
                         yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
 
                 /* 配列の次元によって分岐（コンパイル時）
                  */
                 /* １次元配列の場合 */
-                if (var->col_len == 1) {
+                if (var->row_len == 1) {
                         pA(pop_stack);
                         pA("heap_offset = stack_socket;");
                         write_heap($1);
 
                 /* 2次元配列の場合 */
-                } else if (var->col_len >= 2) {
-                        /* これは[行, 列]の行。 変数の行サイズと乗算 */
+                } else if (var->row_len >= 2) {
+                        /* これは[行, 列]の列 */
                         pA(pop_stack);
-                        pA("heap_offset = stack_socket * %d;", var->col_len);
+                        pA("heap_offset = stack_socket;");
 
-                        /* これは[行, 列]の列。 これを足すことで、変数の先頭からのオフセット位置 */
+                        /* これは[行, 列]の行。
+                         * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
+                         */
                         pA(pop_stack);
-                        pA("heap_offset += stack_socket;");
+                        pA("heap_offset += stack_socket * %d;", var->col_len);
+
                         write_heap($1);
 
                 /* 1,2次元以外の場合はシステムエラー */
                 } else {
-                        yyerror("system err: assignment, col_len の値が不正です");
+                        yyerror("system err: assignment, var->row_len の値が不正です");
                 }
         }
         ;
@@ -2085,7 +2088,8 @@ read_variable
                         yyerror("syntax err: 未定義のスカラー変数から読もうとしました");
 
                 /* 変数が配列な場合はエラー */
-                if (var->col_len != 1 || var->row_len != 1)
+
+                if (var->row_len != 1 || var->col_len != 1)
                         yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
 
                 /* スカラーなので読み込みオフセットは 0 */
@@ -2105,36 +2109,39 @@ read_variable
                                 yyerror("syntax err: 未定義の配列変数から読もうとしました");
 
                         /* 変数がスカラーな場合はエラー */
-                        if (var->col_len == 1 && var->row_len == 1)
+                        if (var->row_len == 1 && var->col_len == 1)
                                 yyerror("syntax err: スカラー変数へ添字による読み込みを行おうとしました");
 
                         /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
                         */
                         /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                        if (var->col_len == 1 && $3 != 1)
+                        if (var->row_len == 1 && $3 != 1)
                                 yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
 
                         /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                        else if (var->col_len >= 2 && $3 != 2)
+                        else if (var->row_len >= 2 && $3 != 2)
                                 yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
 
                         /* 配列の次元によって分岐（コンパイル時）
                          */
                         /* １次元配列の場合 */
-                        if (var->col_len == 1) {
+                        if (var->row_len == 1) {
                                 pA(pop_stack);
                                 pA("heap_offset = stack_socket;");
                                 read_heap($1);
 
                         /* 2次元配列の場合 */
-                        } else if (var->col_len >= 2) {
-                                /* これは[行, 列]の行。 変数の行サイズと乗算 */
+                        } else if (var->row_len >= 2) {
+                                /* これは[行, 列]の列 */
                                 pA(pop_stack);
-                                pA("heap_offset = stack_socket * %d;", var->col_len);
+                                pA("heap_offset = stack_socket;");
 
-                                /* これは[行, 列]の列。 これを足すことで、変数の先頭からのオフセット位置 */
+                                /* これは[行, 列]の行。
+                                 * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
+                                 */
                                 pA(pop_stack);
-                                pA("heap_offset += stack_socket;");
+                                pA("heap_offset += stack_socket * %d;", var->col_len);
+
                                 read_heap($1);
 
                         /* 1,2次元以外の場合はシステムエラー */
