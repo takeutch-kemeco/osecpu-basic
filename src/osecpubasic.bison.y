@@ -1225,7 +1225,8 @@ static void ope_matrix_copy(const char* strL, const char* strR)
         /* 要素数をセット（コンパイル時） */
         pA("matcountrow = %d;", varL->array_len - 1);
 
-        beginF();
+        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
+        /* beginF(); */
 
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
@@ -1242,7 +1243,7 @@ static void ope_matrix_copy(const char* strL, const char* strR)
                 pA("PLIMM(P3F, %d);", local_label);
         pA("}");
 
-        endF();
+        /* endF(); */
 }
 
 /* 行列の全ての要素に任意のスカラー値をセットする
@@ -1258,7 +1259,8 @@ static void ope_matrix_scalar(const char* strA)
         /* 要素数をセット（コンパイル時） */
         pA("matcountrow = %d;", varA->array_len - 1);
 
-        beginF();
+        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
+        /* beginF(); */
 
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
@@ -1274,7 +1276,7 @@ static void ope_matrix_scalar(const char* strA)
                 pA("PLIMM(P3F, %d);", local_label);
         pA("}");
 
-        endF();
+        /* endF(); */
 }
 
 /* 行列に単位行列をセットする
@@ -1295,7 +1297,8 @@ static void ope_matrix_idn(const char* strA)
         /* 対角成分となる要素のインデックスは、 col_len + 1 の倍数インデックスであるはず */
         pA("matfixtmp = %d;", varA->col_len + 1);
 
-        beginF();
+        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
+        /* beginF(); */
 
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
@@ -1319,7 +1322,7 @@ static void ope_matrix_idn(const char* strA)
                 pA("PLIMM(P3F, %d);", local_label);
         pA("}");
 
-        endF();
+        /* endF(); */
 }
 
 /* 行列の転置行列を得る
@@ -1349,9 +1352,10 @@ static void ope_matrix_trn(const char* strA, const char* strL)
         pA("matcol = %d;", varA->col_len);
         pA("matrow = %d;", varA->row_len);
 
-        beginF();
+        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
+        /* beginF(); */
 
-        /* 二重のforループ
+        /* 2重のforループ
          */
         pA("matcountcol = 0;");
 
@@ -1371,20 +1375,20 @@ static void ope_matrix_trn(const char* strA, const char* strL)
                 pA("LB(0, %d);", local_label_row);
 
                 pA("if (matcountrow < matrow) {");
-                        /* fixL の読み込みオフセットを計算
+                        /* strL の読み込みオフセットを計算
                          */
                         pA("matfixL = matrow * matcountcol;");
                         pA("matfixL += matcountrow;");
                         pA("matfixL <<= 16;");
 
-                        /* fixA の書き込みオフセットを計算（fixLの行と列を入れ替えたオフセット）
+                        /* strA の書き込みオフセットを計算（strLの行と列を入れ替えたオフセット）
                          */
                         pA("matfixA = matcol * matcountrow;");
                         pA("matfixA += matcountcol;");
                         pA("matfixA <<= 16;");
 
                         /* 要素のスワップ
-                         * fixA, fixL の記憶領域が同一の場合でも動作するように一時変数を噛ませてスワップ
+                         * strA, strL の記憶領域が同一の場合でも動作するように一時変数を噛ませてスワップ
                          */
                         pA("heap_offset = matfixA;");
                         read_heap(strA);
@@ -1411,7 +1415,7 @@ static void ope_matrix_trn(const char* strA, const char* strL)
                 pA("PLIMM(P3F, %d);", local_label_col);
         pA("}");
 
-        endF();
+        /* endF(); */
 }
 
 /* 行列同士の加算を行う。ただし strR の各要素は scale 倍されてから加算される。
@@ -1443,7 +1447,8 @@ static void ope_matrix_add_common(const char* strA, const char* strL, const char
          */
         pA("matfixtmp = %d;", scale);
 
-        beginF();
+        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
+        /* beginF(); */
 
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
@@ -1470,7 +1475,7 @@ static void ope_matrix_add_common(const char* strA, const char* strL, const char
                 pA("PLIMM(P3F, %d);", local_label);
         pA("}");
 
-        endF();
+        /* endF(); */
 }
 
 /* 行列同士の加算を行う。
@@ -1489,11 +1494,135 @@ static void ope_matrix_sub(const char* strA, const char* strL, const char* strR)
         ope_matrix_add_common(strA, strL, strR, -1);
 }
 
-/* 行列同士の乗算、またはベクトルと行列の乗算を行う。
+/* 行列同士の乗算を行う。
+ * strA, strR の行および列が同じ大きさで、かつ、strL, strRが転置可能な行および列の関係の場合のみ乗算する。
+ *
+ * strAの記憶領域が、strLまたはstrRと重複していた場合は、正常な計算結果は得られない。
  */
-static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
+static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* strR)
 {
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varL = varlist_search(strL);
+        struct Var* varR = varlist_search(strR);
+        struct Var* varA = varlist_search(strA);
 
+        /* strL と strR が転置可能な関係でない場合はエラー（コンパイル時） */
+        if ((varL->col_len != varR->row_len) || (varL->row_len != varR->col_len))
+                yyerror("syntax err: A=B*Cの行列の積において、B,Cが転置可能な場合のみ演算をサポートします");
+
+        /* strR と strA の行列が異なる場合はエラー（コンパイル時） */
+        if ((varR->col_len != varA->col_len) || (varR->row_len != varA->row_len))
+                yyerror("syntax err: A=B*Cの行列の積において、A,Cが同じ行および列の場合のみ演算をサポートします");
+
+        /* 要素数をセット（コンパイル時） */
+        pA("matcol = %d;", varA->col_len);
+        pA("matrow = %d;", varA->row_len);
+
+        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
+        /* beginF(); */
+
+        /* 3重のforループ
+         */
+        pA("matcountcol = 0;");
+
+        /* 局所ループ用に無名ラベルをセット （外側forの戻り位置）
+         */
+        const int32_t local_label_col = cur_label_index_head;
+        cur_label_index_head++;
+        pA("LB(0, %d);", local_label_col);
+
+        pA("if (matcountcol < matcol) {");
+                pA("matcountrow = 0;");
+
+                /* 局所ループ用に無名ラベルをセット （中間forの戻り位置）
+                 */
+                const int32_t local_label_row = cur_label_index_head;
+                cur_label_index_head++;
+                pA("LB(0, %d);", local_label_row);
+
+                pA("if (matcountrow < matrow) {");
+                        pA("matfixtmp = 0;");
+                        pA("matfixA = 0;");
+
+                        /* 局所ループ用に無名ラベルをセット （内側forの戻り位置）
+                         */
+                        const int32_t local_label_fixtmp = cur_label_index_head;
+                        cur_label_index_head++;
+                        pA("LB(0, %d);", local_label_fixtmp);
+
+                        pA("if (matfixtmp < matcol) {");
+                                /* strL の読み込みオフセットを計算
+                                 */
+                                pA("matfixL = matcol * matcountrow;");
+                                pA("matfixL += matfixtmp;");
+                                pA("matfixL <<= 16;");
+
+                                /* strR の読み込みオフセットを計算
+                                 */
+                                pA("matfixR = matrow * matfixtmp;");
+                                pA("matfixR += matcountrow;");
+                                pA("matfixR <<= 16;");
+
+                                /* strLの要素 * strRの要素 の演算を行い、
+                                 * 計算の途中経過をmatfixAへ加算
+                                 *
+                                 * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
+                                 * 固定小数点数なので、乗算は __func_pow() を使わなければ行えない為。
+                                 */
+                                pA("heap_offset = matfixL;");
+                                read_heap(strL);
+                                pA("fixL = heap_socket;");
+
+                                pA("heap_offset = matfixR;");
+                                read_heap(strR);
+                                pA("fixR = heap_socket;");
+
+                                /* 固定小数点数なので乗算は __func_mul() を使う必要がある
+                                 * 乗算結果は matfixA に加算して累積させる
+                                 */
+                                __func_mul();
+                                pA("matfixA += fixA;");
+
+pA("junkApi_putConstString('\\n fixL : ');");
+pA("junkApi_putStringDec('\\1', fixL, 6, 0);");
+
+pA("junkApi_putConstString(' fixR : ');");
+pA("junkApi_putStringDec('\\1', fixR, 6, 0);");
+
+pA("junkApi_putConstString(' nmatfixA : ');");
+pA("junkApi_putStringDec('\\1', matfixA, 6, 0);");
+
+                                /* 内側forループの復帰
+                                 */
+                                pA("matfixtmp++;");
+                                pA("PLIMM(P3F, %d);", local_label_fixtmp);
+                        pA("}");
+
+                        /* strA へ結果を書き込む
+                         */
+                        pA("heap_offset = matrow * matcountcol;");
+                        pA("heap_offset += matcountrow;");
+                        pA("heap_offset <<= 16;");
+                        pA("heap_socket = matfixA;");
+
+pA("junkApi_putConstString('\\nstrA : ');");
+pA("junkApi_putStringDec('\\1', heap_socket, 6, 0);");
+
+                        write_heap(strA);
+
+                        /* 中間forループの復帰
+                         */
+                        pA("matcountrow++;");
+                        pA("PLIMM(P3F, %d);", local_label_row);
+                pA("}");
+
+                /* 外側forループの復帰
+                 */
+                pA("matcountcol++;");
+                pA("PLIMM(P3F, %d);", local_label_col);
+        pA("}");
+
+        /* endF(); */
 }
 
 %}
@@ -1792,7 +1921,7 @@ ope_matrix
                 ope_matrix_sub($2, $4, $6);
         }
         | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_MUL __IDENTIFIER {
-                ope_matrix_mul($2, $4, $6);
+                ope_matrix_mul_mm($2, $4, $6);
         }
         ;
 
