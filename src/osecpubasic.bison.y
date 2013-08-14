@@ -1022,6 +1022,47 @@ static void __func_not(void)
         endF();
 }
 
+/* 左シフト命令を出力する
+ * fixL << fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_lshift(void)
+{
+        beginF();
+
+        pA("fixR >> 16");
+        pA("fixA = fixL << fixR;");
+
+        endF();
+}
+
+/* 右シフト命令を出力する（算術シフト）
+ * fixL >> fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ *
+ * 論理シフトとして動作する。
+ */
+static void __func_rshift(void)
+{
+        beginF();
+
+        pA("fixR >> 16");
+
+        pA("if (fixR >= 1) {");
+                pA("if ((fixL & 0x80000000) != 0) {");
+                        pA("fixL &= 0x7fffffff;");
+                        pA("fixL >>= 1;");
+                        pA("fixL |= 0x40000000");
+
+                        pA("fixR--;");
+                pA("}");
+        pA("}");
+
+        pA("fixA = fixL >> fixR;");
+
+        endF();
+}
+
 /* 符号反転命令を出力する
  * fixL -> fixA
  * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
@@ -1950,6 +1991,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
 %left  __OPE_OR __OPE_AND __OPE_XOR __OPE_NOT
+%left  __OPE_LSHIFT __OPE_RSHIFT
 %left  __OPE_COMMA
 %token __OPE_PLUS __OPE_MINUS
 %token __LB __RB __DECL_END __IDENTIFIER __LABEL __DEFINE_LABEL __EOF
@@ -2311,6 +2353,18 @@ operation
                 pA(pop_stack);
                 pA("fixL = stack_socket;");
                 __func_not();
+                pA("stack_socket = fixA;");
+                pA(push_stack);
+        }
+        | expression __OPE_LSHIFT expression {
+                pA(read_eoe_arg);
+                __func_lshift();
+                pA("stack_socket = fixA;");
+                pA(push_stack);
+        }
+        | expression __OPE_RSHIFT expression {
+                pA(read_eoe_arg);
+                __func_rshift();
                 pA("stack_socket = fixA;");
                 pA(push_stack);
         }

@@ -74,6 +74,9 @@ char* linelist[0x10000];
 <main_process>"xor"     return(__OPE_XOR);
 <main_process>"not"     return(__OPE_NOT);
 
+<main_process>"<<"      return(__OPE_LSHIFT);
+<main_process>">>"      return(__OPE_RSHIFT);
+
 <main_process>":="      return(__OPE_SUBST);
 
 <main_process>"="       return(__OPE_COMPARISON);
