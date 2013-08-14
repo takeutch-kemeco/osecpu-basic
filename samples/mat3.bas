@@ -15,9 +15,7 @@ for i := 0 to 1000000 step 1
 next
 
 mat c := a * b
-gosub *pc
-
-print xpc()
+pc()
 
 goto *END
 
@@ -33,13 +31,7 @@ goto *END
         print b(2,0); print b(2,1); print b(2,2);
         return
 
-*pc
-        print c(0,0); print c(0,1); print c(0,2);
-        print c(1,0); print c(1,1); print c(1,2);
-        print c(2,0); print c(2,1); print c(2,2);
-        return
-
-function xpc()
+function pc()
         print c(0,0); print c(0,1); print c(0,2);
         print c(1,0); print c(1,1); print c(1,2);
         print c(2,0); print c(2,1); print c(2,2);

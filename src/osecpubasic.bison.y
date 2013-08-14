@@ -1418,15 +1418,31 @@ static void ope_matrix_trn(const char* strA, const char* strL)
         /* endF(); */
 }
 
-/* 行列同士の加算を行う。ただし strR の各要素は scale 倍されてから加算される。
+#define OPE_MATRIX_MERGE_COMMON_TYPE_ADD 0
+#define OPE_MATRIX_MERGE_COMMON_TYPE_SUB 1
+#define OPE_MATRIX_MERGE_COMMON_TYPE_MUL 2
+
+/* 行列の各要素同士での加算、減算、またはベクトルの各要素同士での乗算を行う。
  * 行および列が同じ大きさの場合のみ、対応する各要素同士を加算する。
  *
- * scale に +1 を渡せば加算相当になる。
- * scale に -1 を渡せば減算相当になる。
+ * type に OPE_MATRIX_MERGE_COMMON_TYPE_ADD を渡せば行列の各要素同士の加算。
+ * type に OPE_MATRIX_MERGE_COMMON_TYPE_SUB を渡せば行列の各要素同士の減算。
+ * type に OPE_MATRIX_MERGE_COMMON_TYPE_MUL を渡せばベクトルの各要素同士の乗算。
  */
-static void ope_matrix_add_common(const char* strA, const char* strL, const char* strR,
-                                  const int32_t scale)
+static void ope_matrix_merge_common(const char* strA, const char* strL, const char* strR,
+                                    const int32_t type)
 {
+        /* type の値が不正な場合はエラー（コンパイル時） */
+        switch (type) {
+        case OPE_MATRIX_MERGE_COMMON_TYPE_ADD:
+        case OPE_MATRIX_MERGE_COMMON_TYPE_SUB:
+        case OPE_MATRIX_MERGE_COMMON_TYPE_MUL:
+                break;
+
+        default:
+                yyerror("system err: ope_matrix_merge_common(), type");
+        }
+
         /* 変数のスペックを得る。（コンパイル時） */
         struct Var* varA = varlist_search(strA);
         struct Var* varL = varlist_search(strL);
@@ -1437,15 +1453,13 @@ static void ope_matrix_add_common(const char* strA, const char* strL, const char
                 ((varA->col_len == varL->col_len) && (varA->col_len == varR->col_len) &&
                  (varA->row_len == varL->row_len) && (varA->row_len == varR->row_len))
         )
-                yyerror("syntax err: 行か列が異なる行列の和または差の演算は未サポートです");
+                yyerror("syntax err: 行か列が異なる行列（またはベクトル）の和、差、積の演算は未サポートです");
 
         /* 要素数をセット（コンパイル時） */
         pA("matcountrow = %d;", varA->array_len - 1);
 
-        /* matfixRに乗算する係数をセット（コンパイル時）
-         * +1なら加算、-1なら減算
-         */
-        pA("matfixtmp = %d;", scale);
+        /* 演算種類のフラグをセット */
+        pA("matfixtmp = %d;", type);
 
         /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
         /* beginF(); */
@@ -1456,18 +1470,39 @@ static void ope_matrix_add_common(const char* strA, const char* strL, const char
         pA("LB(0, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
+                /* strL, strR から値を読み込む
+                 * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
+                 * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
+                 */
                 pA("heap_offset = matcountrow << 16;");
                 read_heap(strL);
-                pA("matfixL = heap_socket;");
+                pA("fixL = heap_socket;");
 
                 pA("heap_offset = matcountrow << 16;");
                 read_heap(strR);
-                pA("matfixR = heap_socket;");
+                pA("fixR = heap_socket;");
 
-                /* matfixR に係数を乗算 */
-                pA("matfixR *= matfixtmp;");
+                /* 演算種類応じて分岐
+                 * } else if { を使わないのは意図的。（アセンブラーのバグ対策）
+                 */
 
-                pA("heap_socket = matfixL + matfixR;");
+                /* 加算の場合 */
+                pA("if (matfixtmp == %d) {", OPE_MATRIX_MERGE_COMMON_TYPE_ADD);
+                        pA("heap_socket = fixL + fixR;");
+                pA("}");
+
+                /* 減算の場合 */
+                pA("if (matfixtmp == %d) {", OPE_MATRIX_MERGE_COMMON_TYPE_SUB);
+                        pA("heap_socket = fixL - fixR;");
+                pA("}");
+
+                /* 乗算の場合 */
+                pA("if (matfixtmp == %d) {", OPE_MATRIX_MERGE_COMMON_TYPE_MUL);
+                        __func_mul();
+                        pA("heap_socket = fixA;");
+                pA("}");
+
+                /* 各要素同士の演算結果をstrAへ書き込む */
                 pA("heap_offset = matcountrow << 16;");
                 write_heap(strA);
 
@@ -1483,7 +1518,7 @@ static void ope_matrix_add_common(const char* strA, const char* strL, const char
  */
 static void ope_matrix_add(const char* strA, const char* strL, const char* strR)
 {
-        ope_matrix_add_common(strA, strL, strR, +1);
+        ope_matrix_merge_common(strA, strL, strR, OPE_MATRIX_MERGE_COMMON_TYPE_ADD);
 }
 
 /* 行列同士の減算を行う。
@@ -1491,7 +1526,17 @@ static void ope_matrix_add(const char* strA, const char* strL, const char* strR)
  */
 static void ope_matrix_sub(const char* strA, const char* strL, const char* strR)
 {
-        ope_matrix_add_common(strA, strL, strR, -1);
+        ope_matrix_merge_common(strA, strL, strR, OPE_MATRIX_MERGE_COMMON_TYPE_SUB);
+}
+
+/* ベクトル同士の乗算を行う。
+ * strA, strL, strR が同じ長さのベクトルの場合のみ乗算する。
+ *
+ * strAの記憶領域が、strL, strR と重複していても問題無く動作する。
+ */
+static void ope_matrix_mul_vv(const char* strA, const char* strL, const char* strR)
+{
+        ope_matrix_merge_common(strA, strL, strR, OPE_MATRIX_MERGE_COMMON_TYPE_MUL);
 }
 
 /* 行列同士の乗算を行う。
@@ -1740,15 +1785,99 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
  */
 static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* strR)
 {
-}
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varL = varlist_search(strL);
+        struct Var* varR = varlist_search(strR);
+        struct Var* varA = varlist_search(strA);
 
-/* ベクトル同士の乗算を行う。
- * strA, strL, strR が同じ長さのベクトルの場合のみ乗算する。
- *
- * strAの記憶領域が、strL, strR と重複していても問題無く動作する。
- */
-static void ope_matrix_mul_vv(const char* strA, const char* strL, const char* strR)
-{
+        /* ベクトル strA, strR が異なる長さの場合はエラーとなる */
+        if (varA->col_len != varR->col_len)
+                yyerror("syntax err: A = M * V において、ベクトルA, Vの長さが異なります");
+
+        /* ベクトル strA のサイズが、 正方行列 strL の列サイズと異なる場合はエラーとなる */
+        if (varA->col_len != varL->col_len)
+                yyerror("syntax err: A = M * V において、ベクトルA,Vのサイズが、正方行列Mの行サイズと異なります");
+
+        /* 要素数をセット（コンパイル時） */
+        pA("matrow = %d;", varL->row_len);
+        pA("matcol = %d;", varL->col_len);
+
+        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
+        /* beginF(); */
+
+        /* 2重のforループ
+         */
+        pA("matcountrow = 0;");
+
+        /* 局所ループ用に無名ラベルをセット （外側forの戻り位置）
+         */
+        const int32_t local_label_row = cur_label_index_head;
+        cur_label_index_head++;
+        pA("LB(0, %d);", local_label_row);
+
+        pA("if (matcountrow < matrow) {");
+                pA("matcountcol = 0;");
+                pA("matfixA = 0;");
+
+                /* 局所ループ用に無名ラベルをセット （内側forの戻り位置）
+                 */
+                const int32_t local_label_col = cur_label_index_head;
+                cur_label_index_head++;
+                pA("LB(0, %d);", local_label_col);
+
+                pA("if (matcountcol < matcol) {");
+                        /* strL の読み込みオフセットを計算
+                         */
+                        pA("matfixL = matcol * matcountrow;");
+                        pA("matfixL += matcountcol;");
+                        pA("matfixL <<= 16;");
+
+                        /* strR の読み込みオフセットを計算
+                         */
+                        pA("matfixR = matcountcol;");
+                        pA("matfixR <<= 16;");
+
+                        /* strLの要素 * strRの要素 の演算を行い、
+                         * 計算の途中経過をmatfixAへ加算
+                         *
+                         * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
+                         * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
+                         */
+                        pA("heap_offset = matfixL;");
+                        read_heap(strL);
+                        pA("fixL = heap_socket;");
+
+                        pA("heap_offset = matfixR;");
+                        read_heap(strR);
+                        pA("fixR = heap_socket;");
+
+                        /* 固定小数点数なので乗算は __func_mul() を使う必要がある
+                         * 乗算結果は matfixA に加算して累積させる
+                         */
+                        __func_mul();
+                        pA("matfixA += fixA;");
+
+                        /* 内側forループの復帰
+                         */
+                        pA("matcountcol++;");
+                        pA("PLIMM(P3F, %d);", local_label_col);
+                pA("}");
+
+                /* strA へ結果を書き込む
+                 */
+                pA("heap_offset = matcountrow;");
+                pA("heap_offset <<= 16;");
+                pA("heap_socket = matfixA;");
+
+                write_heap(strA);
+
+                /* 外側forループの復帰
+                 */
+                pA("matcountrow++;");
+                pA("PLIMM(P3F, %d);", local_label_row);
+        pA("}");
+
+        /* endF(); */
 }
 
 /* 行列の乗算を行う
