@@ -1630,14 +1630,173 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
 }
 
 /* ベクトル * 行列 の乗算を行う。
- * strA, strL は同じ長さのベクトルで、かつ、行列 strR のrow_len(行数)と同じ大きさの場合のみ乗算する。
+ * strA, strL は同じ長さのベクトルで、かつ、正方行列 strR のrow_len(行数)と同じ大きさの場合のみ乗算する。
  * 左からベクトルを乗算するケース（V * M）に相当。
  *
  * strAの記憶領域が、strLと重複していた場合は、正常な計算結果は得られない。
  */
 static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* strR)
 {
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varL = varlist_search(strL);
+        struct Var* varR = varlist_search(strR);
+        struct Var* varA = varlist_search(strA);
 
+        /* ベクトル strA, strL が異なる長さの場合はエラーとなる */
+        if (varA->col_len != varL->col_len)
+                yyerror("syntax err: A = V * M において、ベクトルA, Vの長さが異なります");
+
+        /* ベクトル strA のサイズが、 正方行列 strR の行サイズと異なる場合はエラーとなる */
+        if (varA->col_len != varR->row_len)
+                yyerror("syntax err: A = V * M において、ベクトルA,Vのサイズが、正方行列Mの列サイズと異なります");
+
+        /* 要素数をセット（コンパイル時） */
+        pA("matrow = %d;", varR->row_len);
+        pA("matcol = %d;", varR->col_len);
+
+        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
+        /* beginF(); */
+
+        /* 2重のforループ
+         */
+        pA("matcountrow = 0;");
+
+        /* 局所ループ用に無名ラベルをセット （外側forの戻り位置）
+         */
+        const int32_t local_label_row = cur_label_index_head;
+        cur_label_index_head++;
+        pA("LB(0, %d);", local_label_row);
+
+        pA("if (matcountrow < matrow) {");
+                pA("matcountcol = 0;");
+                pA("matfixA = 0;");
+
+                /* 局所ループ用に無名ラベルをセット （内側forの戻り位置）
+                 */
+                const int32_t local_label_col = cur_label_index_head;
+                cur_label_index_head++;
+                pA("LB(0, %d);", local_label_col);
+
+                pA("if (matcountcol < matcol) {");
+                        /* strL の読み込みオフセットを計算
+                         */
+                        pA("matfixL = matcountcol;");
+                        pA("matfixL <<= 16;");
+
+                        /* strR の読み込みオフセットを計算
+                         */
+                        pA("matfixR = matrow * matcountcol;");
+                        pA("matfixR += matcountcol;");
+                        pA("matfixR <<= 16;");
+
+                        /* strLの要素 * strRの要素 の演算を行い、
+                         * 計算の途中経過をmatfixAへ加算
+                         *
+                         * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
+                         * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
+                         */
+                        pA("heap_offset = matfixL;");
+                        read_heap(strL);
+                        pA("fixL = heap_socket;");
+
+                        pA("heap_offset = matfixR;");
+                        read_heap(strR);
+                        pA("fixR = heap_socket;");
+
+                        /* 固定小数点数なので乗算は __func_mul() を使う必要がある
+                         * 乗算結果は matfixA に加算して累積させる
+                         */
+                        __func_mul();
+                        pA("matfixA += fixA;");
+
+                        /* 内側forループの復帰
+                         */
+                        pA("matcountcol++;");
+                        pA("PLIMM(P3F, %d);", local_label_col);
+                pA("}");
+
+                /* strA へ結果を書き込む
+                 */
+                pA("heap_offset = matcountrow;");
+                pA("heap_offset <<= 16;");
+                pA("heap_socket = matfixA;");
+
+                write_heap(strA);
+
+                /* 外側forループの復帰
+                 */
+                pA("matcountrow++;");
+                pA("PLIMM(P3F, %d);", local_label_row);
+        pA("}");
+
+        /* endF(); */
+}
+
+/* 行列 * ベクトルの乗算を行う。
+ * strA, strR は同じ長さのベクトルで、かつ、正方行列 strL のcol_len(行数)と同じ大きさの場合のみ乗算する。
+ * 右からベクトルを乗算するケース（M * V）に相当。
+ *
+ * strAの記憶領域が、strRと重複していた場合は、正常な計算結果は得られない。
+ */
+static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* strR)
+{
+}
+
+/* ベクトル同士の乗算を行う。
+ * strA, strL, strR が同じ長さのベクトルの場合のみ乗算する。
+ *
+ * strAの記憶領域が、strL, strR と重複していても問題無く動作する。
+ */
+static void ope_matrix_mul_vv(const char* strA, const char* strL, const char* strR)
+{
+}
+
+/* 行列の乗算を行う
+ * 以下の組み合わせに対応（Mは正方行列、VはMの行もしくは列と同じ長さのベクトルである前提。それ以外はエラー）
+ * M = M * M
+ * V = M * V
+ * V = V * M
+ * V = V * V
+ *
+ * A = B * C において、Aの記憶領域が、BまたはCと重複していた場合は、正常な計算結果は得られない。
+ */
+static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varL = varlist_search(strL);
+        struct Var* varR = varlist_search(strR);
+        struct Var* varA = varlist_search(strA);
+
+        /* strA がスカラーな場合はエラーとする */
+        if (varA->row_len <= 1 && varA->col_len <= 1)
+                yyerror("syntax err: A = B * C による正方行列の積を得ようとしましたが、Aはスカラー変数です");
+
+        /* strAが正方行列な場合 */
+        if ((varA->row_len >= 2) && (varA->row_len == varA->col_len)) {
+                ope_matrix_mul_mm(strA, strL, strR);
+                return;
+
+        /* strAがベクトルな場合 */
+        } else {
+                /* strL が正方行列の場合 */
+                if ((varL->row_len >= 2) && (varL->row_len == varL->col_len)) {
+                        ope_matrix_mul_mv(strA, strL, strR);
+                        return;
+
+                /* strR が正方行列の場合 */
+                } else if ((varR->row_len >= 2) && (varR->row_len == varR->col_len)) {
+                        ope_matrix_mul_vm(strA, strL, strR);
+                        return;
+
+                /* strA, strL, strR 全てベクトルの場合 */
+                } else if ((varR->row_len <= 1) && (varL->row_len <= 1)) {
+                        ope_matrix_mul_vv(strA, strL, strR);
+                        return;
+                }
+        }
+
+        /* どれにも該当しない場合はエラーとする */
+        yyerror("syntax err: 行列の積において型にエラーがあります。行列が正方行列では無いか、サイズが異なる等が考えられます");
 }
 
 %}
@@ -1943,7 +2102,7 @@ ope_matrix
                 ope_matrix_sub($2, $4, $6);
         }
         | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_MUL __IDENTIFIER {
-                ope_matrix_mul_mm($2, $4, $6);
+                ope_matrix_mul($2, $4, $6);
         }
         ;
 
