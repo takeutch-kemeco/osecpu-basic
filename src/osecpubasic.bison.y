@@ -3033,23 +3033,38 @@ define_full_function
                         char iden[0x1000];
                         idenlist_pop(iden);
 
-                        varlist_add(iden, 1, 1);
+                        varlist_add_local(iden, 1, 1);
+
+                        /* 変数のスペックを得る。（コンパイル時） */
+                        struct Var* var = varlist_search(iden);
+                        if (var == NULL)
+                                yyerror("system err: functionによる関数定義において、ローカル変数の作成に失敗しました");
 
                         pA("heap_offset = 0;");
 
-/*問題あり*/
-                        write_heap(/*iden*/);
+                        /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
+                        pA("heap_base = %d;", var->base_ptr);
+
+                        write_heap();
                 }
 
                 /* 戻り値の代入用に、関数名と同名のローカル変数（スカラー）を作成する */
-                varlist_add($2, 1, 1);
+                varlist_add_local($2, 1, 1);
+
         } declaration_list __STATE_END_FUNCTION {
                 /* 関数名と同名のローカル変数の値を、スタックにプッシュして、これを戻り値とする
                  */
+                /* 勘数名変数（戻り値代入先）のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search($2);
+                if (var == NULL)
+                        yyerror("system err: functionによる関数定義において、関数名と同名のローカル変数の作成に失敗しました");
+
                 pA("heap_offset = 0;");
 
-/*問題あり*/
-                read_heap(/*$2*/);
+                /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
+                pA("heap_base = %d;", var->base_ptr);
+
+                read_heap();
 
                 pA("stack_socket = heap_socket;");
                 pA(push_stack);
