@@ -148,7 +148,9 @@ char* linelist[0x10000];
 <main_process>"tan"     return(__FUNC_TAN);
 <main_process>"sqrt"    return(__FUNC_SQRT);
 
-<main_process>"drawline" return(__FUNC_DRAWLINE);
+<main_process>"drawpoint"       return(__FUNC_DRAWPOINT);
+<main_process>"drawline"        return(__FUNC_DRAWLINE);
+<main_process>"sleep"           return(__FUNC_SLEEP);
 
 <main_process>[_a-zA-Z][_0-9a-zA-Z]* {strcpy(yylval.sval, yytext); return(__IDENTIFIER);}
 

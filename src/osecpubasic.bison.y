@@ -2109,7 +2109,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __STATE_FUNCTION __STATE_END_FUNCTION
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
 %token __FUNC_SIN __FUNC_COS __FUNC_TAN __FUNC_SQRT
-%token __FUNC_DRAWLINE
+%token __FUNC_DRAWPOINT __FUNC_DRAWLINE __FUNC_SLEEP
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
@@ -2127,7 +2127,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 
 %type <sval> func_print
 %type <sval> func_sin func_cos func_tan
-%type <sval> func_drawline
+%type <sval> func_drawline func_drawpoint func_sleep
 %type <sval> operation const_variable read_variable
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
@@ -2198,7 +2198,9 @@ function
         | func_cos
         | func_tan
         | func_sqrt
+        | func_drawpoint
         | func_drawline
+        | func_sleep
         ;
 
 func_print
@@ -2249,6 +2251,37 @@ func_sqrt
         }
         ;
 
+func_drawpoint
+        : __FUNC_DRAWPOINT expression expression expression
+                           expression expression expression
+        {
+                beginF();
+
+                pA(pop_stack);
+                pA("fixL = stack_socket & 0x00ff0000;");     /* B */
+                pA(pop_stack);
+                pA("fixR = stack_socket & 0x00ff0000;");     /* G */
+                pA(pop_stack);
+                pA("fixT = stack_socket & 0x00ff0000;");     /* R */
+
+                /* RGB */
+                pA("fixS = fixL >> 16;");
+                pA("fixS |= fixR >> 8;");
+                pA("fixS |= fixT;");
+
+                pA(pop_stack);
+                pA("fixR = stack_socket >> 16;");       /* y */
+                pA(pop_stack);
+                pA("fixL = stack_socket >> 16;");       /* x */
+                pA(pop_stack);
+                pA("fixT = stack_socket >> 16;");       /* mode */
+
+                pA("junkApi_drawPoint(fixT, fixL, fixR, fixS);");
+
+                endF();
+        }
+        ;
+
 func_drawline
         : __FUNC_DRAWLINE expression expression expression expression expression
                           expression expression expression
@@ -2268,17 +2301,32 @@ func_drawline
                 pA("fixS |= fixT;");
 
                 pA(pop_stack);
-                pA("fixR = stack_socket >> 16;");     /* y */
+                pA("fixR = stack_socket >> 16;");     /* y1 */
                 pA(pop_stack);
-                pA("fixL = stack_socket >> 16;");     /* x */
+                pA("fixL = stack_socket >> 16;");     /* x1 */
                 pA(pop_stack);
-                pA("fixRx = stack_socket >> 16;");    /* h */
+                pA("fixRx = stack_socket >> 16;");    /* y0 */
                 pA(pop_stack);
-                pA("fixLx = stack_socket >> 16;");    /* w */
+                pA("fixLx = stack_socket >> 16;");    /* x0 */
                 pA(pop_stack);
                 pA("fixT = stack_socket >> 16;");     /* mode */
 
                 pA("junkApi_drawLine(fixT, fixLx, fixRx, fixL, fixR, fixS);");
+
+                endF();
+        }
+        ;
+
+func_sleep
+        : __FUNC_SLEEP expression expression {
+                beginF();
+
+                pA(pop_stack);
+                pA("fixS = stack_socket >> 16;");       /* msec */
+                pA(pop_stack);
+                pA("fixT = stack_socket >> 16;");       /* mode */
+
+                pA("junkApi_sleep(fixT, fixS);");
 
                 endF();
         }
@@ -2765,9 +2813,9 @@ iterator_for
                 $<varptr>$ = var;
 
         } __OPE_SUBST expression {
-                /* このセクションはスカラー変数への代入なので、 assignment のスカラー版と同様
-                 * （$2が違うだけ）
+                /* このセクションはスカラー変数への代入
                  */
+
                 /* 書き込む値を読んでおく */
                 pA(pop_stack);
                 pA("heap_socket = stack_socket;");
@@ -2848,10 +2896,6 @@ iterator_for
 
                 /* このセクションはスカラー変数の読み込みなので、read_variable とスカラー版とほぼ同様
                  */
-
-                /* 変数が配列な場合はエラー */
-                if ($<varptr>3->col_len != 1 || $<varptr>3->row_len != 1)
-                        yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
 
                 /* スカラーなので読み込みオフセットは 0 */
                 pA("heap_offset = 0;");
