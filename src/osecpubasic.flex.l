@@ -77,6 +77,9 @@ char* linelist[0x10000];
 <main_process>"<<"      return(__OPE_LSHIFT);
 <main_process>">>"      return(__OPE_RSHIFT);
 
+<main_process>"<-"      return(__OPE_ATTACH);
+<main_process>"&"       return(__OPE_ADDRESS);
+
 <main_process>":="      return(__OPE_SUBST);
 
 <main_process>"="       return(__OPE_COMPARISON);

@@ -108,7 +108,7 @@ void idenlist_pop(char* dst)
 #define VAR_STR_LEN IDENLIST_STR_LEN
 struct Var {
         char str[VAR_STR_LEN];
-        int32_t head_ptr;
+        int32_t base_ptr;       /* ベースアドレス */
         int32_t array_len;      /* 配列全体の長さ */
         int32_t col_len;        /* 行の長さ */
         int32_t row_len;        /* 列の長さ */
@@ -212,7 +212,7 @@ static void varlist_add_common(const char* str, const int32_t row_len, const int
         cur->col_len = col_len;
         cur->row_len = row_len;
         cur->array_len = col_len * row_len;
-        cur->head_ptr = (varlist_head == 0) ? 0 : prev->head_ptr + prev->array_len;
+        cur->base_ptr = (varlist_head == 0) ? 0 : prev->base_ptr + prev->array_len;
 
         varlist_head++;
 }
@@ -456,49 +456,51 @@ static void retF(void)
         pA("LB(0, %d);\n", end_label);                                  \
         func_label_init_flag = 1;
 
-/* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置へfix32型を書き込む。
+/* ヒープメモリー上の、任意アドレスからの任意オフセット位置へfix32型を書き込む。
  * 事前に以下のレジスタに値をセットしておくこと:
+ * heap_base   : 書き込みのベースアドレス。Int32型単位なので注意。（fix32型では”無い”）
  * heap_socket : ヒープに書き込みたい値。fix32型単位なので注意。
  * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
+ *
+ * 以前は identifier から struct Var* を得て base_ptr を heap_base へセットする所までこの関数が行っていたが、
+ * 今はそれらの処理は別途、自分で書く必要がある。
+ * （これらの処理はコンパイル時定数となるので beginF(), endF() で囲めない原因となっていた）
+ *
+ * コンパイル時の定数設定は不要となったので beginF(), endF() で囲めるようになった。
  */
-static void write_heap(const char* iden)
+static void write_heap(void)
 {
-        struct Var* v = varlist_search(iden);
-        if (v == NULL)
-                yyerror("syntax err: identifier が未定義の変数に書き込もうとしました");
-
-        pA("heap_seek = %d;", v->head_ptr);
-
         beginF();
 
         pA("heap_offset >>= 16;");
         pA("heap_offset &= 0x0000ffff;");
-        pA("heap_seek += heap_offset;");
-        pA("PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);");
+        pA("heap_base += heap_offset;");
+        pA("PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_base);");
 
         endF();
 }
 
 /* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置からfix32型を読み込む。
  * 事前に以下のレジスタに値をセットしておくこと:
+ * heap_base   : 読み込みのベースアドレス。Int32型単位なので注意。（fix32型では”無い”）
  * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
  *
  * 読み込んだ値は heap_socket へ格納される。これはfix32型なので注意。
+ *
+ * 以前は identifier から struct Var* を得て base_ptr を heap_base へセットする所までこの関数が行っていたが、
+ * 今はそれらの処理は別途、自分で書く必要がある。
+ * （これらの処理はコンパイル時定数となるので beginF(), endF() で囲めない原因となっていた）
+ *
+ * コンパイル時の定数設定は不要となったので beginF(), endF() で囲めるようになった。
  */
-static void read_heap(const char* iden)
+static void read_heap(void)
 {
-        struct Var* v = varlist_search(iden);
-        if (v == NULL)
-                yyerror("syntax err: identifier が未定義の変数から読み込もうとしました");
-
-        pA("heap_seek = %d;", v->head_ptr);
-
         beginF();
 
         pA("heap_offset >>= 16;");
         pA("heap_offset &= 0x0000ffff;");
-        pA("heap_seek += heap_offset;");
-        pA("PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_seek);");
+        pA("heap_base += heap_offset;");
+        pA("PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_base);");
 
         endF();
 }
@@ -509,9 +511,9 @@ static char init_heap[] = {
         "VPtr heap_ptr:P04;\n"
         "junkApi_malloc(heap_ptr, T_SINT32, 0x100000);\n"
         "SInt32 heap_socket:R04;\n"
-        "SInt32 heap_seek:R06;\n"
+        "SInt32 heap_base:R06;\n"
         "SInt32 heap_offset:R05;\n"
-        "heap_seek = 0;\n"
+        "heap_base = 0;\n"
 };
 
 /* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
@@ -614,6 +616,10 @@ void init_all(void)
         pA("SInt32 matcountrow: R19;");
         pA("SInt32 matcol: R1A;");
         pA("SInt32 matrow: R1B;");
+        pA("SInt32 matbpL: R1C;");
+        pA("SInt32 matbpR: R1D;");
+        pA("SInt32 matbpA: R1E;");
+
 
         pA(init_heap);
         pA(init_stack);
@@ -1030,7 +1036,7 @@ static void __func_lshift(void)
 {
         beginF();
 
-        pA("fixR >> 16");
+        pA("fixR >>= 16;");
         pA("fixA = fixL << fixR;");
 
         endF();
@@ -1046,13 +1052,13 @@ static void __func_rshift(void)
 {
         beginF();
 
-        pA("fixR >> 16");
+        pA("fixR >>= 16;");
 
         pA("if (fixR >= 1) {");
                 pA("if ((fixL & 0x80000000) != 0) {");
                         pA("fixL &= 0x7fffffff;");
                         pA("fixL >>= 1;");
-                        pA("fixL |= 0x40000000");
+                        pA("fixL |= 0x40000000;");
 
                         pA("fixR--;");
                 pA("}");
@@ -1252,22 +1258,28 @@ static void __func_tan(void)
 
 /* 行列のコピー命令を出力する
  * 行および列が同じ大きさの場合のみ、対応する各要素同士をコピーする。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
-static void ope_matrix_copy(const char* strL, const char* strR)
+static void ope_matrix_copy(const char* strA, const char* strL)
 {
         /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varA = varlist_search(strA);
         struct Var* varL = varlist_search(strL);
-        struct Var* varR = varlist_search(strR);
 
         /* コピーする配列の要素数が異なる場合はエラーとする（コンパイル時） */
-        if ((varL->col_len != varR->col_len) || (varL->row_len != varR->row_len))
+        if ((varA->col_len != varL->col_len) || (varA->row_len != varL->row_len))
                 yyerror("syntax err: 行か列が異なる行列のコピーは未サポートです");
+
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
 
         /* 要素数をセット（コンパイル時） */
         pA("matcountrow = %d;", varL->array_len - 1);
 
-        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
-        /* beginF(); */
+        beginF();
 
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
@@ -1276,21 +1288,26 @@ static void ope_matrix_copy(const char* strL, const char* strR)
 
         pA("if (matcountrow >= 0) {");
                 pA("heap_offset = matcountrow << 16;");
-                read_heap(strR);
+                pA("heap_base = matbpL;");
+                read_heap();
+
                 pA("heap_offset = matcountrow << 16;");
-                write_heap(strL);
+                pA("heap_base = matbpA;");
+                write_heap();
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
         pA("}");
 
-        /* endF(); */
+        endF();
 }
 
 /* 行列の全ての要素に任意のスカラー値をセットする
  * あらかじめ matfixL に値をセットしておくこと（fix32型）
  * matfixLに0をセットしておけば mat a := zer 相当になる。
  * matfixLに(1 << 16)をセットしておけば mat a := con 相当になる。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_scalar(const char* strA)
 {
@@ -1300,8 +1317,11 @@ static void ope_matrix_scalar(const char* strA)
         /* 要素数をセット（コンパイル時） */
         pA("matcountrow = %d;", varA->array_len - 1);
 
-        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
-        /* beginF(); */
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+
+        beginF();
 
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
@@ -1311,17 +1331,20 @@ static void ope_matrix_scalar(const char* strA)
         pA("if (matcountrow >= 0) {");
                 pA("heap_socket = matfixL;");
                 pA("heap_offset = matcountrow << 16;");
-                write_heap(strA);
+                pA("heap_base = matbpA;");
+                write_heap();
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
         pA("}");
 
-        /* endF(); */
+        endF();
 }
 
 /* 行列に単位行列をセットする
  * 正方行列でない場合はエラーとなる。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_idn(const char* strA)
 {
@@ -1332,14 +1355,17 @@ static void ope_matrix_idn(const char* strA)
         if (varA->col_len != varA->row_len)
                 yyerror("syntax err: 正方行列ではない行列へ単位行列をセットしようとしました");
 
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+
         /* 要素数をセット（コンパイル時） */
         pA("matcountrow = %d;", varA->array_len - 1);
 
         /* 対角成分となる要素のインデックスは、 col_len + 1 の倍数インデックスであるはず */
         pA("matfixtmp = %d;", varA->col_len + 1);
 
-        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
-        /* beginF(); */
+        beginF();
 
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
@@ -1351,19 +1377,23 @@ static void ope_matrix_idn(const char* strA)
                 pA("if ((matcountrow %% matfixtmp) == 0) {");
                         pA("heap_socket = 1 << 16;");
                         pA("heap_offset = matcountrow << 16;");
-                        write_heap(strA);
+                        pA("heap_base = matbpA;");
+                        write_heap();
+
                 /* 対角成分では無い場合 */
                 pA("} else {");
                         pA("heap_socket = 0;");
                         pA("heap_offset = matcountrow << 16;");
-                        write_heap(strA);
+                        pA("heap_base = matbpA;");
+                        write_heap();
+
                 pA("}");
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
         pA("}");
 
-        /* endF(); */
+        endF();
 }
 
 /* 行列の転置行列を得る
@@ -1378,6 +1408,8 @@ static void ope_matrix_idn(const char* strA)
  *
  * strA と strL が同じ記憶領域だった場合でも問題無く動作する
  * （バッファーを噛ませてあるので、スワップによる値の破壊は無い）
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_trn(const char* strA, const char* strL)
 {
@@ -1389,12 +1421,16 @@ static void ope_matrix_trn(const char* strA, const char* strL)
         if ((varA->col_len != varL->row_len) || (varA->row_len != varL->col_len))
                 yyerror("syntax err: 転置後の行列サイズと合いません。列->行、行->列、で要素数が対応している必要があります");
 
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
+
         /* 要素数をセット（コンパイル時） */
         pA("matcol = %d;", varA->col_len);
         pA("matrow = %d;", varA->row_len);
 
-        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
-        /* beginF(); */
+        beginF();
 
         /* 2重のforループ
          */
@@ -1432,17 +1468,21 @@ static void ope_matrix_trn(const char* strA, const char* strL)
                          * strA, strL の記憶領域が同一の場合でも動作するように一時変数を噛ませてスワップ
                          */
                         pA("heap_offset = matfixA;");
-                        read_heap(strA);
+                        pA("heap_base == matbpA;");
+                        read_heap();
                         pA("matfixtmp = heap_socket;");
 
                         pA("heap_offset = matfixL;");
-                        read_heap(strL);
+                        pA("heap_base = matbpL");
+                        read_heap();
                         pA("heap_offset = matfixA;");
-                        write_heap(strA);
+                        pA("heap_base = matbpA;");
+                        write_heap();
 
                         pA("heap_offset = matfixL;");
                         pA("heap_socket = matfixtmp;");
-                        write_heap(strL);
+                        pA("heap_base = matbpL;");
+                        write_heap();
 
                         /* 内側forループの復帰
                          */
@@ -1456,7 +1496,7 @@ static void ope_matrix_trn(const char* strA, const char* strL)
                 pA("PLIMM(P3F, %d);", local_label_row);
         pA("}");
 
-        /* endF(); */
+        endF();
 }
 
 #define OPE_MATRIX_MERGE_COMMON_TYPE_ADD 0
@@ -1469,6 +1509,8 @@ static void ope_matrix_trn(const char* strA, const char* strL)
  * type に OPE_MATRIX_MERGE_COMMON_TYPE_ADD を渡せば行列の各要素同士の加算。
  * type に OPE_MATRIX_MERGE_COMMON_TYPE_SUB を渡せば行列の各要素同士の減算。
  * type に OPE_MATRIX_MERGE_COMMON_TYPE_MUL を渡せばベクトルの各要素同士の乗算。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_merge_common(const char* strA, const char* strL, const char* strR,
                                     const int32_t type)
@@ -1489,6 +1531,12 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
         struct Var* varL = varlist_search(strL);
         struct Var* varR = varlist_search(strR);
 
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+
         /* コピーする配列の要素数が異なる場合はエラーとする（コンパイル時） */
         if (!
                 ((varA->col_len == varL->col_len) && (varA->col_len == varR->col_len) &&
@@ -1502,8 +1550,7 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
         /* 演算種類のフラグをセット */
         pA("matfixtmp = %d;", type);
 
-        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
-        /* beginF(); */
+        beginF();
 
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
@@ -1516,11 +1563,13 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
                  * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                  */
                 pA("heap_offset = matcountrow << 16;");
-                read_heap(strL);
+                pA("heap_base = matbpL;");
+                read_heap();
                 pA("fixL = heap_socket;");
 
                 pA("heap_offset = matcountrow << 16;");
-                read_heap(strR);
+                pA("heap_base = matbpR;");
+                read_heap();
                 pA("fixR = heap_socket;");
 
                 /* 演算種類応じて分岐
@@ -1545,17 +1594,20 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
 
                 /* 各要素同士の演算結果をstrAへ書き込む */
                 pA("heap_offset = matcountrow << 16;");
-                write_heap(strA);
+                pA("heap_base = matbpA;");
+                write_heap();
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
         pA("}");
 
-        /* endF(); */
+        endF();
 }
 
 /* 行列同士の加算を行う。
  * 行および列が同じ大きさの場合のみ、対応する各要素同士を加算する。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_add(const char* strA, const char* strL, const char* strR)
 {
@@ -1564,6 +1616,8 @@ static void ope_matrix_add(const char* strA, const char* strL, const char* strR)
 
 /* 行列同士の減算を行う。
  * 行および列が同じ大きさの場合のみ、対応する各要素同士を減算する。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_sub(const char* strA, const char* strL, const char* strR)
 {
@@ -1574,6 +1628,8 @@ static void ope_matrix_sub(const char* strA, const char* strL, const char* strR)
  * strA, strL, strR が同じ長さのベクトルの場合のみ乗算する。
  *
  * strAの記憶領域が、strL, strR と重複していても問題無く動作する。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_mul_vv(const char* strA, const char* strL, const char* strR)
 {
@@ -1584,6 +1640,8 @@ static void ope_matrix_mul_vv(const char* strA, const char* strL, const char* st
  * strA, strL, strR が全て正方行列で、かつ、行および列が同じ大きさの場合のみ乗算する。
  *
  * strAの記憶領域が、strLまたはstrRと重複していた場合は、正常な計算結果は得られない。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* strR)
 {
@@ -1600,12 +1658,17 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
         )
                 yyerror("syntax err: 行または列が異なる、または正方行列以外の積を得ようとしました");
 
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+
         /* 要素数をセット（コンパイル時） */
         pA("matrow = %d;", varA->row_len);
         pA("matcol = %d;", varA->col_len);
 
-        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
-        /* beginF(); */
+        beginF();
 
         /* 3重のforループ
          */
@@ -1656,11 +1719,13 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                                  * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                                  */
                                 pA("heap_offset = matfixL;");
-                                read_heap(strL);
+                                pA("heap_base = matbpL;");
+                                read_heap();
                                 pA("fixL = heap_socket;");
 
                                 pA("heap_offset = matfixR;");
-                                read_heap(strR);
+                                pA("heap_base = matbpR;");
+                                read_heap();
                                 pA("fixR = heap_socket;");
 
                                 /* 固定小数点数なので乗算は __func_mul() を使う必要がある
@@ -1698,7 +1763,8 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                         pA("junkApi_putStringDec('\\1', heap_socket, 6, 0);");
 #endif /* DEBUG_OPE_MATRIX_MUL_MM */
 
-                        write_heap(strA);
+                        pA("heap_base = matbpA;");
+                        write_heap();
 
                         /* 中間forループの復帰
                          */
@@ -1712,7 +1778,7 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                 pA("PLIMM(P3F, %d);", local_label_row);
         pA("}");
 
-        /* endF(); */
+        endF();
 }
 
 /* ベクトル * 行列 の乗算を行う。
@@ -1720,6 +1786,8 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
  * 左からベクトルを乗算するケース（V * M）に相当。
  *
  * strAの記憶領域が、strLと重複していた場合は、正常な計算結果は得られない。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* strR)
 {
@@ -1736,12 +1804,17 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
         if (varA->col_len != varR->row_len)
                 yyerror("syntax err: A = V * M において、ベクトルA,Vのサイズが、正方行列Mの列サイズと異なります");
 
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+
         /* 要素数をセット（コンパイル時） */
         pA("matrow = %d;", varR->row_len);
         pA("matcol = %d;", varR->col_len);
 
-        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
-        /* beginF(); */
+        beginF();
 
         /* 2重のforループ
          */
@@ -1782,11 +1855,13 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
                          * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                          */
                         pA("heap_offset = matfixL;");
-                        read_heap(strL);
+                        pA("heap_base = matbpL;");
+                        read_heap();
                         pA("fixL = heap_socket;");
 
                         pA("heap_offset = matfixR;");
-                        read_heap(strR);
+                        pA("heap_base = matbpR;");
+                        read_heap();
                         pA("fixR = heap_socket;");
 
                         /* 固定小数点数なので乗算は __func_mul() を使う必要がある
@@ -1807,7 +1882,8 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
                 pA("heap_offset <<= 16;");
                 pA("heap_socket = matfixA;");
 
-                write_heap(strA);
+                pA("heap_base = matbpA;");
+                write_heap();
 
                 /* 外側forループの復帰
                  */
@@ -1815,7 +1891,7 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
                 pA("PLIMM(P3F, %d);", local_label_row);
         pA("}");
 
-        /* endF(); */
+        endF();
 }
 
 /* 行列 * ベクトルの乗算を行う。
@@ -1823,6 +1899,8 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
  * 右からベクトルを乗算するケース（M * V）に相当。
  *
  * strAの記憶領域が、strRと重複していた場合は、正常な計算結果は得られない。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* strR)
 {
@@ -1839,12 +1917,17 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
         if (varA->col_len != varL->col_len)
                 yyerror("syntax err: A = M * V において、ベクトルA,Vのサイズが、正方行列Mの行サイズと異なります");
 
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+
         /* 要素数をセット（コンパイル時） */
         pA("matrow = %d;", varL->row_len);
         pA("matcol = %d;", varL->col_len);
 
-        /* write_heap(), read_heap()はコンパイル時の判断が必要なので beginF(),endF()で囲んではならない */
-        /* beginF(); */
+        beginF();
 
         /* 2重のforループ
          */
@@ -1885,11 +1968,13 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
                          * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                          */
                         pA("heap_offset = matfixL;");
-                        read_heap(strL);
+                        pA("heap_base = matbpL;");
+                        read_heap();
                         pA("fixL = heap_socket;");
 
                         pA("heap_offset = matfixR;");
-                        read_heap(strR);
+                        pA("heap_base = matbpR;");
+                        read_heap();
                         pA("fixR = heap_socket;");
 
                         /* 固定小数点数なので乗算は __func_mul() を使う必要がある
@@ -1910,7 +1995,8 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
                 pA("heap_offset <<= 16;");
                 pA("heap_socket = matfixA;");
 
-                write_heap(strA);
+                pA("heap_base = matbpA;");
+                write_heap();
 
                 /* 外側forループの復帰
                  */
@@ -1918,7 +2004,7 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
                 pA("PLIMM(P3F, %d);", local_label_row);
         pA("}");
 
-        /* endF(); */
+        endF();
 }
 
 /* 行列の乗算を行う
@@ -1929,6 +2015,8 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
  * V = V * V
  *
  * A = B * C において、Aの記憶領域が、BまたはCと重複していた場合は、正常な計算結果は得られない。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 {
@@ -1940,6 +2028,12 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
         /* strA がスカラーな場合はエラーとする */
         if (varA->row_len <= 1 && varA->col_len <= 1)
                 yyerror("syntax err: A = B * C による正方行列の積を得ようとしましたが、Aはスカラー変数です");
+
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
 
         /* strAが正方行列な場合 */
         if ((varA->row_len >= 2) && (varA->row_len == varA->col_len)) {
@@ -1994,6 +2088,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %left  __OPE_LSHIFT __OPE_RSHIFT
 %left  __OPE_COMMA
 %token __OPE_PLUS __OPE_MINUS
+%token __OPE_ATTACH __OPE_ADDRESS
 %token __LB __RB __DECL_END __IDENTIFIER __LABEL __DEFINE_LABEL __EOF
 %token __CONST_STRING __CONST_FLOAT __CONST_INTEGER
 
@@ -2010,7 +2105,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> ope_matrix
 %type <sval> syntax_tree declaration_list declaration
 %type <sval> define_function define_def_function define_full_function
-%type <ival> expression_list identifier_list
+%type <ival> expression_list identifier_list attach_base
 
 %start syntax_tree
 
@@ -2171,47 +2266,64 @@ initializer
         }
         ;
 
+attach_base
+        : {
+                pA("stack_socket = -1;");
+                pA(push_stack);
+        }
+        | expression __OPE_ATTACH
+        ;
+
 assignment
-        : __IDENTIFIER __OPE_SUBST expression {
+        : attach_base __IDENTIFIER __OPE_SUBST expression {
                 /* 書き込む値を読んでおく */
                 pA(pop_stack);
                 pA("heap_socket = stack_socket;");
 
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($1);
+                struct Var* var = varlist_search($2);
                 if (var == NULL)
                         yyerror("syntax err: 未定義のスカラー変数へ代入しようとしました");
 
-                /* 変数が配列な場合はエラー */
+                /* 変数が配列な場合はエラー（コンパイル時） */
                 if (var->row_len != 1 || var->col_len != 1)
                         yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
 
                 /* スカラーなので書き込みオフセットは 0 */
                 pA("heap_offset = 0;");
-                write_heap($1);
+
+                /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
+                 * heap_base < 0 （空の場合）ならば、
+                 * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
+                 */
+                pA(pop_stack);
+                pA("heap_base = stack_socket;");
+                pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+
+                write_heap();
         }
-        | __IDENTIFIER __LB expression_list __RB __OPE_SUBST expression {
+        | attach_base __IDENTIFIER __LB expression_list __RB __OPE_SUBST expression {
                 /* 書き込む値を読んでおく */
                 pA(pop_stack);
                 pA("heap_socket = stack_socket;");
 
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($1);
+                struct Var* var = varlist_search($2);
                 if (var == NULL)
                         yyerror("syntax err: 未定義の配列変数へ代入しようとしました");
 
-                /* 変数がスカラーな場合はエラー */
+                /* 変数がスカラーな場合はエラー（コンパイル時） */
                 if (var->row_len == 1 && var->col_len == 1)
                         yyerror("syntax err: スカラー変数へ添字による書き込みを行おうとしました");
 
-                /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
+                /* 配列の次元に対して、添字の次元が異なる場合にエラーとする（コンパイル時）
                  */
-                /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                if (var->row_len == 1 && $3 != 1)
+                /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合（コンパイル時） */
+                if (var->row_len == 1 && $4 != 1)
                         yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
 
-                /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                else if (var->row_len >= 2 && $3 != 2)
+                /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合（コンパイル時） */
+                else if (var->row_len >= 2 && $4 != 2)
                         yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
 
                 /* 配列の次元によって分岐（コンパイル時）
@@ -2220,7 +2332,16 @@ assignment
                 if (var->row_len == 1) {
                         pA(pop_stack);
                         pA("heap_offset = stack_socket;");
-                        write_heap($1);
+
+                        /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
+                         * heap_base < 0 （空の場合）ならば、
+                         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
+                         */
+                        pA(pop_stack);
+                        pA("heap_base = stack_socket;");
+                        pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+
+                        write_heap();
 
                 /* 2次元配列の場合 */
                 } else if (var->row_len >= 2) {
@@ -2234,7 +2355,15 @@ assignment
                         pA(pop_stack);
                         pA("heap_offset += stack_socket * %d;", var->col_len);
 
-                        write_heap($1);
+                        /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
+                         * heap_base < 0 （空の場合）ならば、
+                         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
+                         */
+                        pA(pop_stack);
+                        pA("heap_base = stack_socket;");
+                        pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+
+                        write_heap();
 
                 /* 1,2次元以外の場合はシステムエラー */
                 } else {
@@ -2285,11 +2414,11 @@ const_variable
                 int32_t ia = ((int32_t)a) << 16;
                 int32_t ib = ((int32_t)(0x0000ffff * b)) & 0x0000ffff;
 
-                pA("stack_socket = %d;\n", ia | ib);
+                pA("stack_socket = %d;", ia | ib);
                 pA(push_stack);
         }
         | __CONST_INTEGER {
-                pA("stack_socket = %d;\n", $1 << 16);
+                pA("stack_socket = %d;", $1 << 16);
                 pA(push_stack);
         }
         ;
@@ -2423,30 +2552,38 @@ comparison
         ;
 
 read_variable
-        : __IDENTIFIER {
+        : attach_base __IDENTIFIER {
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($1);
+                struct Var* var = varlist_search($2);
                 if (var == NULL)
                         yyerror("syntax err: 未定義のスカラー変数から読もうとしました");
 
                 /* 変数が配列な場合はエラー */
-
                 if (var->row_len != 1 || var->col_len != 1)
                         yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
 
                 /* スカラーなので読み込みオフセットは 0 */
                 pA("heap_offset = 0;");
-                read_heap($1);
+
+                /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
+                 * heap_base < 0 （空の場合）ならば、
+                 * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
+                 */
+                pA(pop_stack);
+                pA("heap_base = stack_socket;");
+                pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+
+                read_heap();
 
                 /* 結果をスタックにプッシュする */
                 pA("stack_socket = heap_socket;");
                 pA(push_stack);
         }
-        | __IDENTIFIER __LB expression_list __RB {
+        | attach_base __IDENTIFIER __LB expression_list __RB {
                 /* ラベルリストに名前が存在しなければ、これは配列変数 */
-                if (labellist_search_unsafe($1) == -1) {
+                if (labellist_search_unsafe($2) == -1) {
                         /* 変数のスペックを得る。（コンパイル時） */
-                        struct Var* var = varlist_search($1);
+                        struct Var* var = varlist_search($2);
                         if (var == NULL)
                                 yyerror("syntax err: 未定義の配列変数から読もうとしました");
 
@@ -2457,11 +2594,11 @@ read_variable
                         /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
                         */
                         /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                        if (var->row_len == 1 && $3 != 1)
+                        if (var->row_len == 1 && $4 != 1)
                                 yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
 
                         /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                        else if (var->row_len >= 2 && $3 != 2)
+                        else if (var->row_len >= 2 && $4 != 2)
                                 yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
 
                         /* 配列の次元によって分岐（コンパイル時）
@@ -2470,7 +2607,16 @@ read_variable
                         if (var->row_len == 1) {
                                 pA(pop_stack);
                                 pA("heap_offset = stack_socket;");
-                                read_heap($1);
+
+                                /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
+                                 * heap_base < 0 （空の場合）ならば、
+                                 * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
+                                 */
+                                pA(pop_stack);
+                                pA("heap_base = stack_socket;");
+                                pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+
+                                read_heap();
 
                         /* 2次元配列の場合 */
                         } else if (var->row_len >= 2) {
@@ -2484,7 +2630,15 @@ read_variable
                                 pA(pop_stack);
                                 pA("heap_offset += stack_socket * %d;", var->col_len);
 
-                                read_heap($1);
+                                /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
+                                 * heap_base < 0 （空の場合）ならば、
+                                 * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
+                                 */
+                                pA(pop_stack);
+                                pA("heap_base = stack_socket;");
+                                pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+
+                                read_heap();
 
                         /* 1,2次元以外の場合はシステムエラー */
                         } else {
@@ -2500,7 +2654,7 @@ read_variable
                         /* gosub とほぼ同じ */
                         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
                         pA(push_labelstack);
-                        pA("PLIMM(P3F, %d);\n", labellist_search($1));
+                        pA("PLIMM(P3F, %d);\n", labellist_search($2));
                         pA("LB(0, %d);\n", cur_label_index_head);
                         cur_label_index_head++;
                 }
@@ -2554,7 +2708,9 @@ iterator_for
 
                 /* スカラーなので書き込みオフセットは 0 */
                 pA("heap_offset = 0;");
-                write_heap($2);
+
+/*問題あり*/
+                write_heap();
 
                 /* そして、代入後であるここに無名ラベルを作る（このforループは、以降はこの位置へと戻ってくる）
                  * また、このラベルは next で戻ってくる際に使うので、この構文解析器で参照できるように $$ で出力する。（以降$5で参照できる）
@@ -2575,7 +2731,9 @@ iterator_for
                 /* 次にスカラー変数から値を読み、 forfixL （左辺用） へと退避しておく。
                  */
                 pA("heap_offset = 0;");
-                read_heap($2);
+
+/*問題あり*/
+                read_heap();
                 pA("forfixL = heap_socket;");
         } __STATE_STEP expression {
                 /* 条件比較の方向を判断するために、stepの値を読む必要がある
@@ -2619,7 +2777,9 @@ iterator_for
 
                 /* スカラーなので読み込みオフセットは 0 */
                 pA("heap_offset = 0;");
-                read_heap($2);
+
+/*問題あり*/
+                read_heap();
 
                 /* 結果をforfixLにセットする */
                 pA("forfixL = heap_socket;");
@@ -2629,7 +2789,9 @@ iterator_for
                 pA("heap_socket = forfixL + forfixR;");
 
                 pA("heap_offset = 0;");
-                write_heap($2);
+
+/*問題あり*/
+                write_heap();
 
                 /* その後、先頭で作成したラベル位置へと再び戻るために、 goto させる命令を書く。
                  * これには $5 により示されるラベル位置を用いる。
@@ -2743,7 +2905,9 @@ define_def_function
                         varlist_add(iden, 1, 1);
 
                         pA("heap_offset = 0;");
-                        write_heap(iden);
+
+/*問題あり*/
+                        write_heap(/*iden*/);
                 }
         } expression {
                 /* ローカル変数を破棄する */
@@ -2774,7 +2938,9 @@ define_full_function
                         varlist_add(iden, 1, 1);
 
                         pA("heap_offset = 0;");
-                        write_heap(iden);
+
+/*問題あり*/
+                        write_heap(/*iden*/);
                 }
 
                 /* 戻り値の代入用に、関数名と同名のローカル変数（スカラー）を作成する */
@@ -2783,7 +2949,9 @@ define_full_function
                 /* 関数名と同名のローカル変数の値を、スタックにプッシュして、これを戻り値とする
                  */
                 pA("heap_offset = 0;");
-                read_heap($2);
+
+/*問題あり*/
+                read_heap(/*$2*/);
 
                 pA("stack_socket = heap_socket;");
                 pA(push_stack);
