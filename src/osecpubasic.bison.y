@@ -2993,12 +2993,19 @@ define_def_function
                         char iden[0x1000];
                         idenlist_pop(iden);
 
-                        varlist_add(iden, 1, 1);
+                        varlist_add_local(iden, 1, 1);
+
+                        /* 変数のスペックを得る。（コンパイル時） */
+                        struct Var* var = varlist_search(iden);
+                        if (var == NULL)
+                                yyerror("system err: defによる関数定義において、ローカル変数の作成に失敗しました");
 
                         pA("heap_offset = 0;");
 
-/*問題あり*/
-                        write_heap(/*iden*/);
+                        /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
+                        pA("heap_base = %d;", var->base_ptr);
+
+                        write_heap();
                 }
         } expression {
                 /* ローカル変数を破棄する */
