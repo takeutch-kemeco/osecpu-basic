@@ -395,32 +395,29 @@ static char init_labelstack[] = {
  * 事前に以下のレジスタをセットしておくこと
  * atachstack_socket : プッシュしたい値。（SInt32型)
  */
-static void push_attachstack(void)
-{
-        pA("PASMEM0(attachstack_socket, T_SINT32, attachstack_ptr, attachstack_head);");
-        pA("attachstack_head++;");
-}
+static char push_attachstack[] = {
+        "PASMEM0(attachstack_socket, T_SINT32, attachstack_ptr, attachstack_head);\n"
+        "attachstack_head++;\n"
+};
 
 /* アタッチスタックからアドレス（SInt32型）をポップする
  * ポップした値は atachstack_socket に格納される。（SInt32型)
  */
-static void pop_attachstack(void)
-{
-        pA("attachstack_head--;");
-        pA("PALMEM0(attachstack_socket, T_SINT32, attachstack_ptr, attachstack_head);");
-}
+static char pop_attachstack[] = {
+        "attachstack_head--;\n"
+        "PALMEM0(attachstack_socket, T_SINT32, attachstack_ptr, attachstack_head);\n"
+};
 
 /* アタッチスタックの初期化
  * アタッチスタックは、アタッチに用いるためのアドレスをスタックで管理するためのもの。
  */
-static void init_attachstack(void)
-{
-        pA("VPtr attachstack_ptr:P05;");
-        pA("junkApi_malloc(attachstack_ptr, T_SINT32, 0x100000);");
-        pA("SInt32 attachstack_socket:R20;");
-        pA("SInt32 attachstack_head:R21;");
-        pA("attachstack_head = 0;");
-}
+static char init_attachstack[] = {
+        "VPtr attachstack_ptr:P05;\n"
+        "junkApi_malloc(attachstack_ptr, T_SINT32, 0x100000);\n"
+        "SInt32 attachstack_socket:R20;\n"
+        "SInt32 attachstack_head:R21;\n"
+        "attachstack_head = 0;\n"
+};
 
 /* プリセット関数やアキュムレーターを呼び出し命令に対して、追加でさらに共通の定型命令を出力する。
  * すなわち、関数呼び出しのラッパ。
@@ -651,11 +648,10 @@ void init_all(void)
         pA("SInt32 matbpR: R1D;");
         pA("SInt32 matbpA: R1E;");
 
-
         pA(init_heap);
         pA(init_stack);
         pA(init_labelstack);
-        init_attachstack();
+        pA(init_attachstack);
         pA(init_eoe_arg);
 }
 
@@ -2137,6 +2133,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> ope_matrix
 %type <sval> syntax_tree declaration_list declaration
 %type <sval> define_function define_def_function define_full_function
+%type <sval> var_identifier
 %type <ival> expression_list identifier_list attach_base
 
 %start syntax_tree
@@ -2304,6 +2301,11 @@ attach_base
                 pA(push_stack);
         }
         | expression __OPE_ATTACH
+        ;
+
+var_identifier
+        : attach_base __IDENTIFIER {
+        }
         ;
 
 assignment
