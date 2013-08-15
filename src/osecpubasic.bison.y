@@ -1501,7 +1501,7 @@ static void ope_matrix_trn(const char* strA, const char* strL)
                         pA("matfixtmp = heap_socket;");
 
                         pA("heap_offset = matfixL;");
-                        pA("heap_base = matbpL");
+                        pA("heap_base = matbpL;");
                         read_heap();
                         pA("heap_offset = matfixA;");
                         pA("heap_base = matbpA;");
@@ -2297,25 +2297,30 @@ initializer
 
 attach_base
         : {
-                pA("stack_socket = -1;");
-                pA(push_stack);
+                pA("attachstack_socket = -1;");
+                pA(push_attachstack);
         }
-        | expression __OPE_ATTACH
+        | expression __OPE_ATTACH {
+                pA(pop_stack);
+                pA("attachstack_socket = stack_socket;");
+                pA(push_attachstack);
+        }
         ;
 
 var_identifier
         : attach_base __IDENTIFIER {
+                strcpy($$, $2);
         }
         ;
 
 assignment
-        : attach_base __IDENTIFIER __OPE_SUBST expression {
+        : var_identifier __OPE_SUBST expression {
                 /* 書き込む値を読んでおく */
                 pA(pop_stack);
                 pA("heap_socket = stack_socket;");
 
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($2);
+                struct Var* var = varlist_search($1);
                 if (var == NULL)
                         yyerror("syntax err: 未定義のスカラー変数へ代入しようとしました");
 
@@ -2326,23 +2331,19 @@ assignment
                 /* スカラーなので書き込みオフセットは 0 */
                 pA("heap_offset = 0;");
 
-                /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
-                 * heap_base < 0 （空の場合）ならば、
-                 * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
-                 */
-                pA(pop_stack);
-                pA("heap_base = stack_socket;");
-                pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                pA(pop_attachstack);
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
 
                 write_heap();
         }
-        | attach_base __IDENTIFIER __LB expression_list __RB __OPE_SUBST expression {
+        | var_identifier __LB expression_list __RB __OPE_SUBST expression {
                 /* 書き込む値を読んでおく */
                 pA(pop_stack);
                 pA("heap_socket = stack_socket;");
 
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($2);
+                struct Var* var = varlist_search($1);
                 if (var == NULL)
                         yyerror("syntax err: 未定義の配列変数へ代入しようとしました");
 
@@ -2353,11 +2354,11 @@ assignment
                 /* 配列の次元に対して、添字の次元が異なる場合にエラーとする（コンパイル時）
                  */
                 /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合（コンパイル時） */
-                if (var->row_len == 1 && $4 != 1)
+                if (var->row_len == 1 && $3 != 1)
                         yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
 
                 /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合（コンパイル時） */
-                else if (var->row_len >= 2 && $4 != 2)
+                else if (var->row_len >= 2 && $3 != 2)
                         yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
 
                 /* 配列の次元によって分岐（コンパイル時）
@@ -2367,13 +2368,9 @@ assignment
                         pA(pop_stack);
                         pA("heap_offset = stack_socket;");
 
-                        /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
-                         * heap_base < 0 （空の場合）ならば、
-                         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
-                         */
-                        pA(pop_stack);
-                        pA("heap_base = stack_socket;");
-                        pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                        pA(pop_attachstack);
+                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
 
                         write_heap();
 
@@ -2389,13 +2386,9 @@ assignment
                         pA(pop_stack);
                         pA("heap_offset += stack_socket * %d;", var->col_len);
 
-                        /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
-                         * heap_base < 0 （空の場合）ならば、
-                         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
-                         */
-                        pA(pop_stack);
-                        pA("heap_base = stack_socket;");
-                        pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                        pA(pop_attachstack);
+                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
 
                         write_heap();
 
@@ -2407,35 +2400,79 @@ assignment
         ;
 
 ope_matrix
-        : __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER {
+        : __STATE_MAT var_identifier __OPE_SUBST var_identifier {
+                pA(pop_attachstack);
+                pA("matbpL = attachstack_socket;");
+                pA(pop_attachstack);
+                pA("matbpA = attachstack_socket;");
+
                 ope_matrix_copy($2, $4);
         }
-        | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_ZER {
+        | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_ZER {
+                pA(pop_attachstack);
+                pA("matbpA = attachstack_socket;");
+
                 pA("matfixL = 0;");
                 ope_matrix_scalar($2);
         }
-        | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_CON {
+        | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_CON {
+                pA(pop_attachstack);
+                pA("matbpA = attachstack_socket;");
+
                 pA("matfixL = 1 << 16;");
                 ope_matrix_scalar($2);
         }
-        | __STATE_MAT __IDENTIFIER __OPE_SUBST expression __OPE_MUL __STATE_MAT_CON {
+        | __STATE_MAT var_identifier __OPE_SUBST expression __OPE_MUL __STATE_MAT_CON {
                 pA(pop_stack);
                 pA("matfixL = stack_socket;");
+
+                pA(pop_attachstack);
+                pA("matbpA = attachstack_socket;");
+
                 ope_matrix_scalar($2);
         }
-        | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_IDN {
+        | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_IDN {
+                pA(pop_attachstack);
+                pA("matbpA = attachstack_socket;");
+
                 ope_matrix_idn($2);
         }
-        | __STATE_MAT __IDENTIFIER __OPE_SUBST __STATE_MAT_TRN __LB __IDENTIFIER __RB {
+        | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_TRN __LB var_identifier __RB {
+                pA(pop_attachstack);
+                pA("matbpL = attachstack_socket;");
+                pA(pop_attachstack);
+                pA("matbpA = attachstack_socket;");
+
                 ope_matrix_trn($2, $6);
         }
-        | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_ADD __IDENTIFIER {
+        | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_ADD var_identifier {
+                pA(pop_attachstack);
+                pA("matbpR = attachstack_socket;");
+                pA(pop_attachstack);
+                pA("matbpL = attachstack_socket;");
+                pA(pop_attachstack);
+                pA("matbpA = attachstack_socket;");
+
                 ope_matrix_add($2, $4, $6);
         }
-        | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_SUB __IDENTIFIER {
+        | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_SUB var_identifier {
+                pA(pop_attachstack);
+                pA("matbpR = attachstack_socket;");
+                pA(pop_attachstack);
+                pA("matbpL = attachstack_socket;");
+                pA(pop_attachstack);
+                pA("matbpA = attachstack_socket;");
+
                 ope_matrix_sub($2, $4, $6);
         }
-        | __STATE_MAT __IDENTIFIER __OPE_SUBST __IDENTIFIER __OPE_MUL __IDENTIFIER {
+        | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_MUL var_identifier {
+                pA(pop_attachstack);
+                pA("matbpR = attachstack_socket;");
+                pA(pop_attachstack);
+                pA("matbpL = attachstack_socket;");
+                pA(pop_attachstack);
+                pA("matbpA = attachstack_socket;");
+
                 ope_matrix_mul($2, $4, $6);
         }
         ;
@@ -2586,9 +2623,9 @@ comparison
         ;
 
 read_variable
-        : attach_base __IDENTIFIER {
+        : var_identifier {
                 /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($2);
+                struct Var* var = varlist_search($1);
                 if (var == NULL)
                         yyerror("syntax err: 未定義のスカラー変数から読もうとしました");
 
@@ -2599,13 +2636,9 @@ read_variable
                 /* スカラーなので読み込みオフセットは 0 */
                 pA("heap_offset = 0;");
 
-                /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
-                 * heap_base < 0 （空の場合）ならば、
-                 * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
-                 */
-                pA(pop_stack);
-                pA("heap_base = stack_socket;");
-                pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                pA(pop_attachstack);
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
 
                 read_heap();
 
@@ -2613,11 +2646,11 @@ read_variable
                 pA("stack_socket = heap_socket;");
                 pA(push_stack);
         }
-        | attach_base __IDENTIFIER __LB expression_list __RB {
+        | var_identifier __LB expression_list __RB {
                 /* ラベルリストに名前が存在しなければ、これは配列変数 */
-                if (labellist_search_unsafe($2) == -1) {
+                if (labellist_search_unsafe($1) == -1) {
                         /* 変数のスペックを得る。（コンパイル時） */
-                        struct Var* var = varlist_search($2);
+                        struct Var* var = varlist_search($1);
                         if (var == NULL)
                                 yyerror("syntax err: 未定義の配列変数から読もうとしました");
 
@@ -2628,11 +2661,11 @@ read_variable
                         /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
                         */
                         /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                        if (var->row_len == 1 && $4 != 1)
+                        if (var->row_len == 1 && $3 != 1)
                                 yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
 
                         /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                        else if (var->row_len >= 2 && $4 != 2)
+                        else if (var->row_len >= 2 && $3 != 2)
                                 yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
 
                         /* 配列の次元によって分岐（コンパイル時）
@@ -2642,13 +2675,9 @@ read_variable
                                 pA(pop_stack);
                                 pA("heap_offset = stack_socket;");
 
-                                /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
-                                 * heap_base < 0 （空の場合）ならば、
-                                 * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
-                                 */
-                                pA(pop_stack);
-                                pA("heap_base = stack_socket;");
-                                pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+                                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                                pA(pop_attachstack);
+                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
 
                                 read_heap();
 
@@ -2664,13 +2693,9 @@ read_variable
                                 pA(pop_stack);
                                 pA("heap_offset += stack_socket * %d;", var->col_len);
 
-                                /* 実行時にスタックからアタッチ値をポップし heap_base へセットし、
-                                 * heap_base < 0 （空の場合）ならば、
-                                 * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時）
-                                 */
-                                pA(pop_stack);
-                                pA("heap_base = stack_socket;");
-                                pA("if (heap_base < 0) {heap_base = %d;}", var->base_ptr);
+                                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                                pA(pop_attachstack);
+                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
 
                                 read_heap();
 
@@ -2688,7 +2713,7 @@ read_variable
                         /* gosub とほぼ同じ */
                         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
                         pA(push_labelstack);
-                        pA("PLIMM(P3F, %d);\n", labellist_search($2));
+                        pA("PLIMM(P3F, %d);\n", labellist_search($1));
                         pA("LB(0, %d);\n", cur_label_index_head);
                         cur_label_index_head++;
                 }
