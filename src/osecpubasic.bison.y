@@ -391,6 +391,37 @@ static char init_labelstack[] = {
         "labelstack_head = 0;\n"
 };
 
+/* アタッチスタックにアドレス（SInt32型）をプッシュする
+ * 事前に以下のレジスタをセットしておくこと
+ * atachstack_socket : プッシュしたい値。（SInt32型)
+ */
+static void push_attachstack(void)
+{
+        pA("PASMEM0(attachstack_socket, T_SINT32, attachstack_ptr, attachstack_head);");
+        pA("attachstack_head++;");
+}
+
+/* アタッチスタックからアドレス（SInt32型）をポップする
+ * ポップした値は atachstack_socket に格納される。（SInt32型)
+ */
+static void pop_attachstack(void)
+{
+        pA("attachstack_head--;");
+        pA("PALMEM0(attachstack_socket, T_SINT32, attachstack_ptr, attachstack_head);");
+}
+
+/* アタッチスタックの初期化
+ * アタッチスタックは、アタッチに用いるためのアドレスをスタックで管理するためのもの。
+ */
+static void init_attachstack(void)
+{
+        pA("VPtr attachstack_ptr:P05;");
+        pA("junkApi_malloc(attachstack_ptr, T_SINT32, 0x100000);");
+        pA("SInt32 attachstack_socket:R20;");
+        pA("SInt32 attachstack_head:R21;");
+        pA("attachstack_head = 0;");
+}
+
 /* プリセット関数やアキュムレーターを呼び出し命令に対して、追加でさらに共通の定型命令を出力する。
  * すなわち、関数呼び出しのラッパ。
  * （ラベルスタックへの戻りラベルのプッシュ、関数実行、関数後位置への戻りラベル設定）
@@ -624,6 +655,7 @@ void init_all(void)
         pA(init_heap);
         pA(init_stack);
         pA(init_labelstack);
+        init_attachstack();
         pA(init_eoe_arg);
 }
 
