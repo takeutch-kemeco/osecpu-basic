@@ -2097,6 +2097,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
         int32_t ival;
         float fval;
         char sval[0x1000];
+        struct Var* varptr;
 }
 
 %token __STATE_IF __STATE_THEN __STATE_ELSE
@@ -2748,14 +2749,7 @@ selection_if_e
         ;
 
 iterator_for
-        : __STATE_FOR __IDENTIFIER __OPE_SUBST expression {
-                /* このセクションはスカラー変数への代入なので、 assignment のスカラー版と同様
-                 * （$2が違うだけ）
-                 */
-                /* 書き込む値を読んでおく */
-                pA(pop_stack);
-                pA("heap_socket = stack_socket;");
-
+        : __STATE_FOR var_identifier {
                 /* 変数のスペックを得る。（コンパイル時） */
                 struct Var* var = varlist_search($2);
                 if (var == NULL)
@@ -2765,20 +2759,41 @@ iterator_for
                 if (var->col_len != 1 || var->row_len != 1)
                         yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
 
+                /* var（変数のスペック）は他の場所でも使うので、コンパイル時に参照できるように $$ で出力する。
+                 * （以降は$<varptr>3で参照できる）
+                 */
+                $<varptr>$ = var;
+
+        } __OPE_SUBST expression {
+                /* このセクションはスカラー変数への代入なので、 assignment のスカラー版と同様
+                 * （$2が違うだけ）
+                 */
+                /* 書き込む値を読んでおく */
+                pA(pop_stack);
+                pA("heap_socket = stack_socket;");
+
                 /* スカラーなので書き込みオフセットは 0 */
                 pA("heap_offset = 0;");
 
-/*問題あり*/
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                 * このアタッチは以降も使うので、ポップ直後にプッシュしておく
+                 */
+                pA(pop_attachstack);
+                pA(push_attachstack);
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
+
                 write_heap();
 
                 /* そして、代入後であるここに無名ラベルを作る（このforループは、以降はこの位置へと戻ってくる）
-                 * また、このラベルは next で戻ってくる際に使うので、この構文解析器で参照できるように $$ で出力する。（以降$5で参照できる）
-                 * この $5 ラベル番号で int32 型の値である。
+                 * また、このラベルは next で戻ってくる際に使うので、コンパイル時に参照できるように $$ で出力する。
+                 * （以降は$<ival>6で参照できる）
+                 * これはラベル番号で int32 型の値である。
                  * そして、ラベルを作成したので cur_label_index_head を一つ進める。
                  */
                 pA("LB(0, %d);\n", cur_label_index_head);
                 $<ival>$ = cur_label_index_head;
                 cur_label_index_head++;
+
         } __STATE_TO expression {
                 /* 条件を比較するために
                  * まずスタックに詰まれてる __STATE_TO expression (の戻り値)を得て、 forfixR（右辺用） へと退避しておく。
@@ -2791,9 +2806,16 @@ iterator_for
                  */
                 pA("heap_offset = 0;");
 
-/*問題あり*/
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                 * このアタッチは以降も使うので、ポップ直後にプッシュしておく
+                 */
+                pA(pop_attachstack);
+                pA(push_attachstack);
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
+
                 read_heap();
                 pA("forfixL = heap_socket;");
+
         } __STATE_STEP expression {
                 /* 条件比較の方向を判断するために、stepの値を読む必要がある
                  * そして、最後の next の時点でインクリメントに使用するのに備えて、再びプッシュしておく
@@ -2812,6 +2834,7 @@ iterator_for
                  * （真の場合の分岐は、そのまま以降の declaration_list となる）
                  */
                 pA("if (forfixL <= forfixR) {");
+
         } declaration_list __STATE_NEXT {
                 /* ここは真の場合の命令の続きで、declaration_list の本体が終了した時点 */
 
@@ -2825,19 +2848,21 @@ iterator_for
 
                 /* このセクションはスカラー変数の読み込みなので、read_variable とスカラー版とほぼ同様
                  */
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($2);
-                if (var == NULL)
-                        yyerror("syntax err: 未定義のスカラー変数を参照しようとしました");
 
                 /* 変数が配列な場合はエラー */
-                if (var->col_len != 1 || var->row_len != 1)
+                if ($<varptr>3->col_len != 1 || $<varptr>3->row_len != 1)
                         yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
 
                 /* スカラーなので読み込みオフセットは 0 */
                 pA("heap_offset = 0;");
 
-/*問題あり*/
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                 * このアタッチは以降も使うので、ポップ直後にプッシュしておく
+                 */
+                pA(pop_attachstack);
+                pA(push_attachstack);
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
+
                 read_heap();
 
                 /* 結果をforfixLにセットする */
@@ -2849,18 +2874,25 @@ iterator_for
 
                 pA("heap_offset = 0;");
 
-/*問題あり*/
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                 * このアタッチは以降も使うので、ポップ直後にプッシュしておく
+                 */
+                pA(pop_attachstack);
+                pA(push_attachstack);
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
+
                 write_heap();
 
                 /* その後、先頭で作成したラベル位置へと再び戻るために、 goto させる命令を書く。
-                 * これには $5 により示されるラベル位置を用いる。
+                 * これには $<ival>6 により示されるラベル位置を用いる。
                  * そして、真の場合の命令はここまでとなり、以降は偽の場合の命令となる
                  */
-                pA("PLIMM(P3F, %d);\n", $<ival>5);
+                pA("PLIMM(P3F, %d);\n", $<ival>6);
                 pA("} else {");
 
-                /* 偽の場合は、スタックをポップ（stepを捨てるため）して、そのまま終わる */
+                /* 偽の場合は、アタッチスタックとスタックをポップして（step等を捨てるため）して、そのまま終わる */
                 pA(pop_stack);
+                pA(pop_attachstack);
                 pA("}");
         }
         ;
