@@ -2174,7 +2174,9 @@ expression
         ;
 
 expression_list
-        :
+        : {
+                $$ = 0;
+        }
         | expression {
                 $$ = 1;
         }
@@ -2334,13 +2336,13 @@ func_sleep
 
 initializer
         : __STATE_DIM __IDENTIFIER {
-                varlist_add($2, 1, 1);
+                varlist_add_local($2, 1, 1);
         }
         | __STATE_DIM __IDENTIFIER __LB __CONST_INTEGER __RB {
-                varlist_add($2, 1, $4);
+                varlist_add_local($2, 1, $4);
         }
         | __STATE_DIM __IDENTIFIER __LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __RB {
-                varlist_add($2, $4, $6);
+                varlist_add_local($2, $4, $6);
         }
         ;
 
@@ -3000,7 +3002,9 @@ jump
         ;
 
 identifier_list
-        :
+        : {
+                $$ = 0;
+        }
         | __IDENTIFIER {
                 idenlist_push($1);
                 $$ = 1;
@@ -3040,7 +3044,7 @@ define_def_function
                         varlist_add_local(iden, 1, 1);
 
                         /* 変数のスペックを得る。（コンパイル時） */
-                        struct Var* var = varlist_search(iden);
+                        struct Var* var = varlist_search_local(iden);
                         if (var == NULL)
                                 yyerror("system err: defによる関数定義において、ローカル変数の作成に失敗しました");
 
@@ -3080,7 +3084,7 @@ define_full_function
                         varlist_add_local(iden, 1, 1);
 
                         /* 変数のスペックを得る。（コンパイル時） */
-                        struct Var* var = varlist_search(iden);
+                        struct Var* var = varlist_search_local(iden);
                         if (var == NULL)
                                 yyerror("system err: functionによる関数定義において、ローカル変数の作成に失敗しました");
 
