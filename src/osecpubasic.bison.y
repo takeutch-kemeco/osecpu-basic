@@ -868,7 +868,7 @@ static void __func_sqrt(void)
         endF();
 }
 
-/* powのバックエンドに用いる a ^ +b 限定（bが正の数の場合限定）のpow
+/* powのバックエンドに用いる ±a ^ +b (ただし b = 整数、かつ a != 0) 限定のpow。（bが正の場合限定のpow）
  * fixL ^ fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
@@ -947,7 +947,7 @@ static void __func_pow_p(void)
         endF();
 }
 
-/* powのバックエンドに用いる a ^ -b 限定（bが負の数の場合限定）のpow
+/* powのバックエンドに用いる ±a ^ -b (ただし b = 整数、かつ a != 0) 限定のpow。（bが負の場合限定のpow）
  * fixL ^ fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
@@ -973,31 +973,56 @@ static void __func_pow(void)
 {
         beginF();
 
-        /* 左辺が0の場合 */
-        pA("if (fixL == 0) {");
-                /* 右辺が0または負の場合は、計算未定義と表示して終了 */
-                pA("if(fixR <= 0) {");
-                        pA("junkApi_putConstString('err: 0^0 or 0^-x. This calculation is undefined.')");
-                        pA("jnukApi_exit(0)");
-
-                /* 右辺が正の場合は、常に0を返す */
-                pA("} else {");
-                        pA("fixA = 0;");
-                pA("}");
-
-        /* 左辺が非0の場合 */
-        pA("} else {");
-                /* 右辺が0または正の場合 */
+        /* 左辺が0以外で正の場合 */
+        pA("if (fixL > 0) {");
+                /* 右辺が0 または 正の整数の場合 */
                 pA("if (fixR >= 0) {");
                         push_eoe();
                         __func_pow_p();
                         pop_eoe();
+                pA("}");
 
-                /* 右辺が負の場合 */
-                pA("} else {");
+                /* 右辺が負の整数の場合 */
+                pA("if (fixR < 0) {");
+                        push_eoe();
+                        __func_pow_m();
+                        pop_eoe();
+                pA("}");
+        pA("}");
+
+        /* 左辺が0以外で負の場合 */
+        pA("if (fixL < 0) {");
+                /* 右辺が非整数の場合 */
+                pA("if ((fixR & 0x0000ffff) != 0) {");
+                        pA("junkApi_putConstString('system err: -a ^ 0.1 is not support.');");
+                        pA("jnukApi_exit(1);");
+                pA("}");
+
+                /* 右辺が0 または 正の整数の場合 */
+                pA("if (fixR >= 0) {");
                         push_eoe();
                         __func_pow_p();
                         pop_eoe();
+                pA("}");
+
+                /* 右辺が負の整数の場合 */
+                pA("if (fixR < 0) {");
+                        push_eoe();
+                        __func_pow_m();
+                        pop_eoe();
+                pA("}");
+        pA("}");
+
+        /* 左辺が0の場合 */
+        pA("if (fixL == 0) {");
+                /* 右辺が0または負の場合は、計算未定義と表示して終了 */
+                pA("if(fixR <= 0) {");
+                        pA("junkApi_putConstString('system err: 0 ^ 0 or 0 ^ -x is not support.');");
+                        pA("jnukApi_exit(1);");
+
+                /* 右辺が正の場合は、常に0を返す */
+                pA("} else {");
+                        pA("fixA = 0;");
                 pA("}");
         pA("}");
 

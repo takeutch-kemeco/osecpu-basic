@@ -122,8 +122,8 @@ char* linelist[0x10000];
 <main_process>"idn"     return(__STATE_MAT_IDN);
 <main_process>"trn"     return(__STATE_MAT_TRN);
 
-<main_process>"function"                {puts(yytext); return(__STATE_FUNCTION);}
-<main_process>"end"[ ]*"function"       {puts(yytext); return(__STATE_END_FUNCTION);}
+<main_process>"function"                {return(__STATE_FUNCTION);}
+<main_process>"end"[ ]*"function"       {return(__STATE_END_FUNCTION);}
 
 <main_process>"def"     return(__STATE_DEF);
 <main_process>","       return(__OPE_COMMA);
