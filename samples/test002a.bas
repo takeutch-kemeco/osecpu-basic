@@ -1,15 +1,21 @@
 dim c
-dim w
-dim h
-dim r
-dim g
-dim b
-for c := 0 to 10000 step 0.01
-        b := (sin c) * 255
-        for h := 0 to 255 step 1
-                for w := 0 to 255 step 1
+for c := 0 to 1234 step 0.05
+        dim b
+
+rem     b := (sin c) * 255
+        b := (cos c) * 255
+
+        if b < 0 then b := -b
+
+        dim h
+        for h := 1 to 255 step 1
+                dim w
+                for w := 1 to 255 step 1
+                        dim r
+                        dim g
                         r := w
                         g := h
+
                         drawpoint 0 w h r g b
                 next
         next

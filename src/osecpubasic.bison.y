@@ -1195,7 +1195,7 @@ static void __func_sin(void)
         void u(const int32_t p, const int32_t b)
         {
                 push_eoe();
-                pA("fixR = %d;", p << 16);
+                pA("fixR = %d;", p);
                 __func_pow();
                 pA("fixL = fixA;");
 
@@ -1232,11 +1232,11 @@ static void __func_sin(void)
         /* sin(0)のテーラー展開式を用いてsinを求める
          */
         pA("fixT = fixL;");
-        u(3, 10923);
+        u(196608, 10923);
         pA("fixT -= fixA;");
-        u(5, 546);
+        u(327680, 546);
         pA("fixT += fixA;");
-        u(7, 13);
+        u(458752, 13);
         pA("fixT -= fixA;");
 
         pA("fixA = fixT;");
@@ -1255,8 +1255,7 @@ static void __func_cos(void)
         const int32_t pi_h = 102943;
         const int32_t pi_2 = 411774;
 
-        /* 値を(±π/2)の範囲へ正規化する命令を出力する
-         * fixL -> fixL
+        /* ±(π/2)の範囲内へ丸める */
         push_eoe();
         pA("fixR = %d;", pi_2);
         __func_mod();
