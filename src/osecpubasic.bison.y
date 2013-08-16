@@ -833,6 +833,15 @@ static void __func_sqrt(void)
 {
         beginF();
 
+        /* 終了位置ラベル用（コンパイル時） */
+        static int32_t __func_sqrt_end_label = -1;
+
+        /* コンパイル時に、この関数の呼び出しの最初ならば、ラベル番号を確保する（コンパイル時） */
+        if (__func_sqrt_end_label == -1) {
+                __func_sqrt_end_label = cur_label_index_head;
+                cur_label_index_head++;
+        }
+
         /* fixL, fixT -> fixT */
         void nr(void)
         {
@@ -855,7 +864,11 @@ static void __func_sqrt(void)
                 __func_div();
                 pop_eoe();
 
-                pA("fixA = fixR - fixA;");
+                pA("fixT = fixA;");
+                pA("fixA = fixR - fixT;");
+
+                pA("if (fixT < 0) {fixT = -fixT;}");
+                pA("if (fixT < 0x00000100) {PLIMM(P3F, %d);}", __func_sqrt_end_label);
         }
 
         push_eoe();
@@ -871,6 +884,8 @@ static void __func_sqrt(void)
         pA("fixR = fixA;");     nr();
         pA("fixR = fixA;");     nr();
         pA("fixR = fixA;");     nr();
+
+        pA("LB(0, %d);", __func_sqrt_end_label);
 
         endF();
 }
