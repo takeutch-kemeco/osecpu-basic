@@ -761,7 +761,11 @@ static void __func_div(void)
          * （除算の場合は単位分 >> するので（すなわち >> 16））、
          * したがって結果を << 2 すれば（16 - 14 = 2だから） 0x00010000 を 1 とした場合での値となるはず。
          */
+
+        /* 絶対に0除算が起きないように、0ならば最小数に置き換えてから除算 */
+        pA("if (fixR == 0) {fixR = 1;}");
         pA("fixRx = 0x40000000 / fixR;");
+
         pA("fixR = fixRx << 2;");
 
         /* 他アキュムレーターを呼び出す前に eoe を退避しておく */
@@ -798,17 +802,20 @@ static void __func_mod(void)
 
         /* 符号が異なり、かつ、絶対値比較で fixL の方が小さい場合 */
         pA("if (fixLx < fixRx) {");
-        pA("if (fixS == 1) {fixS = 3; fixA = fixL + fixR;}");
-        pA("if (fixS == 2) {fixS = 3; fixA = fixL + fixR;}");
+                pA("if (fixS == 1) {fixS = 3; fixA = fixL + fixR;}");
+                pA("if (fixS == 2) {fixS = 3; fixA = fixL + fixR;}");
         pA("}");
 
         /* それ以外の場合 */
         pA("if (fixS != 3) {");
-        pA("fixT = fixL / fixR;");
-        /* floor */
-        pA("if (fixT < 0) {fixT -= 1;}");
-        pA("fixRx = fixT * fixR;");
-        pA("fixA = fixL - fixRx;");
+                /* 絶対に0除算が起きないように、0ならば最小数に置き換えてから除算 */
+                pA("if (fixR == 0) {fixR = 1;}");
+                pA("fixT = fixL / fixR;");
+
+                /* floor */
+                pA("if (fixT < 0) {fixT -= 1;}");
+                pA("fixRx = fixT * fixR;");
+                pA("fixA = fixL - fixRx;");
         pA("}");
 
         endF();
