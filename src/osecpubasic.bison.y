@@ -2154,8 +2154,11 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __STATE_LET __STATE_DEF __STATE_DIM
 %token __STATE_FUNCTION __STATE_END_FUNCTION
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
+
 %token __FUNC_SIN __FUNC_COS __FUNC_TAN __FUNC_SQRT
-%token __FUNC_DRAWPOINT __FUNC_DRAWLINE __FUNC_SLEEP
+
+%token __FUNC_OPENWIN __FUNC_DRAWPOINT __FUNC_DRAWLINE __FUNC_SLEEP
+
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
@@ -2172,8 +2175,11 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> __CONST_STRING __IDENTIFIER __LABEL __DEFINE_LABEL
 
 %type <sval> func_print
+
 %type <sval> func_sin func_cos func_tan
-%type <sval> func_drawline func_drawpoint func_sleep
+
+%type <sval> func_openwin func_drawpoint func_drawline func_sleep
+
 %type <sval> operation const_variable read_variable
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
@@ -2246,6 +2252,7 @@ function
         | func_cos
         | func_tan
         | func_sqrt
+        | func_openwin
         | func_drawpoint
         | func_drawline
         | func_sleep
@@ -2296,6 +2303,21 @@ func_sqrt
                 __func_sqrt();
                 pA("stack_socket = fixA;");
                 pA(push_stack);
+        }
+        ;
+
+func_openwin
+        : __FUNC_OPENWIN expression expression {
+                beginF();
+
+                pA(pop_stack);
+                pA("fixR = stack_socket >> 16;");       /* y */
+                pA(pop_stack);
+                pA("fixL = stack_socket >> 16;");       /* x */
+
+                pA("junkApi_openWin(fixL, fixR);");
+
+                endF();
         }
         ;
 
