@@ -1330,6 +1330,139 @@ static void __func_tan(void)
         endF();
 }
 
+/* 描画領域を初期設定をして開く
+ * fixL, fixR -> null
+ * あらかじめ fix? に配列の値をセットしておくこと。 演算結果は存在しない。
+ *
+ * fixL: 描画領域のwidth
+ * fixR: 描画り領域のheight
+ */
+static void __func_openwin(void)
+{
+        beginF();
+
+        pA("fixR >>= 16;");
+        pA("fixL >>= 16;");
+        pA("junkApi_openWin(fixL, fixR);");
+
+        endF();
+}
+
+/* 指定ミリ秒間だけスリープする
+ * fixL, fixR -> null
+ * あらかじめ fix? に配列の値をセットしておくこと。 演算結果は存在しない。
+ *
+ * fixL: mode
+ * fixR: スリープ時間（ミリ秒単位）
+ */
+static void __func_sleep(void)
+{
+        beginF();
+
+        pA("fixR >>= 16;");
+        pA("fixL >>= 16;");
+        pA("junkApi_sleep(fixL, fixR);");
+
+        endF();
+}
+
+/* 三色の数値をRGBへとまとめる
+ * fixL, fixR, fixS -> fixA
+ * あらかじめ fix? に配列の値をセットしておくこと。 演算結果はfixAへと出力される。
+ *
+ * fixL: 赤 (0 ～ 255)
+ * fixR: 緑 (0 ～ 255)
+ * fixS: 青 (0 ～ 255)
+ *
+ * 赤・緑・青を、32bitのRGB値へと変換する。フォーマットは 0x00RRGGBB
+ * 多くの関数で色値が必要な場合は、この値を渡せばいい。
+ */
+static void __func_torgb(void)
+{
+        beginF();
+
+        pA("fixL &= 0x00ff0000;");      /* R */
+        pA("fixR &= 0x00ff0000;");      /* G */
+        pA("fixS &= 0x00ff0000;");      /* B */
+
+        pA("fixA = fixL;");
+        pA("fixA |= fixR >> 8;");
+        pA("fixA |= fixS >> 16;");
+
+        endF();
+}
+
+/* 描画領域に点を描く
+ * fixT, fixL, fixR, fixS -> null
+ * あらかじめ fix? に配列の値をセットしておくこと。 演算結果は存在しない。
+ *
+ * fixT: mode
+ * fixL: x座標
+ * fixR: y座標
+ * fixS: RGB （32bitカラー。フォーマットは0x00RRGGBB）
+ */
+static void __func_drawpoint(void)
+{
+        beginF();
+
+        pA("fixT >>= 16;");     /* mode */
+        pA("fixL >>= 16;");     /* x */
+        pA("fixR >>= 16;");     /* y */
+        pA("junkApi_drawPoint(fixT, fixL, fixR, fixS);");
+
+        endF();
+}
+
+/* 描画領域に線を描く
+ * fixT, fixL, fixR, fixLx, fixRx, fixS -> null
+ * あらかじめ fix? に配列の値をセットしておくこと。 演算結果は存在しない。
+ *
+ * fixT: mode
+ * fixL: 始点x座標
+ * fixR: 始点y座標
+ * fixLx: 終点x座標
+ * fixRx: 終点y座標
+ * fixS: RGB （32bitカラー。フォーマットは0x00RRGGBB）
+ */
+static void __func_drawline(void)
+{
+        beginF();
+
+        pA("fixT >>= 16;");     /* mode */
+        pA("fixL >>= 16;");     /* x0 */
+        pA("fixR >>= 16;");     /* y0 */
+        pA("fixLx >>= 16;");    /* x1 */
+        pA("fixRx >>= 16;");    /* y1 */
+        pA("junkApi_drawLine(fixT, fixL, fixR, fixLx, fixRx, fixS);");
+
+        endF();
+}
+
+/* 描画領域の指定領域を塗りつぶす
+ * fixT, fixL, fixR, fixLx, fixRx, fixS -> null
+ * あらかじめ fix? に配列の値をセットしておくこと。 演算結果は存在しない。
+ *
+ * fixT: mode
+ * fixL: 領域のよこ幅
+ * fixR: 領域のたて幅
+ * fixLx: 終点x座標
+ * fixRx: 終点y座標
+ * fixS: RGB （32bitカラー。フォーマットは0x00RRGGBB）
+ */
+static void __func_fillrect(void)
+{
+        beginF();
+
+        pA("fixT >>= 16;");     /* mode */
+        pA("fixL >>= 16;");     /* x0 */
+        pA("fixR >>= 16;");     /* y0 */
+        pA("fixLx >>= 16;");    /* x1 */
+        pA("fixRx >>= 16;");    /* y1 */
+        pA("junkApi_fillRect(fixT, fixL, fixR, fixLx, fixRx, fixS);");
+
+        endF();
+}
+
 /* 線分ベクトルの絶対値を得る命令を出力する
  * あらかじめ各 fix? に所定の値をセットしておくこと。 演算結果はfixAへ出力される。
  * fixL:x0, fixR:y0, fixLx:x1, fixRx:y1 -> fixA
@@ -2235,7 +2368,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 
 %token __FUNC_SIN __FUNC_COS __FUNC_TAN __FUNC_SQRT
 
-%token __FUNC_OPENWIN __FUNC_DRAWPOINT __FUNC_DRAWLINE __FUNC_FILLRECT __FUNC_SLEEP
+%token __FUNC_OPENWIN __FUNC_TORGB __FUNC_DRAWPOINT __FUNC_DRAWLINE __FUNC_FILLRECT __FUNC_SLEEP
 
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB
@@ -2256,7 +2389,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 
 %type <sval> func_sin func_cos func_tan
 
-%type <sval> func_openwin func_drawpoint func_drawline func_fillrect func_sleep
+%type <sval> func_openwin func_torgb func_drawpoint func_drawline func_fillrect func_sleep
 
 %type <sval> operation const_variable read_variable
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
@@ -2331,6 +2464,7 @@ function
         | func_tan
         | func_sqrt
         | func_openwin
+        | func_torgb
         | func_drawpoint
         | func_drawline
         | func_fillrect
@@ -2387,134 +2521,89 @@ func_sqrt
 
 func_openwin
         : __FUNC_OPENWIN expression expression {
-//                beginF();
-
                 pA(pop_stack);
-                pA("fixR = stack_socket >> 16;");       /* y */
+                pA("fixR = stack_socket;");     /* y */
                 pA(pop_stack);
-                pA("fixL = stack_socket >> 16;");       /* x */
+                pA("fixL = stack_socket;");     /* x */
+                __func_openwin();
+        }
+        ;
 
-                pA("junkApi_openWin(fixL, fixR);");
-
-//                endF();
+func_torgb
+        : __FUNC_TORGB expression expression expression
+        {
+                pA(pop_stack);
+                pA("fixS = stack_socket;");     /* B */
+                pA(pop_stack);
+                pA("fixR = stack_socket;");     /* G */
+                pA(pop_stack);
+                pA("fixL = stack_socket;");     /* R */
+                __func_torgb();
+                pA("stack_socket = fixA;");
+                pA(push_stack);
         }
         ;
 
 func_drawpoint
-        : __FUNC_DRAWPOINT expression expression expression
-                           expression expression expression
+        : __FUNC_DRAWPOINT expression expression expression expression
         {
-//                beginF();
-
                 pA(pop_stack);
-                pA("fixL = stack_socket & 0x00ff0000;");     /* B */
+                pA("fixS = stack_socket;");     /* RGB */
                 pA(pop_stack);
-                pA("fixR = stack_socket & 0x00ff0000;");     /* G */
+                pA("fixR = stack_socket;");     /* y0 */
                 pA(pop_stack);
-                pA("fixT = stack_socket & 0x00ff0000;");     /* R */
-
-                /* RGB */
-                pA("fixS = fixL >> 16;");
-                pA("fixS |= fixR >> 8;");
-                pA("fixS |= fixT;");
-
+                pA("fixL = stack_socket;");     /* x0 */
                 pA(pop_stack);
-                pA("fixR = stack_socket >> 16;");       /* y */
-                pA(pop_stack);
-                pA("fixL = stack_socket >> 16;");       /* x */
-                pA(pop_stack);
-                pA("fixT = stack_socket >> 16;");       /* mode */
-
-                pA("junkApi_drawPoint(fixT, fixL, fixR, fixS);");
-
-                pA(push_stack);
-
-//                endF();
+                pA("fixT = stack_socket;");     /* mode */
+                __func_drawpoint();
         }
         ;
 
 func_drawline
-        : __FUNC_DRAWLINE expression expression expression expression expression
-                          expression expression expression
+        : __FUNC_DRAWLINE expression expression expression expression expression expression
         {
-//                beginF();
-
                 pA(pop_stack);
-                pA("fixL = stack_socket & 0x00ff0000;");     /* B */
+                pA("fixS = stack_socket;");     /* RGB */
                 pA(pop_stack);
-                pA("fixR = stack_socket & 0x00ff0000;");     /* G */
+                pA("fixRx = stack_socket;");    /* y1 */
                 pA(pop_stack);
-                pA("fixT = stack_socket & 0x00ff0000;");     /* R */
-
-                /* RGB */
-                pA("fixS = fixL >> 16;");
-                pA("fixS |= fixR >> 8;");
-                pA("fixS |= fixT;");
-
+                pA("fixLx = stack_socket;");    /* x1 */
                 pA(pop_stack);
-                pA("fixR = stack_socket >> 16;");     /* y1 */
+                pA("fixR = stack_socket;");     /* y0 */
                 pA(pop_stack);
-                pA("fixL = stack_socket >> 16;");     /* x1 */
+                pA("fixL = stack_socket;");     /* x0 */
                 pA(pop_stack);
-                pA("fixRx = stack_socket >> 16;");    /* y0 */
-                pA(pop_stack);
-                pA("fixLx = stack_socket >> 16;");    /* x0 */
-                pA(pop_stack);
-                pA("fixT = stack_socket >> 16;");     /* mode */
-
-                pA("junkApi_drawLine(fixT, fixLx, fixRx, fixL, fixR, fixS);");
-
-//                endF();
+                pA("fixT = stack_socket;");     /* mode */
+                __func_drawline();
         }
         ;
 
 func_fillrect
-        : __FUNC_FILLRECT expression expression expression expression expression
-                          expression expression expression
+        : __FUNC_FILLRECT expression expression expression expression expression expression
         {
-//                beginF();
-
                 pA(pop_stack);
-                pA("fixL = stack_socket & 0x00ff0000;");     /* B */
+                pA("fixS = stack_socket;");     /* RGB */
                 pA(pop_stack);
-                pA("fixR = stack_socket & 0x00ff0000;");     /* G */
+                pA("fixRx = stack_socket;");    /* y1 */
                 pA(pop_stack);
-                pA("fixT = stack_socket & 0x00ff0000;");     /* R */
-
-                /* RGB */
-                pA("fixS = fixL >> 16;");
-                pA("fixS |= fixR >> 8;");
-                pA("fixS |= fixT;");
-
+                pA("fixLx = stack_socket;");    /* x1 */
                 pA(pop_stack);
-                pA("fixR = stack_socket >> 16;");     /* y */
+                pA("fixR = stack_socket;");     /* y0 */
                 pA(pop_stack);
-                pA("fixL = stack_socket >> 16;");     /* x */
+                pA("fixL = stack_socket;");     /* x0 */
                 pA(pop_stack);
-                pA("fixRx = stack_socket >> 16;");    /* h */
-                pA(pop_stack);
-                pA("fixLx = stack_socket >> 16;");    /* w */
-                pA(pop_stack);
-                pA("fixT = stack_socket >> 16;");     /* mode */
-
-                pA("junkApi_fillRect(fixT, fixLx, fixRx, fixL, fixR, fixS);");
-
-//                endF();
+                pA("fixT = stack_socket;");     /* mode */
+                __func_fillrect();
         }
         ;
 
 func_sleep
         : __FUNC_SLEEP expression expression {
-//                beginF();
-
                 pA(pop_stack);
-                pA("fixS = stack_socket >> 16;");       /* msec */
+                pA("fixR = stack_socket;");     /* msec */
                 pA(pop_stack);
-                pA("fixT = stack_socket >> 16;");       /* mode */
-
-                pA("junkApi_sleep(fixT, fixS);");
-
-//                endF();
+                pA("fixL = stack_socket;");     /* mode */
+                __func_sleep();
         }
         ;
 

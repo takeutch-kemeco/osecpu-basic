@@ -43,22 +43,25 @@ openwin scw sch
         mat vtx(0)<-v:=vtx(0)<-v+ov; mat vtx(1)<-v:=vtx(1)<-v+ov; mat vtx(2)<-v:=vtx(2)<-v+ov; mat vtx(3)<-v:=vtx(3)<-v+ov;
         mat vtx(4)<-v:=vtx(4)<-v+ov; mat vtx(5)<-v:=vtx(5)<-v+ov; mat vtx(6)<-v:=vtx(6)<-v+ov; mat vtx(7)<-v:=vtx(7)<-v+ov;
 
-        drawline 0 vtx(0)<-v(0) vtx(0)<-v(1) vtx(1)<-v(0) vtx(1)<-v(1) 255 255 255
-        drawline 0 vtx(1)<-v(0) vtx(1)<-v(1) vtx(2)<-v(0) vtx(2)<-v(1) 255 255 255
-        drawline 0 vtx(2)<-v(0) vtx(2)<-v(1) vtx(3)<-v(0) vtx(3)<-v(1) 255 255 255
-        drawline 0 vtx(3)<-v(0) vtx(3)<-v(1) vtx(0)<-v(0) vtx(0)<-v(1) 255 255 255
+        dim col; col:=torgb 255 255 255
+        drawline 0 vtx(0)<-v(0) vtx(0)<-v(1) vtx(1)<-v(0) vtx(1)<-v(1) col
+        drawline 0 vtx(1)<-v(0) vtx(1)<-v(1) vtx(2)<-v(0) vtx(2)<-v(1) col
+        drawline 0 vtx(2)<-v(0) vtx(2)<-v(1) vtx(3)<-v(0) vtx(3)<-v(1) col
+        drawline 0 vtx(3)<-v(0) vtx(3)<-v(1) vtx(0)<-v(0) vtx(0)<-v(1) col
 
-        drawline 0 vtx(4)<-v(0) vtx(4)<-v(1) vtx(5)<-v(0) vtx(5)<-v(1) 255 255 255
-        drawline 0 vtx(5)<-v(0) vtx(5)<-v(1) vtx(6)<-v(0) vtx(6)<-v(1) 255 255 255
-        drawline 0 vtx(6)<-v(0) vtx(6)<-v(1) vtx(7)<-v(0) vtx(7)<-v(1) 255 255 255
-        drawline 0 vtx(7)<-v(0) vtx(7)<-v(1) vtx(4)<-v(0) vtx(4)<-v(1) 255 255 255
+        drawline 0 vtx(4)<-v(0) vtx(4)<-v(1) vtx(5)<-v(0) vtx(5)<-v(1) col
+        drawline 0 vtx(5)<-v(0) vtx(5)<-v(1) vtx(6)<-v(0) vtx(6)<-v(1) col
+        drawline 0 vtx(6)<-v(0) vtx(6)<-v(1) vtx(7)<-v(0) vtx(7)<-v(1) col
+        drawline 0 vtx(7)<-v(0) vtx(7)<-v(1) vtx(4)<-v(0) vtx(4)<-v(1) col
 
-        drawline 0 vtx(0)<-v(0) vtx(0)<-v(1) vtx(4)<-v(0) vtx(4)<-v(1) 255 255 255
-        drawline 0 vtx(1)<-v(0) vtx(1)<-v(1) vtx(5)<-v(0) vtx(5)<-v(1) 255 255 255
-        drawline 0 vtx(2)<-v(0) vtx(2)<-v(1) vtx(6)<-v(0) vtx(6)<-v(1) 255 255 255
-        drawline 0 vtx(3)<-v(0) vtx(3)<-v(1) vtx(7)<-v(0) vtx(7)<-v(1) 255 255 255
+        drawline 0 vtx(0)<-v(0) vtx(0)<-v(1) vtx(4)<-v(0) vtx(4)<-v(1) col
+        drawline 0 vtx(1)<-v(0) vtx(1)<-v(1) vtx(5)<-v(0) vtx(5)<-v(1) col
+        drawline 0 vtx(2)<-v(0) vtx(2)<-v(1) vtx(6)<-v(0) vtx(6)<-v(1) col
+        drawline 0 vtx(3)<-v(0) vtx(3)<-v(1) vtx(7)<-v(0) vtx(7)<-v(1) col
 
 
         sleep 0 16
-        fillrect 0  scw sch 0 0 100 140 180
+
+        col:=torgb 100 140 180
+        fillrect 0  scw sch 0 0 col
 goto *LLL

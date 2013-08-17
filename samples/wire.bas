@@ -7,7 +7,8 @@ for r := 0 to (3.14 * 2) step 0.05
         h := fy(r)
         print w
         print h
-        drawline 0 100 + w 300 + h 100 + w 300 + h 255 255 255
+        dim col; col:=torgb 255 255 255
+        drawline 0 100 + w 300 + h 100 + w 300 + h col
 next
 
 goto *END
