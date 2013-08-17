@@ -10,7 +10,7 @@ for c := 0 to 1234 step 0.05
         for h := 0 to 255 step 1
                 dim w
                 for w := 0 to 255 step 1
-                        dim col; col:=torgb w h 0
+                        dim col; col:=torgb w h b
                         drawpoint 0 w h col;
                 next
         next
