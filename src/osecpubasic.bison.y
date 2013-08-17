@@ -2484,7 +2484,6 @@ function
         | __FUNC_MID_S expression {}
         | __FUNC_RND {}
         | __FUNC_INPUT_S {}
-        | __FUNC_PEEK expression {}
         | func_sin
         | func_cos
         | func_tan
