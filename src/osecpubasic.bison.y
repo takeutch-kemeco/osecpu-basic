@@ -1205,6 +1205,32 @@ static void __func_print(void)
         endF();
 }
 
+/* ヒープメモリー上の任意アドレスから１ワード読み込む
+ * fixL -> fixA
+ * 予め fixL に読み込み先アドレスをセットしておくこと。 演算結果は fixA へ出力される。
+ *
+ * アドレスはFix32ではなくSInt32型の数として指定します。（Fix32型を >> 16 した値で指定します）
+ *
+ * アドレス指定も、読み込み単位も、バイト単位ではなくワード単位です。(１ワードはSInt32)
+ */
+static void __func_peek(void)
+{
+        pA("PALMEM0(fixA, T_SINT32, fixL, heap_head);");
+}
+
+/* ヒープメモリー上の任意アドレスへ１ワード書き込む
+ * fixL, fixR -> null
+ * 予め fixL に書き込み先アドレス、 fixR に書き込む値（１ワード）をセットしておくこと。 演算結果は存在しない。
+ *
+ * アドレスはFix32ではなくSInt32型の数として指定します。（Fix32型を >> 16 した値で指定します）
+ *
+ * アドレス指定も、書き込み単位も、バイト単位ではなくワード単位です。(１ワードはSInt32)
+ */
+static void __func_poke(void)
+{
+        pA("PASMEM0(fixR, T_SINT32, fixL, heap_head);");
+}
+
 /* sin命令を出力する
  * fixL -> fixA
  * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
@@ -2385,7 +2411,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <fval> __CONST_FLOAT
 %type <sval> __CONST_STRING __IDENTIFIER __LABEL __DEFINE_LABEL
 
-%type <sval> func_print
+%type <sval> func_print func_peek func_poke
 
 %type <sval> func_sin func_cos func_tan
 
@@ -2451,8 +2477,8 @@ expression_list
 function
         : func_print
         | __FUNC_INPUT {}
-        | __FUNC_PEEK {}
-        | __FUNC_POKE expression {}
+        | func_peek
+        | func_poke
         | __FUNC_CHR_S expression {}
         | __FUNC_VAL expression {}
         | __FUNC_MID_S expression {}
@@ -2476,6 +2502,26 @@ func_print
                 pA(pop_stack);
                 pA("fixL = stack_socket;");
                 __func_print();
+        }
+        ;
+
+func_peek
+        : __FUNC_PEEK expression {
+                pA(pop_stack);
+                pA("fixL = stack_socket;");
+                __func_peek();
+                pA("fixA = stack_socket;");
+                pA(push_stack);
+        }
+        ;
+
+func_poke
+        : __FUNC_POKE expression expression {
+                pA(pop_stack);
+                pA("fixR = stack_socket;");
+                pA(pop_stack);
+                pA("fixL = stack_socket;");
+                __func_poke();
         }
         ;
 
