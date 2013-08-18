@@ -31,10 +31,17 @@
 extern int32_t linenumber;
 extern char* linelist[0x10000];
 
-void yyerror(const char *s)
+/* 警告表示 */
+static void yywarning(const char *s)
 {
         printf("line %05d: %s\n", linenumber, s);
         printf("            %s\n", linelist[linenumber]);
+}
+
+/* エラー表示 */
+void yyerror(const char *s)
+{
+        yywarning(s);
         exit(EXIT_FAILURE);
 }
 
@@ -1155,6 +1162,150 @@ static void __func_minus(void)
         pA("fixA = -fixL;");
 
         endF();
+}
+
+/* 以下、各種代入関数 */
+
+/* heap_base, heap_offset で指定されたヒープへ、heap_socket の値を書き込む。
+ * 主に __assignment_scaler(), __assignment_array() の共通処理を抜き出したもの。
+ *
+ * 書き込む値はあらかじめ heap_socket にセットされている前提。
+ * また、アタッチはあらかじめアタッチスタックにプッシュされてる前提。
+ * また、heap_baseにはデフォルトの値があらかじめセットされている前提。（これはアタッチ値が-1（アタッチ無し）の場合に利用される値）
+ * また、heap_offsetにも既に適切な値がセットされている前提。
+ *
+ * 非公開関数
+ */
+static void __assignment_common(void)
+{
+        beginF();
+
+        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
+         * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
+         */
+        pA(pop_attachstack);
+        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
+
+        write_heap();
+
+        endF();
+}
+
+/* 名前がidenのスカラー変数へ、値を代入する。
+ *
+ * iden へは代入先の配列変数名を渡す
+ *
+ * 値はあらかじめスタックにプッシュされてる前提。
+ * また、アタッチも同様にあらかじめアタッチスタックにプッシュされてる前提。
+ */
+static void __assignment_scaler(const char* iden)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* var = varlist_search(iden);
+        if (var == NULL)
+                yyerror("syntax err: 未定義のスカラー変数へ代入しようとしました");
+
+        /* 変数が配列な場合はエラー（コンパイル時） */
+        if (var->row_len != 1 || var->col_len != 1)
+                yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
+
+        /* ヒープ書き込み位置のデフォルト値をセットする命令を出力する（コンパイル時） */
+        pA("heap_base = %d;", var->base_ptr);
+
+        /* 書き込む値を読んでおく */
+        pA(pop_stack);
+        pA("heap_socket = stack_socket;");
+
+        /* スカラーなので書き込みオフセットは0 */
+        pA("heap_offset = 0;");
+
+        /* アタッチも考慮してのヒープへの書き込み
+         */
+        __assignment_common();
+}
+
+/* 名前がidenの配列変数中の、任意インデックス番目の要素へ、値を代入する。
+ *
+ * iden へは代入先の配列変数名を渡す
+ * dimlen へは iden への添字の次元を渡す（構文エラーの判別に用います）
+ *
+ * 値はあらかじめスタックにプッシュされてる前提。
+ * 連続でポップした場合の順番は、
+ *     スカラーならば 書き込み値
+ *     １次元配列ならば 書き込み値、 添字
+ *     2次元配列ならば 書き込み値、 列添字、 行添字
+ * という順番でスタックに詰まれている前提。
+ *
+ * また、アタッチも同様にあらかじめアタッチスタックにプッシュされてる前提。
+ */
+static void __assignment_array(const char* iden, const int32_t dimlen)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* var = varlist_search(iden);
+        if (var == NULL)
+                yyerror("syntax err: 未定義の配列変数へ代入しようとしました");
+
+        /* 変数がスカラーな場合は警告（コンパイル時） */
+        if (var->row_len == 1 && var->col_len == 1) {
+                yywarning("syntax warning: スカラー変数へ添字による書き込みを行おうとしました。"
+                          "これは不正ではありませんが、意図的な記述で無いならばミスの可能性が高いです");
+        }
+
+        /* 変数の次元に対して、指定された添字の次元が異なる場合を調べてエラー表示する（コンパイル時）
+         */
+
+        /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合は警告（コンパイル時） */
+        if (var->row_len == 1 && dimlen != 1) {
+                yywarning("syntax warning: 1次元配列として宣言された変数に対して、異なる次元の添字を指定しました。"
+                          "これは不正ではありませんが、意図的な記述で無いならばミスの可能性が高いです");
+        }
+
+        /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合は警告（コンパイル時） */
+        if (var->row_len >= 2 && dimlen != 2)
+                yywarning("syntax warning: 2次元配列として宣言された変数に対して、異なる次元の添字を指定しました。"
+                          "これは不正ではありませんが、意図的な記述で無いならばミスの可能性が高いです");
+
+        /* 配列の添字が0次元の場合はエラー（コンパイル時） */
+        if (dimlen == 0)
+                yyerror("syntax err: 配列の添字がありません");
+
+        /* 配列の添字が3次元以上の場合はエラー（コンパイル時） */
+        if (dimlen >= 3)
+                yyerror("syntax err: 配列の添字の個数が多すぎます。この言語では２次元配列までしか使えません");
+
+        /* ヒープ書き込み位置のデフォルト値をセットする命令を出力する（コンパイル時） */
+        pA("heap_base = %d;", var->base_ptr);
+
+        /* 書き込む値をスタックから読み込む命令を出力（コンパイル時） */
+        pA(pop_stack);
+        pA("heap_socket = stack_socket;");
+
+        /* ヒープ書き込みオフセット位置をセットする命令を出力する（コンパイル時）
+         * これは配列の次元によって分岐する
+         */
+        /* １次元配列の場合 */
+        if (var->row_len == 1) {
+                pA(pop_stack);
+                pA("heap_offset = stack_socket;");
+
+        /* 2次元配列の場合 */
+        } else if (var->row_len >= 2) {
+                /* これは[行, 列]の列 */
+                pA(pop_stack);
+                pA("heap_offset = stack_socket;");
+
+                /* これは[行, 列]の行 */
+                pA(pop_stack);
+                pA("heap_offset += stack_socket * %d;", var->col_len);
+
+        /* 1,2次元以外の場合はシステムエラー */
+        } else {
+                yyerror("system err: assignment, var->row_len の値が不正です");
+        }
+
+        /* アタッチも考慮してのヒープへの書き込み
+         */
+        __assignment_common();
 }
 
 /* 以下、各種プリセット関数 */
@@ -2684,87 +2835,10 @@ var_identifier
 
 assignment
         : var_identifier __OPE_SUBST expression {
-                /* 書き込む値を読んでおく */
-                pA(pop_stack);
-                pA("heap_socket = stack_socket;");
-
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($1);
-                if (var == NULL)
-                        yyerror("syntax err: 未定義のスカラー変数へ代入しようとしました");
-
-                /* 変数が配列な場合はエラー（コンパイル時） */
-                if (var->row_len != 1 || var->col_len != 1)
-                        yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
-
-                /* スカラーなので書き込みオフセットは 0 */
-                pA("heap_offset = 0;");
-
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                pA(pop_attachstack);
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
-
-                write_heap();
+                __assignment_scaler($1);
         }
         | var_identifier __LB expression_list __RB __OPE_SUBST expression {
-                /* 書き込む値を読んでおく */
-                pA(pop_stack);
-                pA("heap_socket = stack_socket;");
-
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($1);
-                if (var == NULL)
-                        yyerror("syntax err: 未定義の配列変数へ代入しようとしました");
-
-                /* 変数がスカラーな場合はエラー（コンパイル時） */
-                if (var->row_len == 1 && var->col_len == 1)
-                        yyerror("syntax err: スカラー変数へ添字による書き込みを行おうとしました");
-
-                /* 配列の次元に対して、添字の次元が異なる場合にエラーとする（コンパイル時）
-                 */
-                /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合（コンパイル時） */
-                if (var->row_len == 1 && $3 != 1)
-                        yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
-
-                /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合（コンパイル時） */
-                else if (var->row_len >= 2 && $3 != 2)
-                        yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
-
-                /* 配列の次元によって分岐（コンパイル時）
-                 */
-                /* １次元配列の場合 */
-                if (var->row_len == 1) {
-                        pA(pop_stack);
-                        pA("heap_offset = stack_socket;");
-
-                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                        pA(pop_attachstack);
-                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
-
-                        write_heap();
-
-                /* 2次元配列の場合 */
-                } else if (var->row_len >= 2) {
-                        /* これは[行, 列]の列 */
-                        pA(pop_stack);
-                        pA("heap_offset = stack_socket;");
-
-                        /* これは[行, 列]の行。
-                         * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
-                         */
-                        pA(pop_stack);
-                        pA("heap_offset += stack_socket * %d;", var->col_len);
-
-                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                        pA(pop_attachstack);
-                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
-
-                        write_heap();
-
-                /* 1,2次元以外の場合はシステムエラー */
-                } else {
-                        yyerror("system err: assignment, var->row_len の値が不正です");
-                }
+                __assignment_array($1, $3);
         }
         ;
 
