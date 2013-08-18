@@ -268,6 +268,17 @@ static char push_stack[] = {
         __PUSH_STACK
 };
 
+/* 任意のレジスターの値をスタックにプッシュする。
+ * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
+ *
+ * （R02という若いレジスターを経由しなくなるので、高速化の可能性については微妙。逆に遅くなる可能性すらある）
+ */
+static void push_stack_direct(const char* register_name)
+{
+        pA("PASMEM0(%s, T_SINT32, stack_ptr, stack_head);", register_name);
+        pA("stack_head++;");
+}
+
 /* スタックからint32型（またはfix32型）をポップする
  * ポップした値は stack_socket に格納される。
  */
@@ -278,6 +289,17 @@ static char push_stack[] = {
 static char pop_stack[] = {
         __POP_STACK
 };
+
+/* スタックから任意のレジスターへ値をポップする。
+ * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
+ *
+ * （R02という若いレジスターを経由しなくなるので、高速化の可能性については微妙。逆に遅くなる可能性すらある）
+ */
+static void pop_stack_direct(const char* register_name)
+{
+        pA("stack_head--;");
+        pA("PALMEM0(%s, T_SINT32, stack_ptr, stack_head);", register_name);
+}
 
 /* スタックの初期化
  */
@@ -407,6 +429,16 @@ static char push_attachstack[] = {
         "attachstack_head++;\n"
 };
 
+/* 任意のレジスターの値(SInt32型)を、アタッチスタックにプッシュする
+ * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
+ * また、代入プロセスが省略できるので高速化する
+ */
+static void push_attachstack_direct(const char* register_name)
+{
+        pA("PASMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
+        pA("attachstack_head++;");
+}
+
 /* アタッチスタックからアドレス（SInt32型）をポップする
  * ポップした値は atachstack_socket に格納される。（SInt32型)
  */
@@ -414,6 +446,16 @@ static char pop_attachstack[] = {
         "attachstack_head--;\n"
         "PALMEM0(attachstack_socket, T_SINT32, attachstack_ptr, attachstack_head);\n"
 };
+
+/* アタッチスタックからアドレス(SInt32型)を、任意のレジスターへプッシュする
+ * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
+ * また、代入プロセスが省略できるので高速化する
+ */
+static void pop_attachstack_direct(const char* register_name)
+{
+        pA("attachstack_head--;");
+        pA("PALMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
+}
 
 /* アタッチスタックの初期化
  * アタッチスタックは、アタッチに用いるためのアドレスをスタックで管理するためのもの。
@@ -491,6 +533,23 @@ static void retF(void)
         pA("LB(0, %d);\n", end_label);                                  \
         func_label_init_flag = 1;
 
+/* ヒープメモリー上の、任意アドレスからの任意オフセット位置へ、任意のレジスタの内容を書き込む。
+ * 概ね write_heap() と同様だが、
+ * セットする値を heap_socket ではなく直接レジスターで指定できる点が異なる。
+ *
+ * また、他の多くの _direct() も同様だが、
+ * サフィックス _direct() の関数は、その内部処理を beginF(), endF() で囲んでいない。（囲めないので）
+ *
+ * この関数自体を beginF(), endF() で囲む分には問題無い。
+ */
+static void write_heap_inline_direct(const char* register_name)
+{
+        pA("heap_offset >>= 16;");
+        pA("heap_offset &= 0x0000ffff;");
+        pA("heap_base += heap_offset;");
+        pA("PASMEM0(%s, T_SINT32, heap_ptr, heap_base);", register_name);
+}
+
 /* ヒープメモリー上の、任意アドレスからの任意オフセット位置へfix32型を書き込む。
  * 事前に以下のレジスタに値をセットしておくこと:
  * heap_base   : 書き込みのベースアドレス。Int32型単位なので注意。（fix32型では”無い”）
@@ -505,10 +564,7 @@ static void retF(void)
  */
 static void write_heap_inline(void)
 {
-        pA("heap_offset >>= 16;");
-        pA("heap_offset &= 0x0000ffff;");
-        pA("heap_base += heap_offset;");
-        pA("PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_base);");
+        write_heap_inline_direct("heap_socket");
 }
 
 static void write_heap(void)
@@ -520,6 +576,22 @@ static void write_heap(void)
         endF();
 }
 
+/* ヒープメモリー上の、任意アドレスからの任意オフセット位置から、任意のレジスタへ内容を読み込む。
+ * 概ね read_heap() と同様だが、
+ * セットする値を heap_socket ではなく直接レジスターで指定できる点が異なる。
+ *
+ * また、他の多くの _direct() も同様だが、
+ * サフィックス _direct() の関数は、その内部処理を beginF(), endF() で囲んでいない。（囲めないので）
+ *
+ * この関数自体を beginF(), endF() で囲む分には問題無い。
+ */
+static void read_heap_inline_direct(const char* register_name)
+{
+        pA("heap_offset >>= 16;");
+        pA("heap_offset &= 0x0000ffff;");
+        pA("heap_base += heap_offset;");
+        pA("PALMEM0(%s, T_SINT32, heap_ptr, heap_base);", register_name);
+}
 
 /* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置からfix32型を読み込む。
  * 事前に以下のレジスタに値をセットしておくこと:
@@ -536,10 +608,7 @@ static void write_heap(void)
  */
 static void read_heap_inline(void)
 {
-        pA("heap_offset >>= 16;");
-        pA("heap_offset &= 0x0000ffff;");
-        pA("heap_base += heap_offset;");
-        pA("PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_base);");
+        read_heap_inline_direct("heap_socket");
 }
 
 static void read_heap(void)
