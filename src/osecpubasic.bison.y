@@ -534,7 +534,7 @@ static void retF(void)
         func_label_init_flag = 1;
 
 /* ヒープメモリー上の、任意アドレスからの任意オフセット位置へ、任意のレジスタの内容を書き込む。
- * 概ね write_heap() と同様だが、
+ * 概ね write_heap_inline() と同様だが、
  * セットする値を heap_socket ではなく直接レジスターで指定できる点が異なる。
  *
  * また、他の多くの _direct() も同様だが、
@@ -567,17 +567,8 @@ static void write_heap_inline(void)
         write_heap_inline_direct("heap_socket");
 }
 
-static void write_heap(void)
-{
-        beginF();
-
-        write_heap_inline();
-
-        endF();
-}
-
 /* ヒープメモリー上の、任意アドレスからの任意オフセット位置から、任意のレジスタへ内容を読み込む。
- * 概ね read_heap() と同様だが、
+ * 概ね read_heap_inline() と同様だが、
  * セットする値を heap_socket ではなく直接レジスターで指定できる点が異なる。
  *
  * また、他の多くの _direct() も同様だが、
@@ -609,15 +600,6 @@ static void read_heap_inline_direct(const char* register_name)
 static void read_heap_inline(void)
 {
         read_heap_inline_direct("heap_socket");
-}
-
-static void read_heap(void)
-{
-        beginF();
-
-        read_heap_inline();
-
-        endF();
 }
 
 /* ヒープメモリーの初期化
@@ -1246,31 +1228,6 @@ static void __func_minus(void)
 
 /* 以下、各種代入関数 */
 
-/* heap_base, heap_offset で指定されたヒープへ、heap_socket の値を書き込む。
- * 主に __assignment_scaler(), __assignment_array() の共通処理を抜き出したもの。
- *
- * 書き込む値はあらかじめ heap_socket にセットされている前提。
- * また、アタッチはあらかじめアタッチスタックにプッシュされてる前提。
- * また、heap_baseにはデフォルトの値があらかじめセットされている前提。（これはアタッチ値が-1（アタッチ無し）の場合に利用される値）
- * また、heap_offsetにも既に適切な値がセットされている前提。
- *
- * 非公開関数
- */
-static void __assignment_common(void)
-{
-        beginF();
-
-        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
-         * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
-         */
-        pA(pop_attachstack);
-        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
-
-        write_heap_inline();
-
-        endF();
-}
-
 /* 名前がidenのスカラー変数へ、値を代入する。
  *
  * iden へは代入先の配列変数名を渡す
@@ -1294,14 +1251,17 @@ static void __assignment_scaler(const char* iden)
 
         /* 書き込む値を読んでおく */
         pA(pop_stack);
-        pA("heap_socket = stack_socket;");
 
         /* スカラーなので書き込みオフセットは0 */
         pA("heap_offset = 0;");
 
-        /* アタッチも考慮してのヒープへの書き込み
+        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
+         * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
          */
-        __assignment_common();
+        pA(pop_attachstack);
+        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
+
+        write_heap_inline_direct("stack_socket");
 }
 
 /* 名前がidenの配列変数中の、任意インデックス番目の要素へ、値を代入する。
@@ -1383,9 +1343,13 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
                 yyerror("system err: assignment, var->row_len の値が不正です");
         }
 
-        /* アタッチも考慮してのヒープへの書き込み
+        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
+         * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
          */
-        __assignment_common();
+        pA(pop_attachstack);
+        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
+
+        write_heap_inline_direct("heap_socket");
 }
 
 /* 以下、各種プリセット関数 */
@@ -1831,11 +1795,11 @@ static void ope_matrix_copy(const char* strA, const char* strL)
         pA("if (matcountrow >= 0) {");
                 pA("heap_offset = matcountrow << 16;");
                 pA("heap_base = matbpL;");
-                read_heap();
+                read_heap_inline_direct("heap_socket");
 
                 pA("heap_offset = matcountrow << 16;");
                 pA("heap_base = matbpA;");
-                write_heap();
+                write_heap_inline_direct("heap_socket");
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
@@ -1871,10 +1835,9 @@ static void ope_matrix_scalar(const char* strA)
         pA("LB(0, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
-                pA("heap_socket = matfixL;");
                 pA("heap_offset = matcountrow << 16;");
                 pA("heap_base = matbpA;");
-                write_heap();
+                write_heap_inline_direct("matfixL");
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
@@ -1920,14 +1883,14 @@ static void ope_matrix_idn(const char* strA)
                         pA("heap_socket = %d;", 1 << 16);
                         pA("heap_offset = matcountrow << 16;");
                         pA("heap_base = matbpA;");
-                        write_heap();
+                        write_heap_inline_direct("heap_socket");
 
                 /* 対角成分では無い場合 */
                 pA("} else {");
                         pA("heap_socket = 0;");
                         pA("heap_offset = matcountrow << 16;");
                         pA("heap_base = matbpA;");
-                        write_heap();
+                        write_heap_inline_direct("heap_socket");
 
                 pA("}");
 
@@ -2011,20 +1974,18 @@ static void ope_matrix_trn(const char* strA, const char* strL)
                          */
                         pA("heap_offset = matfixA;");
                         pA("heap_base == matbpA;");
-                        read_heap();
-                        pA("matfixtmp = heap_socket;");
+                        read_heap_inline_direct("matfixtmp");
 
                         pA("heap_offset = matfixL;");
                         pA("heap_base = matbpL;");
-                        read_heap();
+                        read_heap_inline_direct("heap_socket");
                         pA("heap_offset = matfixA;");
                         pA("heap_base = matbpA;");
-                        write_heap();
+                        write_heap_inline_direct("heap_socket");
 
                         pA("heap_offset = matfixL;");
-                        pA("heap_socket = matfixtmp;");
                         pA("heap_base = matbpL;");
-                        write_heap();
+                        write_heap_inline_direct("matfixtmp");
 
                         /* 内側forループの復帰
                          */
@@ -2106,13 +2067,11 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
                  */
                 pA("heap_offset = matcountrow << 16;");
                 pA("heap_base = matbpL;");
-                read_heap();
-                pA("fixL = heap_socket;");
+                read_heap_inline_direct("fixL");
 
                 pA("heap_offset = matcountrow << 16;");
                 pA("heap_base = matbpR;");
-                read_heap();
-                pA("fixR = heap_socket;");
+                read_heap_inline_direct("fixR");
 
                 /* 演算種類応じて分岐
                  * } else if { を使わないのは意図的。（アセンブラーのバグ対策）
@@ -2121,23 +2080,32 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
                 /* 加算の場合 */
                 pA("if (matfixtmp == %d) {", OPE_MATRIX_MERGE_COMMON_TYPE_ADD);
                         pA("heap_socket = fixL + fixR;");
+
+                        /* 演算結果をstrAへ書き込む */
+                        pA("heap_offset = matcountrow << 16;");
+                        pA("heap_base = matbpA;");
+                        write_heap_inline_direct("heap_socket");
                 pA("}");
 
                 /* 減算の場合 */
                 pA("if (matfixtmp == %d) {", OPE_MATRIX_MERGE_COMMON_TYPE_SUB);
                         pA("heap_socket = fixL - fixR;");
+
+                        /* 演算結果をstrAへ書き込む */
+                        pA("heap_offset = matcountrow << 16;");
+                        pA("heap_base = matbpA;");
+                        write_heap_inline_direct("heap_socket");
                 pA("}");
 
                 /* 乗算の場合 */
                 pA("if (matfixtmp == %d) {", OPE_MATRIX_MERGE_COMMON_TYPE_MUL);
                         __func_mul();
-                        pA("heap_socket = fixA;");
-                pA("}");
 
-                /* 各要素同士の演算結果をstrAへ書き込む */
-                pA("heap_offset = matcountrow << 16;");
-                pA("heap_base = matbpA;");
-                write_heap();
+                        /* 演算結果をstrAへ書き込む */
+                        pA("heap_offset = matcountrow << 16;");
+                        pA("heap_base = matbpA;");
+                        write_heap_inline_direct("fixA");
+                pA("}");
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
@@ -2262,13 +2230,11 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                                  */
                                 pA("heap_offset = matfixL;");
                                 pA("heap_base = matbpL;");
-                                read_heap();
-                                pA("fixL = heap_socket;");
+                                read_heap_inline_direct("fixL");
 
                                 pA("heap_offset = matfixR;");
                                 pA("heap_base = matbpR;");
-                                read_heap();
-                                pA("fixR = heap_socket;");
+                                read_heap_inline_direct("fixR");
 
                                 /* 固定小数点数なので乗算は __func_mul() を使う必要がある
                                  * 乗算結果は matfixA に加算して累積させる
@@ -2298,7 +2264,6 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                         pA("heap_offset = matcol * matcountrow;");
                         pA("heap_offset += matcountcol;");
                         pA("heap_offset <<= 16;");
-                        pA("heap_socket = matfixA;");
 
 #ifdef DEBUG_OPE_MATRIX_MUL_MM
                         pA("junkApi_putConstString('\\nstrA : ');");
@@ -2306,7 +2271,7 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
 #endif /* DEBUG_OPE_MATRIX_MUL_MM */
 
                         pA("heap_base = matbpA;");
-                        write_heap();
+                        write_heap_inline_direct("matfixA");
 
                         /* 中間forループの復帰
                          */
@@ -2398,13 +2363,11 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
                          */
                         pA("heap_offset = matfixL;");
                         pA("heap_base = matbpL;");
-                        read_heap();
-                        pA("fixL = heap_socket;");
+                        read_heap_inline_direct("fixL");
 
                         pA("heap_offset = matfixR;");
                         pA("heap_base = matbpR;");
-                        read_heap();
-                        pA("fixR = heap_socket;");
+                        read_heap_inline_direct("fixR");
 
                         /* 固定小数点数なので乗算は __func_mul() を使う必要がある
                          * 乗算結果は matfixA に加算して累積させる
@@ -2422,10 +2385,9 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
                  */
                 pA("heap_offset = matcountrow;");
                 pA("heap_offset <<= 16;");
-                pA("heap_socket = matfixA;");
 
                 pA("heap_base = matbpA;");
-                write_heap();
+                write_heap_inline_direct("matfixA");
 
                 /* 外側forループの復帰
                  */
@@ -2511,13 +2473,11 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
                          */
                         pA("heap_offset = matfixL;");
                         pA("heap_base = matbpL;");
-                        read_heap();
-                        pA("fixL = heap_socket;");
+                        read_heap_inline_direct("fixL");
 
                         pA("heap_offset = matfixR;");
                         pA("heap_base = matbpR;");
-                        read_heap();
-                        pA("fixR = heap_socket;");
+                        read_heap_inline_direct("fixR");
 
                         /* 固定小数点数なので乗算は __func_mul() を使う必要がある
                          * 乗算結果は matfixA に加算して累積させる
@@ -2535,10 +2495,9 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
                  */
                 pA("heap_offset = matcountrow;");
                 pA("heap_offset <<= 16;");
-                pA("heap_socket = matfixA;");
 
                 pA("heap_base = matbpA;");
-                write_heap();
+                write_heap_inline_direct("matfixA");
 
                 /* 外側forループの復帰
                  */
@@ -3163,10 +3122,9 @@ read_variable
                 pA(pop_attachstack);
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
 
-                read_heap();
+                read_heap_inline_direct("stack_socket");
 
                 /* 結果をスタックにプッシュする */
-                pA("stack_socket = heap_socket;");
                 pA(push_stack);
         }
         | var_identifier __LB expression_list __RB {
@@ -3202,7 +3160,7 @@ read_variable
                                 pA(pop_attachstack);
                                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
 
-                                read_heap();
+                                read_heap_inline_direct("stack_socket");
 
                         /* 2次元配列の場合 */
                         } else if (var->row_len >= 2) {
@@ -3220,7 +3178,7 @@ read_variable
                                 pA(pop_attachstack);
                                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
 
-                                read_heap();
+                                read_heap_inline_direct("stack_socket");
 
                         /* 1,2次元以外の場合はシステムエラー */
                         } else {
@@ -3228,7 +3186,6 @@ read_variable
                         }
 
                         /* 結果をスタックにプッシュする */
-                        pA("stack_socket = heap_socket;");
                         pA(push_stack);
 
                 /* そうでなければ、これは関数実行 */
@@ -3290,10 +3247,6 @@ iterator_for
                 /* このセクションはスカラー変数への代入
                  */
 
-                /* 書き込む値を読んでおく */
-                pA(pop_stack);
-                pA("heap_socket = stack_socket;");
-
                 /* スカラーなので書き込みオフセットは 0 */
                 pA("heap_offset = 0;");
 
@@ -3304,7 +3257,9 @@ iterator_for
                 pA(push_attachstack);
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
 
-                write_heap();
+                /* 書き込む値を読んで書き込む */
+                pA(pop_stack);
+                write_heap_inline_direct("stack_socket");
 
                 /* そして、代入後であるここに無名ラベルを作る（このforループは、以降はこの位置へと戻ってくる）
                  * また、このラベルは next で戻ってくる際に使うので、コンパイル時に参照できるように $$ で出力する。
@@ -3335,8 +3290,7 @@ iterator_for
                 pA(push_attachstack);
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
 
-                read_heap();
-                pA("forfixL = heap_socket;");
+                read_heap_inline_direct("forfixL");
 
         } __STATE_STEP expression {
                 /* 条件比較の方向を判断するために、stepの値を読む必要がある
@@ -3381,10 +3335,8 @@ iterator_for
                 pA(push_attachstack);
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
 
-                read_heap();
-
                 /* 結果をforfixLにセットする */
-                pA("forfixL = heap_socket;");
+                read_heap_inline_direct("forfixL");
 
                 /* インクリメントして、その結果をスカラー変数へ代入する
                  */
@@ -3399,7 +3351,7 @@ iterator_for
                 pA(push_attachstack);
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
 
-                write_heap();
+                write_heap_inline_direct("heap_socket");
 
                 /* その後、先頭で作成したラベル位置へと再び戻るために、 goto させる命令を書く。
                  * これには $<ival>6 により示されるラベル位置を用いる。
@@ -3507,9 +3459,6 @@ define_def_function
                  */
                 int32_t i;
                 for (i = 0; i < $4; i++) {
-                        pA(pop_stack);
-                        pA("heap_socket = stack_socket;");
-
                         char iden[0x1000];
                         idenlist_pop(iden);
 
@@ -3525,7 +3474,8 @@ define_def_function
                         /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
                         pA("heap_base = %d;", var->base_ptr);
 
-                        write_heap();
+                        pA(pop_stack);
+                        write_heap_inline_direct("stack_socket");
                 }
         } expression {
                 /* ローカル変数を破棄する */
@@ -3547,9 +3497,6 @@ define_full_function
 
                 int32_t i;
                 for (i = 0; i < $4; i++) {
-                        pA(pop_stack);
-                        pA("heap_socket = stack_socket;");
-
                         char iden[0x1000];
                         idenlist_pop(iden);
 
@@ -3565,7 +3512,8 @@ define_full_function
                         /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
                         pA("heap_base = %d;", var->base_ptr);
 
-                        write_heap();
+                        pA(pop_stack);
+                        write_heap_inline_direct("stack_socket");
                 }
 
                 /* 戻り値の代入用に、関数名と同名のローカル変数（スカラー）を作成する */
@@ -3584,9 +3532,8 @@ define_full_function
                 /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
                 pA("heap_base = %d;", var->base_ptr);
 
-                read_heap();
+                read_heap_inline_direct("stack_socket");
 
-                pA("stack_socket = heap_socket;");
                 pA(push_stack);
 
                 /* ローカル変数を破棄する */
