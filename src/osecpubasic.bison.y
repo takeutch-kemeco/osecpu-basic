@@ -264,14 +264,8 @@ static void varlist_add(const char* str, const int32_t row_len, const int32_t co
         "PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);\n"     \
         "stack_head++;\n"
 
-static char push_stack[] = {
-        __PUSH_STACK
-};
-
 /* 任意のレジスターの値をスタックにプッシュする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
- *
- * （R02という若いレジスターを経由しなくなるので、高速化の可能性については微妙。逆に遅くなる可能性すらある）
  */
 static void push_stack_direct(const char* register_name)
 {
@@ -286,14 +280,8 @@ static void push_stack_direct(const char* register_name)
         "stack_head--;\n"                                               \
         "PALMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);\n"
 
-static char pop_stack[] = {
-        __POP_STACK
-};
-
 /* スタックから任意のレジスターへ値をポップする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
- *
- * （R02という若いレジスターを経由しなくなるので、高速化の可能性については微妙。逆に遅くなる可能性すらある）
  */
 static void pop_stack_direct(const char* register_name)
 {
@@ -420,15 +408,6 @@ static char init_labelstack[] = {
         "labelstack_head = 0;\n"
 };
 
-/* アタッチスタックにアドレス（SInt32型）をプッシュする
- * 事前に以下のレジスタをセットしておくこと
- * atachstack_socket : プッシュしたい値。（SInt32型)
- */
-static char push_attachstack[] = {
-        "PASMEM0(attachstack_socket, T_SINT32, attachstack_ptr, attachstack_head);\n"
-        "attachstack_head++;\n"
-};
-
 /* 任意のレジスターの値(SInt32型)を、アタッチスタックにプッシュする
  * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  * また、代入プロセスが省略できるので高速化する
@@ -438,14 +417,6 @@ static void push_attachstack_direct(const char* register_name)
         pA("PASMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
         pA("attachstack_head++;");
 }
-
-/* アタッチスタックからアドレス（SInt32型）をポップする
- * ポップした値は atachstack_socket に格納される。（SInt32型)
- */
-static char pop_attachstack[] = {
-        "attachstack_head--;\n"
-        "PALMEM0(attachstack_socket, T_SINT32, attachstack_ptr, attachstack_head);\n"
-};
 
 /* アタッチスタックからアドレス(SInt32型)を、任意のレジスターへプッシュする
  * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
@@ -628,12 +599,12 @@ static void push_eoe(void)
 {
         beginF();
 
-        pA("stack_socket = fixL;");     pA(push_stack);
-        pA("stack_socket = fixR;");     pA(push_stack);
-        pA("stack_socket = fixLx;");    pA(push_stack);
-        pA("stack_socket = fixRx;");    pA(push_stack);
-        pA("stack_socket = fixT;\n");   pA(push_stack);
-        pA("stack_socket = fixS;\n");   pA(push_stack);
+        push_stack_direct("fixL");
+        push_stack_direct("fixR");
+        push_stack_direct("fixLx");
+        push_stack_direct("fixRx");
+        push_stack_direct("fixT");
+        push_stack_direct("fixS");
 
         endF();
 }
@@ -644,12 +615,12 @@ static void pop_eoe(void)
 {
         beginF();
 
-        pA(pop_stack);  pA("fixS  = stack_socket;");
-        pA(pop_stack);  pA("fixT  = stack_socket;");
-        pA(pop_stack);  pA("fixRx = stack_socket;");
-        pA(pop_stack);  pA("fixLx = stack_socket;");
-        pA(pop_stack);  pA("fixR  = stack_socket;");
-        pA(pop_stack);  pA("fixL  = stack_socket;");
+        pop_stack_direct("fixS");
+        pop_stack_direct("fixT");
+        pop_stack_direct("fixRx");
+        pop_stack_direct("fixLx");
+        pop_stack_direct("fixR");
+        pop_stack_direct("fixL");
 
         endF();
 };
@@ -1250,7 +1221,7 @@ static void __assignment_scaler(const char* iden)
         pA("heap_base = %d;", var->base_ptr);
 
         /* 書き込む値を読んでおく */
-        pA(pop_stack);
+        pop_stack_direct("stack_socket");
 
         /* スカラーなので書き込みオフセットは0 */
         pA("heap_offset = 0;");
@@ -1258,7 +1229,7 @@ static void __assignment_scaler(const char* iden)
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
          * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
          */
-        pA(pop_attachstack);
+        pop_attachstack_direct("attachstack_socket");
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
         write_heap_inline_direct("stack_socket");
@@ -1317,25 +1288,22 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
         pA("heap_base = %d;", var->base_ptr);
 
         /* 書き込む値をスタックから読み込む命令を出力（コンパイル時） */
-        pA(pop_stack);
-        pA("heap_socket = stack_socket;");
+        pop_stack_direct("heap_socket");
 
         /* ヒープ書き込みオフセット位置をセットする命令を出力する（コンパイル時）
          * これは配列の次元によって分岐する
          */
         /* １次元配列の場合 */
         if (var->row_len == 1) {
-                pA(pop_stack);
-                pA("heap_offset = stack_socket;");
+                pop_stack_direct("heap_offset");
 
         /* 2次元配列の場合 */
         } else if (var->row_len >= 2) {
                 /* これは[行, 列]の列 */
-                pA(pop_stack);
-                pA("heap_offset = stack_socket;");
+                pop_stack_direct("heap_offset");
 
                 /* これは[行, 列]の行 */
-                pA(pop_stack);
+                pop_stack_direct("stack_socket");
                 pA("heap_offset += stack_socket * %d;", var->col_len);
 
         /* 1,2次元以外の場合はシステムエラー */
@@ -1346,7 +1314,7 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
          * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
          */
-        pA(pop_attachstack);
+        pop_attachstack_direct("attachstack_socket");
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
         write_heap_inline_direct("heap_socket");
@@ -2688,78 +2656,63 @@ function
 
 func_print
         : __FUNC_PRINT expression {
-                pA(pop_stack);
-                pA("fixL = stack_socket;");
+                pop_stack_direct("fixL");
                 __func_print();
         }
         ;
 
 func_peek
         : __FUNC_PEEK expression {
-                pA(pop_stack);
-                pA("fixL = stack_socket;");
+                pop_stack_direct("fixL");
                 __func_peek();
-                pA("fixA = stack_socket;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         ;
 
 func_poke
         : __FUNC_POKE expression expression {
-                pA(pop_stack);
-                pA("fixR = stack_socket;");
-                pA(pop_stack);
-                pA("fixL = stack_socket;");
+                pop_stack_direct("fixR");
+                pop_stack_direct("fixL");
                 __func_poke();
         }
         ;
 
 func_sin
         : __FUNC_SIN expression {
-                pA(pop_stack);
-                pA("fixL = stack_socket;");
+                pop_stack_direct("fixL");
                 __func_sin();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         ;
 
 func_cos
         : __FUNC_COS expression {
-                pA(pop_stack);
-                pA("fixL = stack_socket;");
+                pop_stack_direct("fixL");
                 __func_cos();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         ;
 
 func_tan
         : __FUNC_TAN expression {
-                pA(pop_stack);
-                pA("fixL = stack_socket;");
+                pop_stack_direct("fixL");
                 __func_tan();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         ;
 
 func_sqrt
         : __FUNC_SQRT expression {
-                pA(pop_stack);
-                pA("fixL = stack_socket;");
+                pop_stack_direct("fixL");
                 __func_sqrt();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         ;
 
 func_openwin
         : __FUNC_OPENWIN expression expression {
-                pA(pop_stack);
-                pA("fixR = stack_socket;");     /* y */
-                pA(pop_stack);
-                pA("fixL = stack_socket;");     /* x */
+                pop_stack_direct("fixR");       /* y */
+                pop_stack_direct("fixL");       /* x */
                 __func_openwin();
         }
         ;
@@ -2767,29 +2720,21 @@ func_openwin
 func_torgb
         : __FUNC_TORGB expression expression expression
         {
-                pA(pop_stack);
-                pA("fixS = stack_socket;");     /* B */
-                pA(pop_stack);
-                pA("fixR = stack_socket;");     /* G */
-                pA(pop_stack);
-                pA("fixL = stack_socket;");     /* R */
+                pop_stack_direct("fixS");       /* B */
+                pop_stack_direct("fixR");       /* G */
+                pop_stack_direct("fixL");       /* R */
                 __func_torgb();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         ;
 
 func_drawpoint
         : __FUNC_DRAWPOINT expression expression expression expression
         {
-                pA(pop_stack);
-                pA("fixS = stack_socket;");     /* RGB */
-                pA(pop_stack);
-                pA("fixR = stack_socket;");     /* y0 */
-                pA(pop_stack);
-                pA("fixL = stack_socket;");     /* x0 */
-                pA(pop_stack);
-                pA("fixT = stack_socket;");     /* mode */
+                pop_stack_direct("fixS");       /* RGB */
+                pop_stack_direct("fixR");       /* y0 */
+                pop_stack_direct("fixL");       /* x0 */
+                pop_stack_direct("fixT");       /* mode */
                 __func_drawpoint();
         }
         ;
@@ -2797,18 +2742,12 @@ func_drawpoint
 func_drawline
         : __FUNC_DRAWLINE expression expression expression expression expression expression
         {
-                pA(pop_stack);
-                pA("fixS = stack_socket;");     /* RGB */
-                pA(pop_stack);
-                pA("fixRx = stack_socket;");    /* y1 */
-                pA(pop_stack);
-                pA("fixLx = stack_socket;");    /* x1 */
-                pA(pop_stack);
-                pA("fixR = stack_socket;");     /* y0 */
-                pA(pop_stack);
-                pA("fixL = stack_socket;");     /* x0 */
-                pA(pop_stack);
-                pA("fixT = stack_socket;");     /* mode */
+                pop_stack_direct("fixS");       /* RGB */
+                pop_stack_direct("fixRx");      /* y1 */
+                pop_stack_direct("fixLx");      /* x1 */
+                pop_stack_direct("fixR");       /* y0 */
+                pop_stack_direct("fixL");       /* x0 */
+                pop_stack_direct("fixT");       /* mode */
                 __func_drawline();
         }
         ;
@@ -2816,28 +2755,20 @@ func_drawline
 func_fillrect
         : __FUNC_FILLRECT expression expression expression expression expression expression
         {
-                pA(pop_stack);
-                pA("fixS = stack_socket;");     /* RGB */
-                pA(pop_stack);
-                pA("fixRx = stack_socket;");    /* y1 */
-                pA(pop_stack);
-                pA("fixLx = stack_socket;");    /* x1 */
-                pA(pop_stack);
-                pA("fixR = stack_socket;");     /* y0 */
-                pA(pop_stack);
-                pA("fixL = stack_socket;");     /* x0 */
-                pA(pop_stack);
-                pA("fixT = stack_socket;");     /* mode */
+                pop_stack_direct("fixS");       /* RGB */
+                pop_stack_direct("fixRx");      /* y1 */
+                pop_stack_direct("fixLx");      /* x1 */
+                pop_stack_direct("fixR");       /* y0 */
+                pop_stack_direct("fixL");       /* x0 */
+                pop_stack_direct("fixT");       /* mode */
                 __func_fillrect();
         }
         ;
 
 func_sleep
         : __FUNC_SLEEP expression expression {
-                pA(pop_stack);
-                pA("fixR = stack_socket;");     /* msec */
-                pA(pop_stack);
-                pA("fixL = stack_socket;");     /* mode */
+                pop_stack_direct("fixR");       /* msec */
+                pop_stack_direct("fixL");       /* mode */
                 __func_sleep();
         }
         ;
@@ -2857,12 +2788,11 @@ initializer
 attach_base
         : {
                 pA("attachstack_socket = -1;");
-                pA(push_attachstack);
+                push_attachstack_direct("attachstack_socket");
         }
         | expression __OPE_ATTACH {
-                pA(pop_stack);
-                pA("attachstack_socket = stack_socket;");
-                pA(push_attachstack);
+                pop_stack_direct("stack_socket");
+                push_attachstack_direct("stack_socket");
         }
         ;
 
@@ -2883,77 +2813,59 @@ assignment
 
 ope_matrix
         : __STATE_MAT var_identifier __OPE_SUBST var_identifier {
-                pA(pop_attachstack);
-                pA("matbpL = attachstack_socket;");
-                pA(pop_attachstack);
-                pA("matbpA = attachstack_socket;");
+                pop_attachstack_direct("matbpL");
+                pop_attachstack_direct("matbpA");
 
                 ope_matrix_copy($2, $4);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_ZER {
-                pA(pop_attachstack);
-                pA("matbpA = attachstack_socket;");
+                pop_attachstack_direct("matbpA");
 
                 pA("matfixL = 0;");
                 ope_matrix_scalar($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_CON {
-                pA(pop_attachstack);
-                pA("matbpA = attachstack_socket;");
+                pop_attachstack_direct("matbpA");
 
-                pA("matfixL = 1 << 16;");
+                pA("matfixL = %d;", 1 << 16);
                 ope_matrix_scalar($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST expression __OPE_MUL __STATE_MAT_CON {
-                pA(pop_stack);
-                pA("matfixL = stack_socket;");
+                pop_stack_direct("matfixL");
 
-                pA(pop_attachstack);
-                pA("matbpA = attachstack_socket;");
+                pop_attachstack_direct("matbpA");
 
                 ope_matrix_scalar($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_IDN {
-                pA(pop_attachstack);
-                pA("matbpA = attachstack_socket;");
+                pop_attachstack_direct("matbpA");
 
                 ope_matrix_idn($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_TRN __LB var_identifier __RB {
-                pA(pop_attachstack);
-                pA("matbpL = attachstack_socket;");
-                pA(pop_attachstack);
-                pA("matbpA = attachstack_socket;");
+                pop_attachstack_direct("matbpL");
+                pop_attachstack_direct("matbpA");
 
                 ope_matrix_trn($2, $6);
         }
         | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_ADD var_identifier {
-                pA(pop_attachstack);
-                pA("matbpR = attachstack_socket;");
-                pA(pop_attachstack);
-                pA("matbpL = attachstack_socket;");
-                pA(pop_attachstack);
-                pA("matbpA = attachstack_socket;");
+                pop_attachstack_direct("matbpR");
+                pop_attachstack_direct("matbpL");
+                pop_attachstack_direct("matbpA");
 
                 ope_matrix_add($2, $4, $6);
         }
         | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_SUB var_identifier {
-                pA(pop_attachstack);
-                pA("matbpR = attachstack_socket;");
-                pA(pop_attachstack);
-                pA("matbpL = attachstack_socket;");
-                pA(pop_attachstack);
-                pA("matbpA = attachstack_socket;");
+                pop_attachstack_direct("matbpR");
+                pop_attachstack_direct("matbpL");
+                pop_attachstack_direct("matbpA");
 
                 ope_matrix_sub($2, $4, $6);
         }
         | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_MUL var_identifier {
-                pA(pop_attachstack);
-                pA("matbpR = attachstack_socket;");
-                pA(pop_attachstack);
-                pA("matbpL = attachstack_socket;");
-                pA(pop_attachstack);
-                pA("matbpA = attachstack_socket;");
+                pop_attachstack_direct("matbpR");
+                pop_attachstack_direct("matbpL");
+                pop_attachstack_direct("matbpA");
 
                 ope_matrix_mul($2, $4, $6);
         }
@@ -2968,11 +2880,11 @@ const_variable
                 int32_t ib = ((int32_t)(0x0000ffff * b)) & 0x0000ffff;
 
                 pA("stack_socket = %d;", ia | ib);
-                pA(push_stack);
+                push_stack_direct("stack_socket");
         }
         | __CONST_INTEGER {
                 pA("stack_socket = %d;", $1 << 16);
-                pA(push_stack);
+                push_stack_direct("stack_socket");
         }
         ;
 
@@ -2980,85 +2892,70 @@ operation
         : expression __OPE_ADD expression {
                 pA(read_eoe_arg);
                 __func_add();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | expression __OPE_SUB expression {
                 pA(read_eoe_arg);
                 __func_sub();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | expression __OPE_MUL expression {
                 pA(read_eoe_arg);
                 __func_mul();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | expression __OPE_DIV expression {
                 pA(read_eoe_arg);
                 __func_div();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | expression __OPE_POWER expression {
                 pA(read_eoe_arg);
                 __func_pow();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | expression __OPE_MOD expression {
                 pA(read_eoe_arg);
                 __func_mod();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | expression __OPE_OR expression {
                 pA(read_eoe_arg);
                 __func_or();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | expression __OPE_AND expression {
                 pA(read_eoe_arg);
                 __func_and();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | expression __OPE_XOR expression {
                 pA(read_eoe_arg);
                 __func_xor();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | __OPE_NOT expression {
-                pA(pop_stack);
-                pA("fixL = stack_socket;");
+                pop_stack_direct("fixL");
                 __func_not();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | expression __OPE_LSHIFT expression {
                 pA(read_eoe_arg);
                 __func_lshift();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | expression __OPE_RSHIFT expression {
                 pA(read_eoe_arg);
                 __func_rshift();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | __OPE_ADD expression %prec __OPE_PLUS {
                 /* 何もしない */
         }
         | __OPE_SUB expression %prec __OPE_MINUS {
-                pA(pop_stack);
-                pA("fixL = stack_socket;");
+                pop_stack_direct("fixL");
                 __func_minus();
-                pA("stack_socket = fixA;");
-                pA(push_stack);
+                push_stack_direct("fixA");
         }
         | __LB expression __RB {
                 /* 何もしない */
@@ -3070,37 +2967,37 @@ comparison
                 pA(read_eoe_arg);
 
                 pA("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                pA(push_stack);
+                push_stack_direct("stack_socket");
         }
         | expression __OPE_NOT_COMPARISON expression {
                 pA(read_eoe_arg);
 
                 pA("if (fixL != fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                pA(push_stack);
+                push_stack_direct("stack_socket");
         }
         | expression __OPE_ISSMALL expression {
                 pA(read_eoe_arg);
 
                 pA("if (fixL < fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                pA(push_stack);
+                push_stack_direct("stack_socket");
         }
         | expression __OPE_ISSMALL_COMP expression {
                 pA(read_eoe_arg);
 
                 pA("if (fixL <= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                pA(push_stack);
+                push_stack_direct("stack_socket");
         }
         | expression __OPE_ISLARGE expression {
                 pA(read_eoe_arg);
 
                 pA("if (fixL > fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                pA(push_stack);
+                push_stack_direct("stack_socket");
         }
         | expression __OPE_ISLARGE_COMP expression {
                 pA(read_eoe_arg);
 
                 pA("if (fixL >= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                pA(push_stack);
+                push_stack_direct("stack_socket");
         }
         ;
 
@@ -3119,13 +3016,14 @@ read_variable
                 pA("heap_offset = 0;");
 
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                pA(pop_attachstack);
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
+                pop_attachstack_direct("attachstack_socket");
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                   "else {heap_base = %d;}", var->base_ptr);
 
                 read_heap_inline_direct("stack_socket");
 
                 /* 結果をスタックにプッシュする */
-                pA(push_stack);
+                push_stack_direct("stack_socket");
         }
         | var_identifier __LB expression_list __RB {
                 /* ラベルリストに名前が存在しなければ、これは配列変数 */
@@ -3153,30 +3051,30 @@ read_variable
                          */
                         /* １次元配列の場合 */
                         if (var->row_len == 1) {
-                                pA(pop_stack);
-                                pA("heap_offset = stack_socket;");
+                                pop_stack_direct("heap_offset");
 
                                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                                pA(pop_attachstack);
-                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
+                                pop_attachstack_direct("attachstack_socket");
+                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                                   "else {heap_base = %d;}", var->base_ptr);
 
                                 read_heap_inline_direct("stack_socket");
 
                         /* 2次元配列の場合 */
                         } else if (var->row_len >= 2) {
                                 /* これは[行, 列]の列 */
-                                pA(pop_stack);
-                                pA("heap_offset = stack_socket;");
+                                pop_stack_direct("heap_offset");
 
                                 /* これは[行, 列]の行。
                                  * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
                                  */
-                                pA(pop_stack);
+                                pop_stack_direct("stack_socket");
                                 pA("heap_offset += stack_socket * %d;", var->col_len);
 
                                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                                pA(pop_attachstack);
-                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", var->base_ptr);
+                                pop_attachstack_direct("attachstack_socket");
+                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                                   "else {heap_base = %d;}", var->base_ptr);
 
                                 read_heap_inline_direct("stack_socket");
 
@@ -3186,7 +3084,7 @@ read_variable
                         }
 
                         /* 結果をスタックにプッシュする */
-                        pA(push_stack);
+                        push_stack_direct("stack_socket");
 
                 /* そうでなければ、これは関数実行 */
                 } else {
@@ -3209,7 +3107,7 @@ selection_if
 
 selection_if_v
         : __STATE_IF expression {
-                pA(pop_stack);
+                pop_stack_direct("stack_socket");
                 pA("if (stack_socket == 0x00010000) {");
         }
         ;
@@ -3253,12 +3151,13 @@ iterator_for
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                  * このアタッチは以降も使うので、ポップ直後にプッシュしておく
                  */
-                pA(pop_attachstack);
-                pA(push_attachstack);
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
+                pop_attachstack_direct("attachstack_socket");
+                push_attachstack_direct("attachstack_socket");
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                   "else {heap_base = %d;}", $<varptr>3->base_ptr);
 
                 /* 書き込む値を読んで書き込む */
-                pA(pop_stack);
+                pop_stack_direct("stack_socket");
                 write_heap_inline_direct("stack_socket");
 
                 /* そして、代入後であるここに無名ラベルを作る（このforループは、以降はこの位置へと戻ってくる）
@@ -3276,8 +3175,7 @@ iterator_for
                  * まずスタックに詰まれてる __STATE_TO expression (の戻り値)を得て、 forfixR（右辺用） へと退避しておく。
                  * （また、このポップは、変数を読む際に余分なスタックが残っていないように、スタックを掃除しておく意味も兼ねる）
                  */
-                pA(pop_stack);
-                pA("forfixR = stack_socket;");
+                pop_stack_direct("forfixR");
 
                 /* 次にスカラー変数から値を読み、 forfixL （左辺用） へと退避しておく。
                  */
@@ -3286,9 +3184,10 @@ iterator_for
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                  * このアタッチは以降も使うので、ポップ直後にプッシュしておく
                  */
-                pA(pop_attachstack);
-                pA(push_attachstack);
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
+                pop_attachstack_direct("attachstack_socket");
+                push_attachstack_direct("attachstack_socket");
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                   "else {heap_base = %d;}", $<varptr>3->base_ptr);
 
                 read_heap_inline_direct("forfixL");
 
@@ -3296,9 +3195,8 @@ iterator_for
                 /* 条件比較の方向を判断するために、stepの値を読む必要がある
                  * そして、最後の next の時点でインクリメントに使用するのに備えて、再びプッシュしておく
                  */
-                pA(pop_stack);
-                pA("forfixtmp = stack_socket;");
-                pA(push_stack);
+                pop_stack_direct("forfixtmp");
+                push_stack_direct("forfixtmp");
 
                 /* step が正の場合は　<= による比較となり、 負の場合は >= による比較となる。
                  * これは実際には forfixL, forfixR の値を入れ替えることで対応する。（比較の条件式をどちらのケースでも共用できるように）
@@ -3319,8 +3217,7 @@ iterator_for
                  * 次に、スカラー変数の値を取得して forfixL へと退避し、
                  * これら forfixL, forfixR を加算し、結果をスカラー変数へ再び代入する。
                  */
-                pA(pop_stack);
-                pA("forfixR = stack_socket;");
+                pop_stack_direct("forfixR");
 
                 /* このセクションはスカラー変数の読み込みなので、read_variable とスカラー版とほぼ同様
                  */
@@ -3331,9 +3228,10 @@ iterator_for
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                  * このアタッチは以降も使うので、ポップ直後にプッシュしておく
                  */
-                pA(pop_attachstack);
-                pA(push_attachstack);
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
+                pop_attachstack_direct("attachstack_socket");
+                push_attachstack_direct("attachstack_socket");
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                   "else {heap_base = %d;}", $<varptr>3->base_ptr);
 
                 /* 結果をforfixLにセットする */
                 read_heap_inline_direct("forfixL");
@@ -3347,9 +3245,10 @@ iterator_for
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                  * このアタッチは以降も使うので、ポップ直後にプッシュしておく
                  */
-                pA(pop_attachstack);
-                pA(push_attachstack);
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} else {heap_base = %d;}", $<varptr>3->base_ptr);
+                pop_attachstack_direct("attachstack_socket");
+                push_attachstack_direct("attachstack_socket");
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                   "else {heap_base = %d;}", $<varptr>3->base_ptr);
 
                 write_heap_inline_direct("heap_socket");
 
@@ -3361,8 +3260,8 @@ iterator_for
                 pA("} else {");
 
                 /* 偽の場合は、アタッチスタックとスタックをポップして（step等を捨てるため）して、そのまま終わる */
-                pA(pop_stack);
-                pA(pop_attachstack);
+                pop_stack_direct("stack_socket");
+                pop_attachstack_direct("attachstack_socket");
                 pA("}");
         }
         ;
@@ -3402,7 +3301,7 @@ jump
                 pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
         }
         | __OPE_ON expression __OPE_GOTO __LABEL {
-                pA(pop_stack);
+                pop_stack_direct("stack_socket");
                 pA("if (stack_socket == 0x00010000) {");
 
                 /* goto と同様（$4が違うだけ）*/
@@ -3411,7 +3310,7 @@ jump
                 pA("}");
         }
         | __OPE_ON expression __OPE_GOSUB __LABEL {
-                pA(pop_stack);
+                pop_stack_direct("stack_socket");
                 pA("if (stack_socket == 0x00010000) {");
 
                 /* gosub と同様（$4が違うだけ）*/
@@ -3474,7 +3373,7 @@ define_def_function
                         /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
                         pA("heap_base = %d;", var->base_ptr);
 
-                        pA(pop_stack);
+                        pop_stack_direct("stack_socket");
                         write_heap_inline_direct("stack_socket");
                 }
         } expression {
@@ -3512,7 +3411,7 @@ define_full_function
                         /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
                         pA("heap_base = %d;", var->base_ptr);
 
-                        pA(pop_stack);
+                        pop_stack_direct("stack_socket");
                         write_heap_inline_direct("stack_socket");
                 }
 
@@ -3534,7 +3433,7 @@ define_full_function
 
                 read_heap_inline_direct("stack_socket");
 
-                pA(push_stack);
+                push_stack_direct("stack_socket");
 
                 /* ローカル変数を破棄する */
                 varlist_scope_pop();
