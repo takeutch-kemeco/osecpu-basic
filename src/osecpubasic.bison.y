@@ -503,17 +503,23 @@ static void retF(void)
  *
  * コンパイル時の定数設定は不要となったので beginF(), endF() で囲めるようになった。
  */
-static void write_heap(void)
+static void write_heap_inline(void)
 {
-        beginF();
-
         pA("heap_offset >>= 16;");
         pA("heap_offset &= 0x0000ffff;");
         pA("heap_base += heap_offset;");
         pA("PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_base);");
+}
+
+static void write_heap(void)
+{
+        beginF();
+
+        write_heap_inline();
 
         endF();
 }
+
 
 /* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置からfix32型を読み込む。
  * 事前に以下のレジスタに値をセットしておくこと:
@@ -528,14 +534,19 @@ static void write_heap(void)
  *
  * コンパイル時の定数設定は不要となったので beginF(), endF() で囲めるようになった。
  */
-static void read_heap(void)
+static void read_heap_inline(void)
 {
-        beginF();
-
         pA("heap_offset >>= 16;");
         pA("heap_offset &= 0x0000ffff;");
         pA("heap_base += heap_offset;");
         pA("PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_base);");
+}
+
+static void read_heap(void)
+{
+        beginF();
+
+        read_heap_inline();
 
         endF();
 }
@@ -1186,7 +1197,7 @@ static void __assignment_common(void)
         pA(pop_attachstack);
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
-        write_heap();
+        write_heap_inline();
 
         endF();
 }
