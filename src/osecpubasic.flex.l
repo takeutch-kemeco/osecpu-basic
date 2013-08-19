@@ -27,6 +27,9 @@
 int32_t linenumber;
 char* linelist[0x10000];
 
+FILE* yyaskA;
+FILE* yyaskB;
+
 %}
 
 %x linelist_process
@@ -34,6 +37,7 @@ char* linelist[0x10000];
 %x pre_process_def
 %x main_process
 %x main_process_comment
+%x tune_process
 
 %%
 
@@ -163,8 +167,37 @@ char* linelist[0x10000];
 <main_process>.         {}
 <main_process><<EOF>>   return(__EOF);
 
+<tune_process>"stack_socket++;"[ \n]*"stack_socket--;" {}
+<tune_process>"attachstack_socket++;"[ \n]*"attachstack_socket--;" {}
+<tune_process>"labelstack_socket++;"[ \n]*"labelstack_socket--;" {}
+<tune_process>"heap_socket++;"[ \n]*"heap_socket--;" {}
+
+<tune_process>"stack_head++;"[ \n]*"stack_head--;" {}
+<tune_process>"attachstack_head++;"[ \n]*"attachstack_head--;" {}
+<tune_process>"labelstack_head++;"[ \n]*"labelstack_head--;" {}
+<tune_process>"heap_head++;"[ \n]*"heap_head--;" {}
+
+<tune_process>"PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);"[ \n]*"PALMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);" {
+}
+
+<tune_process>"PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);"[ \n]*"PALMEM0(heap_offset, T_SINT32, stack_ptr, stack_head);" {
+        fprintf(yyaskB,
+                "PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);\n"
+                "heap_offset = stack_socket;\n");
+}
+
+<tune_process>"PASMEM0(stack_socket, T_SINT32, attachstack_ptr, attachstack_head);"[ \n]*"PALMEM0(matbpR, T_SINT32, attachstack_ptr, attachstack_head);" {
+        fprintf(yyaskB,
+                "PASMEM0(stack_socket, T_SINT32, attachstack_ptr, attachstack_head);\n"
+                "matbpR = stack_socket;\n");
+}
+
+<tune_process>^[\n]     {}
+<tune_process>.*        {fprintf(yyaskB, "%s\n", yytext);}
+
 %%
 
 void start_linelist_process(void) {linenumber = 1; BEGIN(linelist_process);}
 void start_pre_process(void) {linenumber = 1; BEGIN(pre_process);}
 void start_main_process(void) {linenumber = 1; BEGIN(main_process);}
+void start_tune_process(void) {YY_NEW_FILE; BEGIN(tune_process);}

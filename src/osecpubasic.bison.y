@@ -47,7 +47,8 @@ void yyerror(const char *s)
 
 extern FILE* yyin;
 extern FILE* yyout;
-FILE* yyaskA;
+extern FILE* yyaskA;
+extern FILE* yyaskB;
 
 /* 出力ファイル yyaskA へ文字列を書き出す関数 */
 static void pA(const char* fmt, ...)
@@ -586,12 +587,11 @@ static char init_heap[] = {
 
 /* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
  */
-static char read_eoe_arg[] = {
-        __POP_STACK
-        "fixR = stack_socket;"
-        __POP_STACK
-        "fixL = stack_socket;"
-};
+static void read_eoe_arg(void)
+{
+        pop_stack_direct("fixR");
+        pop_stack_direct("fixL");
+}
 
 /* eoe用レジスタをスタックへプッシュする
  */
@@ -703,11 +703,7 @@ void init_all(void)
  */
 static void __func_add(void)
 {
-        beginF();
-
         pA("fixA = fixL + fixR;");
-
-        endF();
 }
 
 /* 減算命令を出力する
@@ -716,11 +712,7 @@ static void __func_add(void)
  */
 static void __func_sub(void)
 {
-        beginF();
-
         pA("fixA = fixL - fixR;");
-
-        endF();
 }
 
 /* 乗算命令を出力する
@@ -1097,11 +1089,7 @@ static void __func_pow(void)
  */
 static void __func_and(void)
 {
-        beginF();
-
         pA("fixA = fixL & fixR;");
-
-        endF();
 }
 
 /* or命令を出力する
@@ -1110,11 +1098,7 @@ static void __func_and(void)
  */
 static void __func_or(void)
 {
-        beginF();
-
         pA("fixA = fixL | fixR;");
-
-        endF();
 }
 
 /* xor命令を出力する
@@ -1123,11 +1107,7 @@ static void __func_or(void)
  */
 static void __func_xor(void)
 {
-        beginF();
-
         pA("fixA = fixL ^ fixR;");
-
-        endF();
 }
 
 /* not命令を出力する
@@ -1136,11 +1116,7 @@ static void __func_xor(void)
  */
 static void __func_not(void)
 {
-        beginF();
-
         pA("fixA = fixL ^ (-1);");
-
-        endF();
 }
 
 /* 左シフト命令を出力する
@@ -1149,12 +1125,8 @@ static void __func_not(void)
  */
 static void __func_lshift(void)
 {
-        beginF();
-
         pA("fixR >>= 16;");
         pA("fixA = fixL << fixR;");
-
-        endF();
 }
 
 /* 右シフト命令を出力する（算術シフト）
@@ -1190,11 +1162,7 @@ static void __func_rshift(void)
  */
 static void __func_minus(void)
 {
-        beginF();
-
         pA("fixA = -fixL;");
-
-        endF();
 }
 
 /* 以下、各種代入関数 */
@@ -1528,13 +1496,9 @@ static void __func_tan(void)
  */
 static void __func_openwin(void)
 {
-        beginF();
-
         pA("fixR >>= 16;");
         pA("fixL >>= 16;");
         pA("junkApi_openWin(fixL, fixR);");
-
-        endF();
 }
 
 /* 指定ミリ秒間だけスリープする
@@ -1546,13 +1510,9 @@ static void __func_openwin(void)
  */
 static void __func_sleep(void)
 {
-        beginF();
-
         pA("fixR >>= 16;");
         pA("fixL >>= 16;");
         pA("junkApi_sleep(fixL, fixR);");
-
-        endF();
 }
 
 /* 三色の数値をRGBへとまとめる
@@ -2591,6 +2551,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 syntax_tree
         : declaration_list __EOF {
                 YYACCEPT;
+                start_tune_process();
         }
         ;
 
@@ -2890,47 +2851,47 @@ const_variable
 
 operation
         : expression __OPE_ADD expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_add();
                 push_stack_direct("fixA");
         }
         | expression __OPE_SUB expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_sub();
                 push_stack_direct("fixA");
         }
         | expression __OPE_MUL expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_mul();
                 push_stack_direct("fixA");
         }
         | expression __OPE_DIV expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_div();
                 push_stack_direct("fixA");
         }
         | expression __OPE_POWER expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_pow();
                 push_stack_direct("fixA");
         }
         | expression __OPE_MOD expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_mod();
                 push_stack_direct("fixA");
         }
         | expression __OPE_OR expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_or();
                 push_stack_direct("fixA");
         }
         | expression __OPE_AND expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_and();
                 push_stack_direct("fixA");
         }
         | expression __OPE_XOR expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_xor();
                 push_stack_direct("fixA");
         }
@@ -2940,12 +2901,12 @@ operation
                 push_stack_direct("fixA");
         }
         | expression __OPE_LSHIFT expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_lshift();
                 push_stack_direct("fixA");
         }
         | expression __OPE_RSHIFT expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
                 __func_rshift();
                 push_stack_direct("fixA");
         }
@@ -2964,37 +2925,37 @@ operation
 
 comparison
         : expression __OPE_COMPARISON expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
 
                 pA("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 push_stack_direct("stack_socket");
         }
         | expression __OPE_NOT_COMPARISON expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
 
                 pA("if (fixL != fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 push_stack_direct("stack_socket");
         }
         | expression __OPE_ISSMALL expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
 
                 pA("if (fixL < fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 push_stack_direct("stack_socket");
         }
         | expression __OPE_ISSMALL_COMP expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
 
                 pA("if (fixL <= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 push_stack_direct("stack_socket");
         }
         | expression __OPE_ISLARGE expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
 
                 pA("if (fixL > fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 push_stack_direct("stack_socket");
         }
         | expression __OPE_ISLARGE_COMP expression {
-                pA(read_eoe_arg);
+                read_eoe_arg();
 
                 pA("if (fixL >= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                 push_stack_direct("stack_socket");

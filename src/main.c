@@ -26,6 +26,7 @@
 extern FILE* yyin;
 extern FILE* yyout;
 extern FILE* yyaskA;
+extern FILE* yyaskB;
 
 static void print_usage(void)
 {
@@ -135,7 +136,7 @@ int main(int argc, char** argv)
 
         yyin = open_in_file(in_path);
         yyout = open_null_out_file();
-        yyaskA = open_out_file(out_path);
+        yyaskA = open_out_file("osecpubasic.tmp.0");
 
         start_linelist_process();
         while (yylex() != 0) {
@@ -154,6 +155,47 @@ int main(int argc, char** argv)
         init_all();
         start_main_process();
         yyparse();
+
+        fclose(yyaskA);
+        fclose(yyin);
+
+#ifndef DISABLE_TUNE
+#ifndef DISABLE_TUNE_1
+        yyin = open_in_file("osecpubasic.tmp.0");
+        yyaskB = open_out_file("osecpubasic.tmp.1");
+
+        start_tune_process();
+        while (yylex() != 0) {
+        }
+
+        fclose(yyaskB);
+        fclose(yyin);
+#endif /* DISABLE_TUNE_1 */
+
+#ifndef DISABLE_TUNE_2
+        yyin = open_in_file("osecpubasic.tmp.1");
+        yyaskB = open_out_file("osecpubasic.tmp.2");
+
+        start_tune_process();
+        while (yylex() != 0) {
+        }
+
+        fclose(yyaskB);
+        fclose(yyin);
+#endif /* DISABLE_TUNE_2 */
+
+#ifndef DISABLE_TUNE_3
+        yyin = open_in_file("osecpubasic.tmp.2");
+        yyaskB = open_out_file(out_path);
+
+        start_tune_process();
+        while (yylex() != 0) {
+        }
+
+        fclose(yyaskB);
+        fclose(yyin);
+#endif /* DISABLE_TUNE_3 */
+#endif /* DISABLE_TUNE */
 
         return EXIT_SUCCESS;
 }
