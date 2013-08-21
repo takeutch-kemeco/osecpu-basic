@@ -5,7 +5,7 @@
 
 #ifndef NO_STATIC
 
-static int32_t cur_label_index_head = 1024;
+static int32_t cur_label_index_head = 1536;
 #define CUR_RETURN_LABEL "P02"
 
 #endif /* NO_STATIC */
@@ -219,6 +219,42 @@ static int optima_fwrite(char* src, int32_t src_len, char* file_name)
         return 0;
 }
 
+/* 文字列 str から len 行分の区間に、文字列 LB か PCP か PLIMM か PAPSMEM か PAPLMEM が存在するかを調べる
+ * 存在すれば 1 、無ければ 0 、エラーならば -1 を返す。
+ */
+static int optima_found_lb(char* str, int32_t len)
+{
+        int i = 0;
+        for (i = 0; i < len; i++) {
+                while (1) {
+                        char* tmp = str++;
+
+                        if (*tmp == '\0')
+                                return -1;
+
+                        if (strncmp(tmp, "LB", 2) == 0)
+                                return 1;
+
+                        if (strncmp(tmp, "PCP", 3) == 0)
+                                return 1;
+
+                        if (strncmp(tmp, "PLIMM", 5) == 0)
+                                return 1;
+
+                        if (strncmp(tmp, "PAPSMEM", 7) == 0)
+                                return 1;
+
+                        if (strncmp(tmp, "PAPLMEM", 7) == 0)
+                                return 1;
+
+                        if (*tmp == '\n')
+                                break;
+                }
+        }
+
+        return 0;
+}
+
 /* 文字列 a, b について、
  * bのindex番目からlen個の文字列を x として、
  * a 中に x と完全に一致する箇所の個数を返す。
@@ -232,6 +268,9 @@ static int optima_comparison_full(char* a, char* b, int32_t index, int32_t len)
         b = optima_seek_line(b, index);
         if (b == NULL)
                 return -1;
+
+        if (optima_found_lb(b, len) != 0)
+                return 0;
 
         int32_t count = 0;
 
@@ -273,6 +312,9 @@ static int optima_strip(char* tmpA, char* tmpB, char* a, char* b, int32_t index,
                 if (optima_comparison(a, b, len) == 1) {
                         if (func_init == 0) {
                                 optima_add_func(tmpB, b, len, func_label);
+
+{char tmp[0x100000]; optima_copy_line(tmp, b, len); printf("%s\n", tmp);}
+
                                 func_init = 1;
                         }
 
@@ -295,7 +337,7 @@ static int optima_strip(char* tmpA, char* tmpB, char* a, char* b, int32_t index,
         return 0;
 }
 
-main()
+main_x()
 {
         char* optima_in = malloc(0x100000);
 
@@ -311,20 +353,36 @@ main()
         char* seekA = optima_in;
         char* seekB = optima_in;
 
-        int32_t window = 10;
-        int32_t cur_index = 2030;
+        int j;
+        for (j = 0; j < 1; j++) {
+                int32_t window;
+                for (window = 16; window >= 8; window--) {
+                        int32_t index = 0;
+                        while (1) {
+                                int32_t match = optima_comparison_full(seekA, seekB, index, window);
+                                if (match == -1)
+                                        break;
 
-        {
-                int32_t match = optima_comparison_full(seekA, seekB, cur_index, window);
-                if (match >= 2) {
-                        optima_strip(optima_tmpA, optima_tmpB, seekA, seekB, cur_index, window);
+                                if (match >= 2) {
+                                        optima_tmpA[0] = '\0';
+                                        optima_strip(optima_tmpA, optima_tmpB, seekA, seekB, index, window);
 
-//                      printf("%s", optima_tmpA);
-//                      printf("%s", optima_tmpB);
-                        strcpy(optima_in, optima_tmpA);
-                        strcat(optima_in, optima_tmpB);
+                                        strcpy(optima_in, optima_tmpA);
+                                }
+
+                                index++;
+                        }
+
+                        optima_normal(optima_in);
                 }
-        }
 
-        optima_fwrite(optima_in, 0x100000, "wire2x.ask");
+                strcpy(optima_in, optima_tmpA);
+                strcat(optima_in, optima_tmpB);
+                optima_fwrite(optima_in, 0x100000, "wire2x.ask");
+        }
+}
+
+main()
+{
+        main_x();
 }
