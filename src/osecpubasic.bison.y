@@ -713,51 +713,16 @@ static void __func_mul(void)
         pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
         pA("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
 
-        /* L * R -> T */
+        pA("fixA = "
+           "((((fixL & 0x0000ffff) >> 1) * (fixR & 0x0000ffff)) >> 15) + "
+           "(((fixL & 0xffff0000) >> 16) * (fixR & 0x0000ffff)) + "
+           "((fixL & 0xffff0000) * ((fixR & 0xffff0000) >> 16)) + "
+           "((fixL & 0x0000ffff) * ((fixR & 0xffff0000) >> 16));");
 
-        pA("fixA = 0;");
-
-#if 1
-        /* R.Decimal * L -> L.Decimal */
-
-        /* R.Decimal * L.Decimal -> T.Decimal */
-        pA("fixRx = fixR & 0x0000ffff;");
-        pA("fixRx >>= 1;");
-        pA("fixLx = fixL & 0x0000ffff;");
-        pA("fixLx >>= 1;");
-        pA("fixT = fixLx * fixRx;");
-        pA("fixT >>= 14;");
-        pA("fixA += fixT;");
-
-        /* R.Decimal * L.Integer -> T.Integer */
-        pA("fixRx = fixR & 0x0000ffff;");
-        pA("fixLx = fixL & 0xffff0000;");
-        pA("fixLx >>= 16;");
-        pA("fixT = fixLx * fixRx;");
-        pA("fixA += fixT;");
-#endif
-
-#if 1
-        /* R.Integer * L -> L.Integer */
-
-        /* R.Integer * L.Decimal -> T.Decimal */
-        pA("fixRx = fixR & 0xffff0000;");
-        pA("fixLx = fixL & 0x0000ffff;");
-        pA("fixRx >>= 16;");
-        pA("fixT = fixLx * fixRx;");
-        pA("fixA += fixT;");
-
-        /* R.Integer * L.Integer -> T.Integer */
-        pA("fixRx = fixR & 0xffff0000;");
-        pA("fixLx = fixL & 0xffff0000;");
-        pA("fixRx >>= 16;");
-        pA("fixT = fixLx * fixRx;");
-        pA("fixA += fixT;");
-#endif
-
-        /* 符号を元に戻す */
-        pA("if ((fixS &= 0x00000003) == 0x00000001) {fixA = -fixA;}");
-        pA("if ((fixS &= 0x00000003) == 0x00000002) {fixA = -fixA;}");
+        /* 符号を元に戻す
+         * fixS の値は、 & 0x00000003 した状態と同様の値のみである前提
+         */
+        pA("if ((fixS == 0x00000001) | (fixS == 0x00000002)) {fixA = -fixA;}");
 
         endF();
 }
