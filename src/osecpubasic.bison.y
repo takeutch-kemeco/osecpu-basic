@@ -257,14 +257,6 @@ static void varlist_add(const char* str, const int32_t row_len, const int32_t co
         varlist_add_common(str, row_len, col_len);
 }
 
-/* スタックにint32型（またはfix32型）をプッシュする
- * 事前に以下のレジスタをセットしておくこと:
- * stack_socket : プッシュしたい値。（int32型）
- */
-#define __PUSH_STACK                                                    \
-        "PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);\n"     \
-        "stack_head++;\n"
-
 /* 任意のレジスターの値をスタックにプッシュする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  */
@@ -273,13 +265,6 @@ static void push_stack_direct(const char* register_name)
         pA("PASMEM0(%s, T_SINT32, stack_ptr, stack_head);", register_name);
         pA("stack_head++;");
 }
-
-/* スタックからint32型（またはfix32型）をポップする
- * ポップした値は stack_socket に格納される。
- */
-#define __POP_STACK                                                     \
-        "stack_head--;\n"                                               \
-        "PALMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);\n"
 
 /* スタックから任意のレジスターへ値をポップする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
