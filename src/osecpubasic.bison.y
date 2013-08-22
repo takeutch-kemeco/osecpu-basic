@@ -704,10 +704,8 @@ static void __func_sub(void)
  * fixL * fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_mul(void)
+static void __func_mul_inline(void)
 {
-        beginF();
-
         /* 符号を保存しておき、+へ変換する*/
         pA("fixS = 0;");
         pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
@@ -729,6 +727,13 @@ static void __func_mul(void)
          * fixS の値は、 & 0x00000003 した状態と同様の値のみである前提
          */
         pA("if ((fixS == 0x00000001) | (fixS == 0x00000002)) {fixA = -fixA;}");
+}
+
+static void __func_mul(void)
+{
+        beginF();
+
+       __func_mul_inline();
 
         endF();
 }
@@ -756,14 +761,8 @@ static void __func_div(void)
 
         pA("fixR = fixRx << 2;");
 
-        /* 他アキュムレーターを呼び出す前に eoe を退避しておく */
-        push_eoe();
-
         /* 逆数を乗算することで除算とする */
-        __func_mul();
-
-        /* eoe を復帰（スタックを掃除するため） */
-        pop_eoe();
+        __func_mul_inline();
 
         endF();
 }
