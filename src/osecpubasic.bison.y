@@ -713,11 +713,17 @@ static void __func_mul(void)
         pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
         pA("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
 
+        pA("fixRx = (fixR & 0xffff0000) >> 16;");
+        pA("fixLx = (fixL & 0xffff0000);");
+
+        pA("fixR = fixR & 0x0000ffff;");
+        pA("fixL = fixL & 0x0000ffff;");
+
         pA("fixA = "
-           "((((fixL & 0x0000ffff) >> 1) * (fixR & 0x0000ffff)) >> 15) + "
-           "(((fixL & 0xffff0000) >> 16) * (fixR & 0x0000ffff)) + "
-           "((fixL & 0xffff0000) * ((fixR & 0xffff0000) >> 16)) + "
-           "((fixL & 0x0000ffff) * ((fixR & 0xffff0000) >> 16));");
+           "(((fixL >> 1) * fixR) >> 15) + "
+           "((fixLx >> 16) * fixR) + "
+           "(fixLx * fixRx) + "
+           "(fixL * fixRx);");
 
         /* 符号を元に戻す
          * fixS の値は、 & 0x00000003 した状態と同様の値のみである前提
