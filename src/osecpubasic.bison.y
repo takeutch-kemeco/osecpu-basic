@@ -1643,7 +1643,7 @@ static void __func_search_max(void)
  *
  * 非公開関数
  */
-static void __func_search_max(void)
+static void __func_search_min(void)
 {
         beginF();
 
