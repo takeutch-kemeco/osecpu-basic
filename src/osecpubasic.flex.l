@@ -192,6 +192,35 @@ FILE* yyaskB;
                 "matbpR = stack_socket;\n");
 }
 
+<tune_process>"heap_offset = matcountrow << 16;"[ \n]*"heap_base = matbpA;"[ \n]*"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {
+        fprintf(yyaskB,
+                "heap_offset = matcountrow & 0x0000ffff;\n"
+                "heap_base = matbpA;\n");
+}
+
+<tune_process>"heap_offset = matcountrow << 16;"[ \n]*"heap_base = matbpL;"[ \n]*"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {
+        fprintf(yyaskB,
+                "heap_offset = matcountrow & 0x0000ffff;\n"
+                "heap_base = matbpL;\n");
+}
+
+<tune_process>"heap_offset = matcountrow << 16;"[ \n]*"heap_base = matbpR;"[ \n]*"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {
+        fprintf(yyaskB,
+                "heap_offset = matcountrow & 0x0000ffff;\n"
+                "heap_base = matbpR;\n");
+}
+
+<tune_process>"heap_offset <<= 16;"[ \n]*"heap_base = matbpA;"[ \n]*"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {
+        fprintf(yyaskB,
+                "heap_offset &= 0x0000ffff;\n"
+                "heap_base = matbpA;\n");
+}
+
+<tune_process>"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {
+        fprintf(yyaskB,
+                "heap_offset >>= 16;\n");
+}
+
 <tune_process>^[\n]     {}
 <tune_process>.*        {fprintf(yyaskB, "%s\n", yytext);}
 
