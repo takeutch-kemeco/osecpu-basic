@@ -1603,7 +1603,7 @@ static void __func_lineabs(void)
         endF();
 }
 
-/* 直線区間a,bを絶対値dで微分
+/* 直線区間a,bを絶対値dで微分する命令を出力する
  * あらかじめ各 fix? に所定の値をセットしておくこと。演算結果はfixAへ出力される。
  * fixL:a, fixR:b, fixT:d
  *
@@ -1618,6 +1618,60 @@ static void __func_dsection(void)
         push_eoe();
         __func_div();
         pop_eoe();
+
+        endF();
+}
+
+/* a,b,cから最大値を探す命令を出力する
+ * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
+ *
+ * 非公開関数
+ */
+static void __func_search_max(void)
+{
+        beginF();
+
+        pA("if ((fixL >= fixR) & (fixL >= fixS)) {fixA = fixL;}");
+        pA("if ((fixR >= fixS) & (fixR >= fixL)) {fixA = fixR;}");
+        pA("if ((fixS >= fixL) & (fixS >= fixR)) {fixA = fixS;}");
+
+        endF();
+}
+
+/* a,b,cから最小値を探す命令を出力する
+ * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
+ *
+ * 非公開関数
+ */
+static void __func_search_max(void)
+{
+        beginF();
+
+        pA("if ((fixL <= fixR) & (fixL <= fixS)) {fixA = fixL;}");
+        pA("if ((fixR <= fixS) & (fixR <= fixL)) {fixA = fixR;}");
+        pA("if ((fixS <= fixL) & (fixS <= fixR)) {fixA = fixS;}");
+
+        endF();
+}
+
+/* a,b,cから中間値を探す命令を出力する
+ * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
+ *
+ * 非公開関数
+ */
+static void __func_search_mid(void)
+{
+        beginF();
+
+        __func_search_max();
+        pA("fixLx = fixA;");
+
+        __func_search_min();
+        pA("fixRx = fixA;");
+
+        pA("if ((fixL <= fixLx) & (fixL >= fixRx)) {fixA = fixL;}");
+        pA("if ((fixR <= fixLx) & (fixR >= fixRx)) {fixA = fixR;}");
+        pA("if ((fixS <= fixLx) & (fixS >= fixRx)) {fixA = fixS;}");
 
         endF();
 }
