@@ -1669,9 +1669,9 @@ static void __func_search_mid(void)
         __func_search_min();
         pA("fixRx = fixA;");
 
-        pA("if ((fixL <= fixLx) & (fixL >= fixRx)) {fixA = fixL;}");
-        pA("if ((fixR <= fixLx) & (fixR >= fixRx)) {fixA = fixR;}");
-        pA("if ((fixS <= fixLx) & (fixS >= fixRx)) {fixA = fixS;}");
+        pA("if ((fixL == fixLx) & (fixR == fixRx)) {fixA = fixS;}");
+        pA("if ((fixR == fixLx) & (fixS == fixRx)) {fixA = fixL;}");
+        pA("if ((fixS == fixLx) & (fixL == fixRx)) {fixA = fixR;}");
 
         endF();
 }
