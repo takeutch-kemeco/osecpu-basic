@@ -1685,9 +1685,9 @@ static void __func_search_mid(void)
         __func_search_min();
         pA("fixT |= fixA;");
 
-        pA("if (fixT == 6) {fixA = fixL;}");
-        pA("if (fixT == 5) {fixA = fixR;}");
-        pA("if (fixT == 3) {fixA = fixS;}");
+        pA("if (fixT == 6) {fixA = 1;}");
+        pA("if (fixT == 5) {fixA = 2;}");
+        pA("if (fixT == 3) {fixA = 4;}");
 
         endF();
 }
