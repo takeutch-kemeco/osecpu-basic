@@ -637,6 +637,10 @@ static char debug_eoe[] = {
         "junkApi_putStringDec('\\1', fixS, 10, 1);"
         "junkApi_putConstString(' fixA:');"
         "junkApi_putStringDec('\\1', fixA, 10, 1);"
+        "junkApi_putConstString(' fixA1:');"
+        "junkApi_putStringDec('\\1', fixA1, 10, 1);"
+        "junkApi_putConstString(' fixA2:');"
+        "junkApi_putStringDec('\\1', fixA2, 10, 1);"
         "junkApi_putConstString('\\n');"
 };
 
@@ -645,6 +649,8 @@ static char debug_eoe[] = {
  * push_eoe(), pop_eoe() ともに、例外として fixA スタックへ退避しない。
  * この fixA は eoe 間で値を受け渡しする為に用いるので、push_eoe(), pop_eoe() に影響されないようにしてある。
  * （push後に行った演算の結果をfixAに入れておくことで、その後にpopした後でも演算結果を引き継げるように）
+ *
+ * fixA1 ～ fixA3 も、 fixA 同様に戻り値の受け渡しに使える。
  */
 static char init_eoe_arg[] = {
         "SInt32 fixA:R07;"
@@ -657,6 +663,9 @@ static char init_eoe_arg[] = {
         "SInt32 fixT1:R0E;"
         "SInt32 fixT2:R0F;"
         "SInt32 fixT3:R10;"
+        "SInt32 fixA1:R22;"
+        "SInt32 fixA2:R23;"
+        "SInt32 fixA3:R24;"
 };
 
 /* 全ての初期化
