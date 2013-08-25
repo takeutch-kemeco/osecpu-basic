@@ -589,6 +589,8 @@ static void push_eoe(void)
         push_stack_direct("fixLx");
         push_stack_direct("fixRx");
         push_stack_direct("fixT");
+        push_stack_direct("fixT1");
+        push_stack_direct("fixT2");
         push_stack_direct("fixS");
 
         endF();
@@ -601,6 +603,8 @@ static void pop_eoe(void)
         beginF();
 
         pop_stack_direct("fixS");
+        pop_stack_direct("fixT2");
+        pop_stack_direct("fixT1");
         pop_stack_direct("fixT");
         pop_stack_direct("fixRx");
         pop_stack_direct("fixLx");
@@ -621,6 +625,10 @@ static char debug_eoe[] = {
         "junkApi_putStringDec('\\1', fixLx, 10, 1);"
         "junkApi_putConstString(' fixT:');"
         "junkApi_putStringDec('\\1', fixT, 10, 1);"
+        "junkApi_putConstString(' fixT1:');"
+        "junkApi_putStringDec('\\1', fixT1, 10, 1);"
+        "junkApi_putConstString(' fixT2:');"
+        "junkApi_putStringDec('\\1', fixT2, 10, 1);"
         "junkApi_putConstString(' fixS:');"
         "junkApi_putStringDec('\\1', fixS, 10, 1);"
         "junkApi_putConstString(' fixA:');"
@@ -635,13 +643,15 @@ static char debug_eoe[] = {
  * （push後に行った演算の結果をfixAに入れておくことで、その後にpopした後でも演算結果を引き継げるように）
  */
 static char init_eoe_arg[] = {
-        "SInt32 fixL:R0A;"
-        "SInt32 fixR:R0B;"
-        "SInt32 fixLx:R0C;"
-        "SInt32 fixRx:R0D;"
-        "SInt32 fixT:R0E;"
+        "SInt32 fixA:R07;"
+        "SInt32 fixL:R08;"
+        "SInt32 fixR:R09;"
+        "SInt32 fixLx:R0A;"
+        "SInt32 fixRx:R0B;"
+        "SInt32 fixT:R0C;"
+        "SInt32 fixT1:R0D;"
+        "SInt32 fixT2:R0E;"
         "SInt32 fixS:R0F;"
-        "SInt32 fixA:R10;"
 };
 
 /* 全ての初期化
@@ -651,9 +661,6 @@ void init_all(void)
         pA("#include \"osecpu_ask.h\"\n");
 
         pA("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
-
-        pA("SInt32 tmp0:R08;");
-        pA("SInt32 tmp1:R09;\n");
 
         /* forループ処理の作業用 */
         pA("SInt32 forfixL: R11;");
