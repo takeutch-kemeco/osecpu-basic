@@ -593,6 +593,7 @@ static void push_eoe(void)
         push_stack_direct("fixT1");
         push_stack_direct("fixT2");
         push_stack_direct("fixT3");
+        push_stack_direct("fixT4");
 
         endF();
 }
@@ -603,6 +604,7 @@ static void pop_eoe(void)
 {
         beginF();
 
+        pop_stack_direct("fixT4");
         pop_stack_direct("fixT3");
         pop_stack_direct("fixT2");
         pop_stack_direct("fixT1");
@@ -633,6 +635,8 @@ static char debug_eoe[] = {
         "junkApi_putStringDec('\\1', fixT2, 10, 1);"
         "junkApi_putConstString(' fixT3:');"
         "junkApi_putStringDec('\\1', fixT3, 10, 1);"
+        "junkApi_putConstString(' fixT4:');"
+        "junkApi_putStringDec('\\1', fixT4, 10, 1);"
         "junkApi_putConstString(' fixS:');"
         "junkApi_putStringDec('\\1', fixS, 10, 1);"
         "junkApi_putConstString(' fixA:');"
@@ -663,6 +667,7 @@ static char init_eoe_arg[] = {
         "SInt32 fixT1:R0E;"
         "SInt32 fixT2:R0F;"
         "SInt32 fixT3:R10;"
+        "SInt32 fixT4:R25;"
         "SInt32 fixA1:R22;"
         "SInt32 fixA2:R23;"
         "SInt32 fixA3:R24;"
