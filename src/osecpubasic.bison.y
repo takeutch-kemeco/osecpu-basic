@@ -588,10 +588,11 @@ static void push_eoe(void)
         push_stack_direct("fixR");
         push_stack_direct("fixLx");
         push_stack_direct("fixRx");
+        push_stack_direct("fixS");
         push_stack_direct("fixT");
         push_stack_direct("fixT1");
         push_stack_direct("fixT2");
-        push_stack_direct("fixS");
+        push_stack_direct("fixT3");
 
         endF();
 }
@@ -602,10 +603,11 @@ static void pop_eoe(void)
 {
         beginF();
 
-        pop_stack_direct("fixS");
+        pop_stack_direct("fixT3");
         pop_stack_direct("fixT2");
         pop_stack_direct("fixT1");
         pop_stack_direct("fixT");
+        pop_stack_direct("fixS");
         pop_stack_direct("fixRx");
         pop_stack_direct("fixLx");
         pop_stack_direct("fixR");
@@ -629,6 +631,8 @@ static char debug_eoe[] = {
         "junkApi_putStringDec('\\1', fixT1, 10, 1);"
         "junkApi_putConstString(' fixT2:');"
         "junkApi_putStringDec('\\1', fixT2, 10, 1);"
+        "junkApi_putConstString(' fixT3:');"
+        "junkApi_putStringDec('\\1', fixT3, 10, 1);"
         "junkApi_putConstString(' fixS:');"
         "junkApi_putStringDec('\\1', fixS, 10, 1);"
         "junkApi_putConstString(' fixA:');"
@@ -648,10 +652,11 @@ static char init_eoe_arg[] = {
         "SInt32 fixR:R09;"
         "SInt32 fixLx:R0A;"
         "SInt32 fixRx:R0B;"
-        "SInt32 fixT:R0C;"
-        "SInt32 fixT1:R0D;"
-        "SInt32 fixT2:R0E;"
-        "SInt32 fixS:R0F;"
+        "SInt32 fixS:R0C;"
+        "SInt32 fixT:R0D;"
+        "SInt32 fixT1:R0E;"
+        "SInt32 fixT2:R0F;"
+        "SInt32 fixT3:R10;"
 };
 
 /* 全ての初期化
