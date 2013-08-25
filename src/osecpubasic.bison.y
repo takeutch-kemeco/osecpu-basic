@@ -1848,28 +1848,100 @@ static void __func_filltri_sl_common(const char* ope_comparison)
         pA("}");
 }
 
-/* 三角形塗りつぶし命令を出力する
- * fixL -> null
- * あらかじめ fixL に配列のアドレスをセットしておくこと。 演算結果は存在しない。
- *
- * 配列の各要素のルール:
- * [0] : 頂点Aのx座標, [1] : 頂点Aのy座標
- * [2] : 頂点Bのx座標, [3] : 頂点Bのy座標
- * [4] : 頂点Cのx座標, [5] : 頂点Cのy座標
- * [6] : RGB
- *
- * アタッチを使って配列による引数渡しをやってみようと思う。実験。
+/* 頂点 a,b,c による三角形塗りつぶしする命令を出力する。
+ * あらかじめ以下のルールで値をセットしておくこと。 演算結果は存在しない。
+ * fixL = x0, fixR = y0, fixLx = x1, fixRx = y1, fixT1 = x2, fixT2 = y2,
+ * fixT = mode, fixS = RGB
  */
 static void __func_filltri(void)
 {
-/*
-        pA("PASMEM0(heap_socket, T_SINT32, heap_ptr, heap_base);");
-        pA("PALMEM0(heap_socket, T_SINT32, heap_ptr, heap_base);");
-*/
+        beginF();
+
+        /* y0,y1,y2 のmin,mid,maxを得る。
+         * 結果は fixT3
+         */
+        push_eoe();
+        pA("fixL = fixR;");
+        pA("fixR = fixRx;");
+        pA("fixS = fixT2;");
+        __func_search_minmidmax();
+        pop_eoe();
+
+        pA("fixT3 = fixA;");
+
+        /* 中点座標を得て、2つのスキャンライン三角形に分割し、それぞれを描画する
+         */
+        push_eoe();
+                /* min, mid, max を調べて min,max 間の中点座標単位を fixA, fixA1 に得る
+                 */
+
+                /* max flag -> set maxXY
+                 */
+                pA("fixT = fixT3 >> 6;");
+                pA("if (fixT == 1) {fixLx = fixL; fixRx = fixR;}");
+                /* pA("if (fixT == 2) {fixLx = fixLx; fixRx = fixRx;}"); */
+                pA("if (fixT == 4) {fixLx = fixT1; fixRx = fixT2;}");
+
+                /* min flag -> set minXY
+                 */
+                pA("fixT = fixT3 & 0x00000007;");
+                /* pA("if (fixT == 1) {fixL = fixL; fixR = fixR;}"); */
+                pA("if (fixT == 2) {fixL = fixLx; fixR = fixRx;}");
+                pA("if (fixT == 4) {fixL = fixT1; fixR = fixT2;}");
+
+                /* mid flag -> set midXY
+                 */
+                pA("fixT = (fixT3 >> 3) & 0x00000007;");
+                pA("if (fixT == 1) {fixT1 = fixL; fixT2 = fixR;}");
+                pA("if (fixT == 2) {fixT1 = fixLx; fixT2 = fixRx;}");
+                /* pA("if (fixT == 4) {fixT1 = fixT1; fixT2 = fixT2;}"); */
+
+                push_eoe();
+                        /* y分割座標をセットし、中点sを fixT3,fixT4 へ得る
+                         */
+                        pA("fixS = fixT2");
+                        __func_linesprit_y();
+                pop_eoe();
+
+                pA("fixT3 = fixA;");
+                pA("fixT4 = fixA1;");
+
+                /* 三角形 s,mid,min の描画
+                 */
+                push_eoe();
+                        pA("fixLx = fixT1;");
+                        pA("fixRx = fixT2;");
+
+                        pA("fixT1 = fixL;");
+                        pA("fixT2 = fixR;");
+
+                        pA("fixL = fixT3;");
+                        pA("fixR = fixT4;");
+
+                        __func_filltri_sl_common(">=");
+                pop_eoe();
+
+                /* 三角形 s,mid,max の描画
+                 */
+                push_eoe();
+                        pA("fixL = fixT1;");
+                        pA("fixR = fixT2;");
+
+                        pA("fixT1 = fixLx;");
+                        pA("fixT2 = fixRx;");
+
+                        pA("fixLx = fixL;");
+                        pA("fixRx = fixR;");
+
+                        pA("fixL = fixT3;");
+                        pA("fixR = fixT4;");
+
+                        __func_filltri_sl_common("<=");
+                pop_eoe();
+        pop_eoe();
+
+        endF();
 }
-
-
-
 
 /* 行列のコピー命令を出力する
  * 行および列が同じ大きさの場合のみ、対応する各要素同士をコピーする。
