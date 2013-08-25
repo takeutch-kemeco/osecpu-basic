@@ -1665,6 +1665,46 @@ static void __func_lineunit(void)
         endF();
 }
 
+/* 線分をy分割するポイントを得る
+ * あらかじめ各 fix? に所定の値をセットしておくこと。 演算結果は fixA, fixA1 へ出力される。
+ * fixL:x0, fixR:y0, fixLx:x1, fixRx:y1, fixS:spritY
+ *
+ * 非公開関数
+ */
+static void __func_linesprit_y(void)
+{
+        beginF();
+
+        /* fitT1:unitX, fixT2:unitY へ単位ベクトルを得る
+         */
+        push_eoe();
+        __func_lineunit();
+        pop_eoe();
+
+        pA("fixT1 = fixA;");
+        pA("fixT2 = fixA1;");
+
+        /* unitY * y -> fixA1
+         */
+        push_eoe();
+        pA("fixL = fixT1;");
+        pA("fixR = fixS;");
+        __func_mul();
+        pop_eoe();
+
+        pA("fixA1 = fixA;");
+
+        /* unitX * y -> fixA
+         */
+        push_eoe();
+        pA("fixL = fixT;");
+        pA("fixR = fixS;");
+        __func_mul();
+        pop_eoe();
+
+        endF();
+}
+
 /* 直線区間a,bを絶対値dで微分する命令を出力する
  * あらかじめ各 fix? に所定の値をセットしておくこと。演算結果はfixAへ出力される。
  * fixL:a, fixR:b, fixT:d
