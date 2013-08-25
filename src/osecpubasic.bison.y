@@ -1692,6 +1692,53 @@ static void __func_search_mid(void)
         endF();
 }
 
+/* 頂点 a,b,c (ay = by) をスキャンライン単位で三角形塗りつぶしする命令を出力する。
+ * あらかじめ以下のルールで値をセットしておくこと。 演算結果は存在しない。
+ * fixL = ax, fixR = bx, fixLx = axd, fixRx = bxd, fixS = ay, fixT = cy,
+ * fixT1 = mode, fixT2 = RGB
+ *
+ * ope_comparison には ">=" か "<=" の文字列を与える想定。
+ * これは +方向、-方向用、それぞれの決め打ち関数を生成するため。
+ *
+ * 非公開関数
+ */
+static void __func_filltri_sl_common(const char* ope_comparison)
+{
+        /* ope_comparison毎に、コンパイル時に複数生成される想定なので、
+         * beginF(), endF() で囲んではいけない。
+         */
+
+        pA("fixS >>= 16;");
+        pA("fixT = (fixT >> 16) - fixS");
+
+        /* forループ
+         */
+
+        /* 局所ループ用に無名ラベルをセット （外側forの戻り位置）
+         */
+        const int32_t local_label_y = cur_label_index_head;
+        cur_label_index_head++;
+        pA("LB(0, %d);", local_label_y);
+
+        pA("if (fixS %s fixT) {", ope_comparison);
+                push_eoe();
+                pA("fixL >>= 16");
+                pA("fixR >>= 16");
+                pA("junkApi_drawLine(fixT1, fixL, fixS, fixR, fixS, fixT2);");
+                pop_eoe();
+
+                pA("junk");
+
+                pA("fixL += fixLx;");
+                pA("fixR += fixRx;");
+
+                /* ループの復帰
+                 */
+                pA("fixS++;");
+                pA("PLIMM(P3F, %d);", local_label_y);
+        pA("}");
+}
+
 /* 三角形塗りつぶし命令を出力する
  * fixL -> null
  * あらかじめ fixL に配列のアドレスをセットしておくこと。 演算結果は存在しない。
