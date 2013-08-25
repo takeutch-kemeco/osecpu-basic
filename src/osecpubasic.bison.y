@@ -1589,26 +1589,28 @@ static void __func_lineabs(void)
 {
         beginF();
 
-        pA("fixL = fixL - fixLx;");
+        /* (x1 - x0) ^ 2 -> fixT1
+         */
+        push_eoe();
+        pA("fixL = fixLx - fixL;");
         pA("fixR = fixL;");
-
-        pA("fixT = fixR - fixRx;");
-
-        push_eoe();
         __func_mul();
         pop_eoe();
-        pA("fixS = fixA;");
+        pA("fixT1 = fixA;");
 
-        pA("fixL = fixT;");
-        pA("fixR = fixT;");
-
+        /* (y1 - y0) ^ 2 -> fixT2
+         */
         push_eoe();
+        pA("fixR = fixRx - fixR;");
+        pA("fixL = fixR;");
         __func_mul();
         pop_eoe();
-        pA("fixR = fixA;");
+        pA("fixT2 = fixA;");
 
-        pA("fixL = fixS;");
+        /* sqrt(fixT1 + fixT2)
+         */
         push_eoe();
+        pA("fixL = fixT1 + fixT2;");
         __func_sqrt();
         pop_eoe();
 
