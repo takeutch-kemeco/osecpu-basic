@@ -1625,15 +1625,18 @@ static void __func_dsection(void)
 /* a,b,cから最大値を探す命令を出力する
  * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
  *
+ * 結果はビットフラグとして返される。
+ * fixL = 1, fixR = 2, fixS = 4
+ *
  * 非公開関数
  */
 static void __func_search_max(void)
 {
         beginF();
 
-        pA("if ((fixL >= fixR) & (fixL >= fixS)) {fixA = fixL;}");
-        pA("if ((fixR >= fixS) & (fixR >= fixL)) {fixA = fixR;}");
-        pA("if ((fixS >= fixL) & (fixS >= fixR)) {fixA = fixS;}");
+        pA("if ((fixL >= fixR) & (fixL >= fixS)) {fixA = 1;}");
+        pA("if ((fixR >= fixS) & (fixR >= fixL)) {fixA = 2;}");
+        pA("if ((fixS >= fixL) & (fixS >= fixR)) {fixA = 4;}");
 
         endF();
 }
@@ -1641,21 +1644,27 @@ static void __func_search_max(void)
 /* a,b,cから最小値を探す命令を出力する
  * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
  *
+ * 結果はビットフラグとして返される。
+ * fixL = 1, fixR = 2, fixS = 4
+ *
  * 非公開関数
  */
 static void __func_search_min(void)
 {
         beginF();
 
-        pA("if ((fixL <= fixR) & (fixL <= fixS)) {fixA = fixL;}");
-        pA("if ((fixR <= fixS) & (fixR <= fixL)) {fixA = fixR;}");
-        pA("if ((fixS <= fixL) & (fixS <= fixR)) {fixA = fixS;}");
+        pA("if ((fixL <= fixR) & (fixL <= fixS)) {fixA = 1;}");
+        pA("if ((fixR <= fixS) & (fixR <= fixL)) {fixA = 2;}");
+        pA("if ((fixS <= fixL) & (fixS <= fixR)) {fixA = 4;}");
 
         endF();
 }
 
 /* a,b,cから中間値を探す命令を出力する
  * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
+ *
+ * 結果はビットフラグとして返される。
+ * fixL = 1, fixR = 2, fixS = 4
  *
  * 非公開関数
  */
@@ -1664,14 +1673,14 @@ static void __func_search_mid(void)
         beginF();
 
         __func_search_max();
-        pA("fixLx = fixA;");
+        pA("fixT = fixA;");
 
         __func_search_min();
-        pA("fixRx = fixA;");
+        pA("fixT |= fixA;");
 
-        pA("if ((fixL == fixLx) & (fixR == fixRx)) {fixA = fixS;}");
-        pA("if ((fixR == fixLx) & (fixS == fixRx)) {fixA = fixL;}");
-        pA("if ((fixS == fixLx) & (fixL == fixRx)) {fixA = fixR;}");
+        pA("if (fixT == 6) {fixA = fixL;}");
+        pA("if (fixT == 5) {fixA = fixR;}");
+        pA("if (fixT == 3) {fixA = fixS;}");
 
         endF();
 }
@@ -1684,7 +1693,7 @@ static void __func_search_mid(void)
  * [0] : 頂点Aのx座標, [1] : 頂点Aのy座標
  * [2] : 頂点Bのx座標, [3] : 頂点Bのy座標
  * [4] : 頂点Cのx座標, [5] : 頂点Cのy座標
- * [6] : 赤, [7] : 緑, [8] : 青
+ * [6] : RGB
  *
  * アタッチを使って配列による引数渡しをやってみようと思う。実験。
  */
