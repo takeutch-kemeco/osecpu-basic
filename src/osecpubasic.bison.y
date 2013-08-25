@@ -2765,7 +2765,8 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 
 %token __FUNC_SIN __FUNC_COS __FUNC_TAN __FUNC_SQRT
 
-%token __FUNC_OPENWIN __FUNC_TORGB __FUNC_DRAWPOINT __FUNC_DRAWLINE __FUNC_FILLRECT __FUNC_SLEEP
+%token __FUNC_OPENWIN __FUNC_TORGB __FUNC_DRAWPOINT __FUNC_DRAWLINE __FUNC_SLEEP
+%token __FUNC_FILLTRI __FUNC_FILLRECT
 
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB
@@ -2786,7 +2787,8 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 
 %type <sval> func_sin func_cos func_tan
 
-%type <sval> func_openwin func_torgb func_drawpoint func_drawline func_fillrect func_sleep
+%type <sval> func_openwin func_torgb func_drawpoint func_drawline func_sleep
+%type <sval> func_filltri func_fillrect
 
 %type <sval> operation const_variable read_variable
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
@@ -2864,6 +2866,7 @@ function
         | func_torgb
         | func_drawpoint
         | func_drawline
+        | func_filltri
         | func_fillrect
         | func_sleep
         ;
@@ -2963,6 +2966,23 @@ func_drawline
                 pop_stack_direct("fixL");       /* x0 */
                 pop_stack_direct("fixT");       /* mode */
                 __func_drawline();
+        }
+        ;
+
+func_filltri
+        : __FUNC_FILLTRI expression
+                         expression expression expression expression expression expression
+                         expression
+        {
+                pop_stack_direct("fixS");       /* RGB */
+                pop_stack_direct("fixT2");      /* y2 */
+                pop_stack_direct("fixT1");      /* x2 */
+                pop_stack_direct("fixRx");      /* y1 */
+                pop_stack_direct("fixLx");      /* x1 */
+                pop_stack_direct("fixR");       /* y0 */
+                pop_stack_direct("fixL");       /* x0 */
+                pop_stack_direct("fixT");       /* mode */
+                __func_filltri();
         }
         ;
 

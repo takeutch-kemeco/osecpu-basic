@@ -156,6 +156,7 @@ FILE* yyaskB;
 <main_process>"torgb"           return(__FUNC_TORGB);
 <main_process>"drawpoint"       return(__FUNC_DRAWPOINT);
 <main_process>"drawline"        return(__FUNC_DRAWLINE);
+<main_process>"filltri"         return(__FUNC_FILLTRI);
 <main_process>"fillrect"        return(__FUNC_FILLRECT);
 <main_process>"sleep"           return(__FUNC_SLEEP);
 
