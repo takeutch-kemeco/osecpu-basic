@@ -1705,7 +1705,9 @@ static void __func_search_mid(void)
 static void __func_filltri_sl_common(const char* ope_comparison)
 {
         /* ope_comparison毎に、コンパイル時に複数生成される想定なので、
-         * beginF(), endF() で囲んではいけない。
+         * 関数内を beginF(), endF() で囲んではいけない。
+         *
+         * この関数自体を囲むことには問題は無い。
          */
 
         pA("fixS >>= 16;");
