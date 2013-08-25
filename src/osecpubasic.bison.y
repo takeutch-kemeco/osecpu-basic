@@ -1626,6 +1626,45 @@ static void __func_lineabs(void)
         endF();
 }
 
+/* 線分ベクトルの単位ベクトルを得る命令を出力する
+ * あらかじめ各 fix? に所定の値をセットしておくこと。 演算結果はfixA, fixA1へ出力される。
+ * fixL:x0, fixR:y0, fixLx:x1, fixRx:y1 -> fixA:x2, fixA1:y2
+ *
+ * 非公開関数
+ */
+static void __func_lineunit(void)
+{
+        beginF();
+
+        /* fixT = r
+         */
+        push_eoe();
+        __func_lineabs();
+        pop_eoe();
+
+        pA("fixT = fixA;");
+
+        /* (y1 - y0) / r
+         */
+        push_eoe();
+        pA("fixL = fixRx - fixR;");
+        pA("fixR = fixT;");
+        __func_div();
+        pop_eoe();
+
+        pA("fixA1 = fixA;");
+
+        /* (x1 - x0) / r
+         */
+        push_eoe();
+        pA("fixL = fixLx - fixL;");
+        pA("fixR = fixT;");
+        __func_div();
+        pop_eoe();
+
+        endF();
+}
+
 /* 直線区間a,bを絶対値dで微分する命令を出力する
  * あらかじめ各 fix? に所定の値をセットしておくこと。演算結果はfixAへ出力される。
  * fixL:a, fixR:b, fixT:d
