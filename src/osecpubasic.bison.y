@@ -1667,27 +1667,34 @@ static void __func_search_min(void)
         endF();
 }
 
-/* a,b,cから中間値を探す命令を出力する
+/* a,b,cから最大値、中間値、最小値を探す命令を出力する
  * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
  *
  * 結果はビットフラグとして返される。
  * fixL = 1, fixR = 2, fixS = 4
+ * を単位フォーマットとして、これを3ビット毎に
+ * 0-2bit = min, 3-5bit = mid, 6-8bit = max
+ * として並べた状態の値を返す。
  *
  * 非公開関数
  */
-static void __func_search_mid(void)
+static void __func_search_minmidmax(void)
 {
         beginF();
 
         __func_search_max();
         pA("fixT = fixA;");
+        pA("fixT1 = fixT << 6;");
 
         __func_search_min();
         pA("fixT |= fixA;");
+        pA("fixT1 |= fixT");
 
         pA("if (fixT == 6) {fixA = 1;}");
         pA("if (fixT == 5) {fixA = 2;}");
         pA("if (fixT == 3) {fixA = 4;}");
+        pA("fixA <<= 3;");
+        pA("fixA |= fixT1;");
 
         endF();
 }
