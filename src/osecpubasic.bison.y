@@ -1859,6 +1859,11 @@ static void __func_filltri_sl_common(const char* ope_comparison, const char* for
                         pA("fixR >>= 16;");
                         pA("fixLx >>= 16;");
                         pA("junkApi_drawLine(fixT, fixL, fixR, fixLx, fixR, fixS);");
+
+                        /* 隙間対策
+                         */
+                        pA("fixR++;");
+                        pA("junkApi_drawLine(fixT, fixL, fixR, fixLx, fixR, fixS);");
                 pop_eoe();
 
                 pA("fixR %s= %d;", for_step, (1 << 16));
