@@ -1670,6 +1670,23 @@ static void __func_lineunit(void)
         endF();
 }
 
+/* 線分の傾きaを得る（ただしx=ay）
+ * あらかじめ各 fix? に所定の値をセットしておくこと。 演算結果は fixA へ出力される。
+ * fixL:x0, fixR:y0, fixLx:x1, fixRx:y1 -> fixA
+ *
+ * 非公開関数
+ */
+static void __func_linebias_ay(void)
+{
+        beginF();
+
+        pA("fixL = fixLx - fixL;");
+        pA("fixR = fixRx - fixR;");
+        __func_div();
+
+        endF();
+}
+
 /* 線分をy分割するポイントを得る
  * あらかじめ各 fix? に所定の値をセットしておくこと。 演算結果は fixA, fixA1 へ出力される。
  * fixL:x0, fixR:y0, fixLx:x1, fixRx:y1, fixS:spritY
