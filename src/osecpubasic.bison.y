@@ -442,7 +442,7 @@ static void callF(const int32_t label)
         pA(push_labelstack);
         pA("PLIMM(P3F, %d);\n", label);
 
-        pA("LB(0, %d);\n", cur_label_index_head);
+        pA("LB(1, %d);\n", cur_label_index_head);
         cur_label_index_head++;
 }
 
@@ -483,11 +483,11 @@ static void retF(void)
         callF(unique_func_label);                                       \
         pA("PLIMM(P3F, %d);\n", end_label);                             \
                                                                         \
-        pA("LB(0, %d);\n", unique_func_label);
+        pA("LB(1, %d);\n", unique_func_label);
 
 #define endF()                                                          \
         retF();                                                         \
-        pA("LB(0, %d);\n", end_label);                                  \
+        pA("LB(1, %d);\n", end_label);                                  \
         func_label_init_flag = 1;
 
 /* ヒープメモリー上の、任意アドレスからの任意オフセット位置へ、任意のレジスタの内容を書き込む。
@@ -898,7 +898,7 @@ static void __func_sqrt(void)
         pA("fixR = fixA;");     nr();
         pA("fixR = fixA;");     nr();
 
-        pA("LB(0, %d);", __func_sqrt_end_label);
+        pA("LB(1, %d);", __func_sqrt_end_label);
 
         endF();
 }
@@ -1851,7 +1851,7 @@ static void __func_filltri_sl_common(const char* ope_comparison, const char* for
          */
         const int32_t local_label_y = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label_y);
+        pA("LB(1, %d);", local_label_y);
 
         pA("if (fixR %s fixT2) {", ope_comparison);
                 push_eoe();
@@ -2004,7 +2004,7 @@ static void ope_matrix_copy(const char* strA, const char* strL)
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label);
+        pA("LB(1, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
                 pA("heap_offset = matcountrow << 16;");
@@ -2046,7 +2046,7 @@ static void ope_matrix_scalar(const char* strA)
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label);
+        pA("LB(1, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
                 pA("heap_offset = matcountrow << 16;");
@@ -2089,7 +2089,7 @@ static void ope_matrix_idn(const char* strA)
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label_row = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label_row);
+        pA("LB(1, %d);", local_label_row);
 
         pA("if (matcountrow >= 0) {");
                 /* インデックスが col_len + 1 の倍数であれば対角成分 */
@@ -2159,7 +2159,7 @@ static void ope_matrix_trn(const char* strA, const char* strL)
          */
         const int32_t local_label_row = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label_row);
+        pA("LB(1, %d);", local_label_row);
 
         pA("if (matcountrow < matrow) {");
                 pA("matcountcol = 0;");
@@ -2168,7 +2168,7 @@ static void ope_matrix_trn(const char* strA, const char* strL)
                  */
                 const int32_t local_label_col = cur_label_index_head;
                 cur_label_index_head++;
-                pA("LB(0, %d);", local_label_col);
+                pA("LB(1, %d);", local_label_col);
 
                 pA("if (matcountcol < matcol) {");
                         /* strL の読み込みオフセットを計算
@@ -2272,7 +2272,7 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label);
+        pA("LB(1, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
                 /* strL, strR から値を読み込む
@@ -2402,7 +2402,7 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
          */
         const int32_t local_label_row = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label_row);
+        pA("LB(1, %d);", local_label_row);
 
         pA("if (matcountrow < matrow) {");
                 pA("matcountcol = 0;");
@@ -2411,7 +2411,7 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                  */
                 const int32_t local_label_col = cur_label_index_head;
                 cur_label_index_head++;
-                pA("LB(0, %d);", local_label_col);
+                pA("LB(1, %d);", local_label_col);
 
                 pA("if (matcountcol < matcol) {");
                         pA("matfixtmp = 0;");
@@ -2421,7 +2421,7 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                          */
                         const int32_t local_label_fixtmp = cur_label_index_head;
                         cur_label_index_head++;
-                        pA("LB(0, %d);", local_label_fixtmp);
+                        pA("LB(1, %d);", local_label_fixtmp);
 
                         pA("if (matfixtmp < matcol) {");
                                 /* strL の読み込みオフセットを計算
@@ -2545,7 +2545,7 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
          */
         const int32_t local_label_row = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label_row);
+        pA("LB(1, %d);", local_label_row);
 
         pA("if (matcountrow < matrow) {");
                 pA("matcountcol = 0;");
@@ -2555,7 +2555,7 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
                  */
                 const int32_t local_label_col = cur_label_index_head;
                 cur_label_index_head++;
-                pA("LB(0, %d);", local_label_col);
+                pA("LB(1, %d);", local_label_col);
 
                 pA("if (matcountcol < matcol) {");
                         /* strL の読み込みオフセットを計算
@@ -2655,7 +2655,7 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
          */
         const int32_t local_label_row = cur_label_index_head;
         cur_label_index_head++;
-        pA("LB(0, %d);", local_label_row);
+        pA("LB(1, %d);", local_label_row);
 
         pA("if (matcountrow < matrow) {");
                 pA("matcountcol = 0;");
@@ -2665,7 +2665,7 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
                  */
                 const int32_t local_label_col = cur_label_index_head;
                 cur_label_index_head++;
-                pA("LB(0, %d);", local_label_col);
+                pA("LB(1, %d);", local_label_col);
 
                 pA("if (matcountcol < matcol) {");
                         /* strL の読み込みオフセットを計算
@@ -3359,7 +3359,7 @@ read_variable
                         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
                         pA(push_labelstack);
                         pA("PLIMM(P3F, %d);\n", labellist_search($1));
-                        pA("LB(0, %d);\n", cur_label_index_head);
+                        pA("LB(1, %d);\n", cur_label_index_head);
                         cur_label_index_head++;
                 }
         }
@@ -3433,7 +3433,7 @@ iterator_for
                  * これはラベル番号で int32 型の値である。
                  * そして、ラベルを作成したので cur_label_index_head を一つ進める。
                  */
-                pA("LB(0, %d);\n", cur_label_index_head);
+                pA("LB(1, %d);\n", cur_label_index_head);
                 $<ival>$ = cur_label_index_head;
                 cur_label_index_head++;
 
@@ -3535,7 +3535,7 @@ iterator_for
 
 define_label
         : __DEFINE_LABEL {
-                pA("LB(0, %d);\n", labellist_search($1));
+                pA("LB(1, %d);\n", labellist_search($1));
         }
         ;
 
@@ -3555,7 +3555,7 @@ jump
                 /* そして、実際に戻り位置としてのラベル（無名ラベル）をここに作成し、
                  * そして、ラベルを作成したので cur_label_index_head を一つ進める
                  */
-                pA("LB(0, %d);\n", cur_label_index_head);
+                pA("LB(1, %d);\n", cur_label_index_head);
                 cur_label_index_head++;
         }
         | __OPE_RETURN {
@@ -3584,7 +3584,7 @@ jump
                 pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
                 pA(push_labelstack);
                 pA("PLIMM(P3F, %d);\n", labellist_search($4));
-                pA("LB(0, %d);\n", cur_label_index_head);
+                pA("LB(1, %d);\n", cur_label_index_head);
                 cur_label_index_head++;
 
                 pA("}");
@@ -3615,7 +3615,7 @@ define_def_function
                 /* __STATE_DEF __IDENTIFIER も、ラベルの一種として字句解析の段階で登録されている前提
                  * ここを、関数呼び出しの際にジャンプしてくる位置とする
                  */
-                pA("LB(0, %d);\n", labellist_search($2));
+                pA("LB(1, %d);\n", labellist_search($2));
 
                 /* 以降の変数をローカル変数とするために、スコープを現時点までに設定 */
                 varlist_scope_push();
@@ -3657,7 +3657,7 @@ define_full_function
         : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __DECL_END {
                 /* define_def_function の場合とほぼ同じ
                  */
-                pA("LB(0, %d);\n", labellist_search($2));
+                pA("LB(1, %d);\n", labellist_search($2));
 
                 varlist_scope_push();
 
