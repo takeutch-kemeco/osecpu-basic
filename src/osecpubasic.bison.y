@@ -1733,72 +1733,76 @@ static void __func_dsection(void)
         endF();
 }
 
-/* a,b,cから最大値を探す命令を出力する
+/* 3項から最大値インデックスを探す命令を出力する
  * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
  *
- * 結果はビットフラグとして返される。
- * fixL = 1, fixR = 2, fixS = 4
+ * 結果は [0] = fixL, [1] = fixR, [2] = fixS と考えた場合のインデックス値
  *
  * 非公開関数
  */
-static void __func_search_max(void)
+static void __func_search_max3(void)
 {
         beginF();
 
-        pA("if ((fixL >= fixR) & (fixL >= fixS)) {fixA = 1;}");
-        pA("if ((fixR >= fixS) & (fixR >= fixL)) {fixA = 2;}");
-        pA("if ((fixS >= fixL) & (fixS >= fixR)) {fixA = 4;}");
+        pA("fixA = 0;");
+        pA("if ((fixR >= fixS) & (fixR >= fixL)) {fixA = 1;}");
+        pA("if ((fixS >= fixL) & (fixS >= fixR)) {fixA = 2;}");
 
         endF();
 }
 
-/* a,b,cから最小値を探す命令を出力する
- * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
+/* 2項から最小値インデックスを探す命令を出力する
+ * あらかじめ fixL, fixR に値をセットしておくこと。演算結果はfixAへ出力される。
  *
- * 結果はビットフラグとして返される。
- * fixL = 1, fixR = 2, fixS = 4
+ * 結果は [0] = fixL, [1] = fixR, [2] = fixS と考えた場合のインデックス値
  *
  * 非公開関数
  */
-static void __func_search_min(void)
+static void __func_search_min2(void)
 {
         beginF();
 
-        pA("if ((fixL <= fixR) & (fixL <= fixS)) {fixA = 1;}");
-        pA("if ((fixR <= fixS) & (fixR <= fixL)) {fixA = 2;}");
-        pA("if ((fixS <= fixL) & (fixS <= fixR)) {fixA = 4;}");
+        pA("fixA = 0;");
+        pA("if (fixR <= fixL) {fixA = 1;}");
 
         endF();
 }
 
-/* a,b,cから最大値、中間値、最小値を探す命令を出力する
+/* 3項から最大値、中間値、最小値のインデックスを探す命令を出力する
  * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
  *
- * 結果はビットフラグとして返される。
- * fixL = 1, fixR = 2, fixS = 4
- * を単位フォーマットとして、これを3ビット毎に
- * 0-2bit = min, 3-5bit = mid, 6-8bit = max
- * として並べた状態の値を返す。
+ * 結果は [0] = fixL, [1] = fixR, [2] = fixS と考えた場合のインデックス値を、2bit毎に配列した値
+ * 0-1bit = min, 2-3bit = mid, 4-5bit = max
  *
  * 非公開関数
  */
-static void __func_search_minmidmax(void)
+static void __func_search_minmidmax3(void)
 {
         beginF();
 
-        __func_search_max();
+        __func_search_max3();
         pA("fixT = fixA;");
-        pA("fixT1 = fixT << 6;");
+        pA("fixT1 = fixT << 4;");
 
-        __func_search_min();
-        pA("fixT |= fixA;");
-        pA("fixT1 |= fixT");
+        pA("if (fixT == 0) {");
+                pA("fixL = fixS;");
+                __func_search_min2();
+                pA("if (fixA == 0) {fixA = fixT1 | %d | %d;}", (1 << 2), (2 << 0));
+                pA("if (fixA == 1) {fixA = fixT1 | %d | %d;}", (2 << 2), (1 << 0));
+        pA("}");
 
-        pA("if (fixT == 6) {fixA = 1;}");
-        pA("if (fixT == 5) {fixA = 2;}");
-        pA("if (fixT == 3) {fixA = 4;}");
-        pA("fixA <<= 3;");
-        pA("fixA |= fixT1;");
+        pA("if (fixT == 1) {");
+                pA("fixR = fixS;");
+                __func_search_min2();
+                pA("if (fixA == 0) {fixA = fixT1 | %d | %d;}", (2 << 2), (0 << 0));
+                pA("if (fixA == 1) {fixA = fixT1 | %d | %d;}", (0 << 2), (2 << 0));
+        pA("}");
+
+        pA("if (fixT == 2) {");
+                __func_search_min2();
+                pA("if (fixA == 0) {fixA = fixT1 | %d | %d;}", (1 << 2), (0 << 0));
+                pA("if (fixA == 1) {fixA = fixT1 | %d | %d;}", (0 << 2), (1 << 0));
+        pA("}");
 
         endF();
 }
