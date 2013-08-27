@@ -2218,14 +2218,12 @@ static void ope_matrix_trn(const char* strA, const char* strL)
 
 #define OPE_MATRIX_MERGE_COMMON_TYPE_ADD 0
 #define OPE_MATRIX_MERGE_COMMON_TYPE_SUB 1
-#define OPE_MATRIX_MERGE_COMMON_TYPE_MUL 2
 
-/* 行列の各要素同士での加算、減算、またはベクトルの各要素同士での乗算を行う。
+/* 行列の各要素同士での加算、減算を行う。
  * 行および列が同じ大きさの場合のみ、対応する各要素同士を加算する。
  *
  * type に OPE_MATRIX_MERGE_COMMON_TYPE_ADD を渡せば行列の各要素同士の加算。
  * type に OPE_MATRIX_MERGE_COMMON_TYPE_SUB を渡せば行列の各要素同士の減算。
- * type に OPE_MATRIX_MERGE_COMMON_TYPE_MUL を渡せばベクトルの各要素同士の乗算。
  *
  * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
@@ -2236,7 +2234,6 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
         switch (type) {
         case OPE_MATRIX_MERGE_COMMON_TYPE_ADD:
         case OPE_MATRIX_MERGE_COMMON_TYPE_SUB:
-        case OPE_MATRIX_MERGE_COMMON_TYPE_MUL:
                 break;
 
         default:
@@ -2311,16 +2308,6 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
                         write_heap_inline_direct("heap_socket");
                 pA("}");
 
-                /* 乗算の場合 */
-                pA("if (matfixtmp == %d) {", OPE_MATRIX_MERGE_COMMON_TYPE_MUL);
-                        __func_mul();
-
-                        /* 演算結果をstrAへ書き込む */
-                        pA("heap_offset = matcountrow << 16;");
-                        pA("heap_base = matbpA;");
-                        write_heap_inline_direct("fixA");
-                pA("}");
-
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
         pA("}");
@@ -2349,15 +2336,72 @@ static void ope_matrix_sub(const char* strA, const char* strL, const char* strR)
 }
 
 /* ベクトル同士の乗算を行う。
- * strA, strL, strR が同じ長さのベクトルの場合のみ乗算する。
+ * strL, strR が同じ長さで、かつ、strAがスカラーの場合のみ乗算する。
  *
- * strAの記憶領域が、strL, strR と重複していても問題無く動作する。
+ * strA, strL, strR のメモリー領域が重複していても問題無く動作する。
  *
  * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
 static void ope_matrix_mul_vv(const char* strA, const char* strL, const char* strR)
 {
-        ope_matrix_merge_common(strA, strL, strR, OPE_MATRIX_MERGE_COMMON_TYPE_MUL);
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varA = varlist_search(strA);
+        struct Var* varL = varlist_search(strL);
+        struct Var* varR = varlist_search(strR);
+
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+
+        /* strL と strR の要素数が異なる場合はエラーとする（コンパイル時） */
+        if ((varL->col_len != varR->col_len) || (varL->row_len != varR->row_len))
+                yyerror("syntax err: a = b * c において、 b, c の要素数が異なります");
+
+        /* 要素数をセット（コンパイル時） */
+        pA("matcountrow = %d;", varL->array_len - 1);
+
+        beginF();
+
+        /* 演算結果の tmp 用レジスターを初期化 */
+        pA("matfixA = 0;");
+
+        /* 局所ループ用に無名ラベルをセット */
+        const int32_t local_label = cur_label_index_head;
+        cur_label_index_head++;
+        pA("LB(1, %d);", local_label);
+
+        pA("if (matcountrow >= 0) {");
+                /* strL, strR から値を読み込む
+                 * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
+                 * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
+                 */
+                pA("heap_offset = matcountrow << 16;");
+                pA("heap_base = matbpL;");
+                read_heap_inline_direct("fixL");
+
+                pA("heap_offset = matcountrow << 16;");
+                pA("heap_base = matbpR;");
+                read_heap_inline_direct("fixR");
+
+                __func_mul();
+
+                /* 乗算結果をmatfixAへ累積させる */
+                pA("matfixA += fixA;");
+
+                /* ループの先頭へジャンプ
+                 */
+                pA("matcountrow--;");
+                pA("PLIMM(P3F, %d);", local_label);
+        pA("}");
+
+        /* 演算結果を strA へ書き込む */
+        pA("heap_offset = 0;");
+        pA("heap_base = matbpA;");
+        write_heap_inline_direct("matfixA");
+
+        endF();
 }
 
 /* ベクトル（または行列）のスカラー乗算を行う。
@@ -2797,11 +2841,11 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
  * M = M * M
  * V = M * V
  * V = V * M
- * V = V * V
+ * S = V * V
  * M = S * M
  * V = S * V
  *
- * A = B * C において、Aの記憶領域が、BまたはCと重複していた場合は、正常な計算結果は得られない。
+ * A = B * C において、Aの記憶領域が、BまたはCと重複していた場合は、正常な計算結果は得られないケースがありうる。
  *
  * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
@@ -2811,10 +2855,6 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
         struct Var* varL = varlist_search(strL);
         struct Var* varR = varlist_search(strR);
         struct Var* varA = varlist_search(strA);
-
-        /* strA がスカラーな場合はエラーとする */
-        if (varA->row_len <= 1 && varA->col_len <= 1)
-                yyerror("syntax err: A = B * C による正方行列の積を得ようとしましたが、Aはスカラー変数です");
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
@@ -2836,7 +2876,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
                 }
 
         /* strAがベクトルな場合 */
-        } else {
+        } else if ((varA->row_len <= 1) && (varA->col_len >= 2)) {
                 /* strL がスカラーの場合 */
                 if ((varL->row_len <= 1) && (varL->col_len <= 1)) {
                         ope_matrix_mul_sv(strA, strL, strR);
@@ -2851,9 +2891,14 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
                 } else if ((varR->row_len >= 2) && (varR->row_len == varR->col_len)) {
                         ope_matrix_mul_vm(strA, strL, strR);
                         return;
+                }
 
-                /* strA, strL, strR 全てベクトルの場合 */
-                } else if ((varR->row_len <= 1) && (varL->row_len <= 1)) {
+        /* strAがスカラーな場合 */
+        } else if ((varA->row_len <= 1) && (varA->col_len <= 1)) {
+                /* strL, strR が同じ長さのベクトルの場合 */
+                if ((varL->row_len <= 1) && (varL->col_len >= 2) &&
+                    (varL->row_len == varR->row_len) && (varL->col_len == varR->col_len))
+                {
                         ope_matrix_mul_vv(strA, strL, strR);
                         return;
                 }
