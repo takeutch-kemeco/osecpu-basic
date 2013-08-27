@@ -677,6 +677,42 @@ static char init_eoe_arg[] = {
         "SInt32 fixA3:R24;"
 };
 
+/* ope_matrix 用変数の初期化
+ *
+ * 3 * 3 行列以下の小さな行列演算の高速化を書きやすいように、一部の変数はunionの関係となっている。
+ */
+static char init_matrix[] = {
+        /* 主にループ処理の必要な大きな行列処理時に用いる想定
+         */
+        "SInt32 matfixL: R14;"
+        "SInt32 matfixR: R15;"
+        "SInt32 matfixA: R16;"
+        "SInt32 matfixtmp: R17;"
+        "SInt32 matcountcol: R18;"
+        "SInt32 matcountrow: R19;"
+        "SInt32 matcol: R1A;"
+        "SInt32 matrow: R1B;"
+
+        /* 主に3*3以下の小さな行列処理時に用いる想定
+         * （ループ目的の場合の名前とは、一部のレジスターがunion関係となっている）
+         */
+        "SInt32 matfixE0: R14;"
+        "SInt32 matfixE1: R15;"
+        "SInt32 matfixE2: R16;"
+        "SInt32 matfixE3: R17;"
+        "SInt32 matfixE4: R18;"
+        "SInt32 matfixE5: R19;"
+        "SInt32 matfixE6: R1A;"
+        "SInt32 matfixE7: R1B;"
+        "SInt32 matfixE8: R1C;"
+
+        /* 3項それぞれのベースアドレス保存用。（アタッチへの対応用）
+         */
+        "SInt32 matbpL: R26;"
+        "SInt32 matbpR: R27;"
+        "SInt32 matbpA: R28;"
+};
+
 /* 全ての初期化
  */
 void init_all(void)
@@ -691,23 +727,13 @@ void init_all(void)
         pA("SInt32 forfixtmp: R13;\n");
 
         /* matの作業用 */
-        pA("SInt32 matfixL: R14;");
-        pA("SInt32 matfixR: R15;");
-        pA("SInt32 matfixA: R16;");
-        pA("SInt32 matfixtmp: R17;");
-        pA("SInt32 matcountcol: R18;");
-        pA("SInt32 matcountrow: R19;");
-        pA("SInt32 matcol: R1A;");
-        pA("SInt32 matrow: R1B;");
-        pA("SInt32 matbpL: R1C;");
-        pA("SInt32 matbpR: R1D;");
-        pA("SInt32 matbpA: R1E;");
 
         pA(init_heap);
         pA(init_stack);
         pA(init_labelstack);
         pA(init_attachstack);
         pA(init_eoe_arg);
+        pA(init_matrix);
 }
 
 /* 以下、各種アキュムレーター */
@@ -2408,6 +2434,103 @@ static void ope_matrix_mul_vv(const char* strA, const char* strL, const char* st
         endF();
 }
 
+/* 3次ベクトル同士のクロス積を行う。
+ * strA, strL, strR が全て3次ベクトルの場合のみ。
+ *
+ * strA, strL, strR のメモリー領域が重複してる場合は値が壊れる。
+ *
+ * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
+ */
+static void ope_matrix_cross_product_vv(const char* strA, const char* strL, const char* strR)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* varA = varlist_search(strA);
+        struct Var* varL = varlist_search(strL);
+        struct Var* varR = varlist_search(strR);
+
+        /* 実行時に matbp? < 0 （空の場合）ならば、
+         * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
+        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+
+        /* strA, strL, strR が全て3次ベクトルの場合のみ動作する。それ以外はエラーとする（コンパイル時） */
+        if (!
+                ((varA->row_len <= 1) && (varL->row_len <= 1) && (varR->row_len <= 1) &&
+                 (varA->col_len == 3) && (varL->col_len == 3) && (varR->col_len == 3))
+        ) {
+                yyerror("syntax err: クロス積を計算可能なのは3次ベクトルのみです");
+        }
+
+        beginF();
+
+        /* 短いベクトル同士の演算なので、値を一度に全てレジスターへ読んで計算できる
+         */
+        pA("heap_base = matbpL;");
+        pA("heap_offset = 0;");
+        read_heap_inline_direct("matfixE0");
+        pA("heap_offset = 1;");
+        read_heap_inline_direct("matfixE1");
+        pA("heap_offset = 2;");
+        read_heap_inline_direct("matfixE2");
+
+        pA("heap_base = matbpR;");
+        pA("heap_offset = 0;");
+        read_heap_inline_direct("matfixE3");
+        pA("heap_offset = 1;");
+        read_heap_inline_direct("matfixE4");
+        pA("heap_offset = 2;");
+        read_heap_inline_direct("matfixE5");
+
+        /* E1*E5 - E2*E4 -> E6
+         */
+        pA("fixL = matfixE1;");
+        pA("fixR = matfixE5;");
+        __func_mul();
+        pA("matfixE6 = fixA;");
+
+        pA("fixL = matfixE2;");
+        pA("fixR = matfixE4;");
+        __func_mul();
+        pA("matfixE6 -= fixA;");
+
+        /* E2*E3 - E0*E5 -> E7
+         */
+        pA("fixL = matfixE2;");
+        pA("fixR = matfixE3;");
+        __func_mul();
+        pA("matfixE7 = fixA;");
+
+        pA("fixL = matfixE0;");
+        pA("fixR = matfixE5;");
+        __func_mul();
+        pA("matfixE7 -= fixA;");
+
+        /* E0*E4 - E1*E3 -> E8
+         */
+        pA("fixL = matfixE0;");
+        pA("fixR = matfixE4;");
+        __func_mul();
+        pA("matfixE8 = fixA;");
+
+        pA("fixL = matfixE1;");
+        pA("fixR = matfixE3;");
+        __func_mul();
+        pA("matfixE8 -= fixA;");
+
+        /* 演算結果を strA へ書き込む
+         */
+        pA("heap_base = matbpA;");
+        pA("heap_offset = 0;");
+        write_heap_inline_direct("matfixE6");
+        pA("heap_offset = 1;");
+        write_heap_inline_direct("matfixE7");
+        pA("heap_offset = 2;");
+        write_heap_inline_direct("matfixE8");
+
+        endF();
+}
+
 /* ベクトル（または行列）のスカラー乗算を行う。
  * strA, strR が同じ長さのベクトル（または行列）の場合のみ乗算する。
  *
@@ -2845,11 +2968,15 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
  * M = M * M
  * V = M * V
  * V = V * M
+ * V = V * V
  * S = V * V
  * M = S * M
  * V = S * V
  *
  * A = B * C において、Aの記憶領域が、BまたはCと重複していた場合は、正常な計算結果は得られないケースがありうる。
+ *
+ * S = V * V の場合は内積だが、
+ * V = V * V の場合はクロス積となる。（ただしクロス積はVが3次ベクトルの場合のみ）
  *
  * あらかじめ各 str? に対応するアタッチを matbp? にセットしておくこと
  */
@@ -2881,8 +3008,15 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 
         /* strAがベクトルな場合 */
         } else if ((varA->row_len <= 1) && (varA->col_len >= 2)) {
+                /* strA, strL, strR が全て3次ベクトルの場合はクロス積を計算する */
+                if ((varA->row_len <= 1) && (varL->row_len <= 1) && (varR->row_len <= 1) &&
+                    (varA->col_len == 3) && (varL->col_len == 3) && (varR->col_len == 3))
+                {
+                        ope_matrix_cross_product_vv(strA, strL, strR);
+                        return;
+
                 /* strL がスカラーの場合 */
-                if ((varL->row_len <= 1) && (varL->col_len <= 1)) {
+                } else if ((varL->row_len <= 1) && (varL->col_len <= 1)) {
                         ope_matrix_mul_sv(strA, strL, strR);
                         return;
 
