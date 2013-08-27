@@ -619,14 +619,14 @@ static void pop_eoe(void)
 };
 
 static char debug_eoe[] = {
-        "junkApi_putConstString('\\nfixR:');"
-        "junkApi_putStringDec('\\1', fixR, 10, 1);"
         "junkApi_putConstString(' fixL:');"
         "junkApi_putStringDec('\\1', fixL, 10, 1);"
-        "junkApi_putConstString(' fixRx:');"
-        "junkApi_putStringDec('\\1', fixRx, 10, 1);"
+        "junkApi_putConstString('\\nfixR:');"
+        "junkApi_putStringDec('\\1', fixR, 10, 1);"
         "junkApi_putConstString(' fixLx:');"
         "junkApi_putStringDec('\\1', fixLx, 10, 1);"
+        "junkApi_putConstString(' fixRx:');"
+        "junkApi_putStringDec('\\1', fixRx, 10, 1);"
         "junkApi_putConstString(' fixT:');"
         "junkApi_putStringDec('\\1', fixT, 10, 1);"
         "junkApi_putConstString(' fixT1:');"
@@ -645,6 +645,10 @@ static char debug_eoe[] = {
         "junkApi_putStringDec('\\1', fixA1, 10, 1);"
         "junkApi_putConstString(' fixA2:');"
         "junkApi_putStringDec('\\1', fixA2, 10, 1);"
+        "junkApi_putConstString(' fixA3:');"
+        "junkApi_putStringDec('\\1', fixA3, 10, 1);"
+        "junkApi_putConstString(' fixA4:');"
+        "junkApi_putStringDec('\\1', fixA4, 10, 1);"
         "junkApi_putConstString('\\n');"
 };
 
