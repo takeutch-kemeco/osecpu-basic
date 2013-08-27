@@ -30,14 +30,14 @@ openwin scw sch
         mat vtx(6)<-v:=rm(4)<-m * vt(6)<-v; mat vtx(7)<-v:=rm(4)<-m * vt(7)<-v;
 
         dim prj; prj:=200; dim tz; tz:=100; dim iz;
-        iz:=(vtx(0)<-v(2) + tz); vtx(0)<-v(0):=(vtx(0)<-v(0) * prj)/iz; vtx(0)<-v(1):=(vtx(0)<-v(1) * prj)/iz;
-        iz:=(vtx(1)<-v(2) + tz); vtx(1)<-v(0):=(vtx(1)<-v(0) * prj)/iz; vtx(1)<-v(1):=(vtx(1)<-v(1) * prj)/iz;
-        iz:=(vtx(2)<-v(2) + tz); vtx(2)<-v(0):=(vtx(2)<-v(0) * prj)/iz; vtx(2)<-v(1):=(vtx(2)<-v(1) * prj)/iz;
-        iz:=(vtx(3)<-v(2) + tz); vtx(3)<-v(0):=(vtx(3)<-v(0) * prj)/iz; vtx(3)<-v(1):=(vtx(3)<-v(1) * prj)/iz;
-        iz:=(vtx(4)<-v(2) + tz); vtx(4)<-v(0):=(vtx(4)<-v(0) * prj)/iz; vtx(4)<-v(1):=(vtx(4)<-v(1) * prj)/iz;
-        iz:=(vtx(5)<-v(2) + tz); vtx(5)<-v(0):=(vtx(5)<-v(0) * prj)/iz; vtx(5)<-v(1):=(vtx(5)<-v(1) * prj)/iz;
-        iz:=(vtx(6)<-v(2) + tz); vtx(6)<-v(0):=(vtx(6)<-v(0) * prj)/iz; vtx(6)<-v(1):=(vtx(6)<-v(1) * prj)/iz;
-        iz:=(vtx(7)<-v(2) + tz); vtx(7)<-v(0):=(vtx(7)<-v(0) * prj)/iz; vtx(7)<-v(1):=(vtx(7)<-v(1) * prj)/iz;
+        iz:=prj * (1/(vtx(0)<-v(2) + tz)); mat vtx(0)<-v := iz * vtx(0)<-v;
+        iz:=prj * (1/(vtx(1)<-v(2) + tz)); mat vtx(1)<-v := iz * vtx(1)<-v;
+        iz:=prj * (1/(vtx(2)<-v(2) + tz)); mat vtx(2)<-v := iz * vtx(2)<-v;
+        iz:=prj * (1/(vtx(3)<-v(2) + tz)); mat vtx(3)<-v := iz * vtx(3)<-v;
+        iz:=prj * (1/(vtx(4)<-v(2) + tz)); mat vtx(4)<-v := iz * vtx(4)<-v;
+        iz:=prj * (1/(vtx(5)<-v(2) + tz)); mat vtx(5)<-v := iz * vtx(5)<-v;
+        iz:=prj * (1/(vtx(6)<-v(2) + tz)); mat vtx(6)<-v := iz * vtx(6)<-v;
+        iz:=prj * (1/(vtx(7)<-v(2) + tz)); mat vtx(7)<-v := iz * vtx(7)<-v;
 
         dim ov(3); ov(0):=scw/2; ov(1):=sch/2; ov(2):=0;
         mat vtx(0)<-v:=vtx(0)<-v+ov; mat vtx(1)<-v:=vtx(1)<-v+ov; mat vtx(2)<-v:=vtx(2)<-v+ov; mat vtx(3)<-v:=vtx(3)<-v+ov;
@@ -58,7 +58,6 @@ openwin scw sch
         drawline 0 vtx(1)<-v(0) vtx(1)<-v(1) vtx(5)<-v(0) vtx(5)<-v(1) col
         drawline 0 vtx(2)<-v(0) vtx(2)<-v(1) vtx(6)<-v(0) vtx(6)<-v(1) col
         drawline 0 vtx(3)<-v(0) vtx(3)<-v(1) vtx(7)<-v(0) vtx(7)<-v(1) col
-
 
         sleep 0 16
 

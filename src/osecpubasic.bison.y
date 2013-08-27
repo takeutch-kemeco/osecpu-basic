@@ -619,9 +619,9 @@ static void pop_eoe(void)
 };
 
 static char debug_eoe[] = {
-        "junkApi_putConstString(' fixL:');"
+        "junkApi_putConstString('\\nfixL:');"
         "junkApi_putStringDec('\\1', fixL, 10, 1);"
-        "junkApi_putConstString('\\nfixR:');"
+        "junkApi_putConstString(' fixR:');"
         "junkApi_putStringDec('\\1', fixR, 10, 1);"
         "junkApi_putConstString(' fixLx:');"
         "junkApi_putStringDec('\\1', fixLx, 10, 1);"
@@ -647,8 +647,6 @@ static char debug_eoe[] = {
         "junkApi_putStringDec('\\1', fixA2, 10, 1);"
         "junkApi_putConstString(' fixA3:');"
         "junkApi_putStringDec('\\1', fixA3, 10, 1);"
-        "junkApi_putConstString(' fixA4:');"
-        "junkApi_putStringDec('\\1', fixA4, 10, 1);"
         "junkApi_putConstString('\\n');"
 };
 
