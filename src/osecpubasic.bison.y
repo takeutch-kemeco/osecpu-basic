@@ -2465,19 +2465,23 @@ static void ope_matrix_cross_product_vv(const char* strA, const char* strL, cons
         /* 短いベクトル同士の演算なので、値を一度に全てレジスターへ読んで計算できる
          */
         pA("heap_base = matbpL;");
-        pA("heap_offset = 0;");
+        pA("heap_offset = %d;", 0 << 16);
         read_heap_inline_direct("matfixE0");
-        pA("heap_offset = 1;");
+        pA("heap_base = matbpL;");
+        pA("heap_offset = %d;", 1 << 16);
         read_heap_inline_direct("matfixE1");
-        pA("heap_offset = 2;");
+        pA("heap_base = matbpL;");
+        pA("heap_offset = %d;", 2 << 16);
         read_heap_inline_direct("matfixE2");
 
         pA("heap_base = matbpR;");
-        pA("heap_offset = 0;");
+        pA("heap_offset = %d;", 0 << 16);
         read_heap_inline_direct("matfixE3");
-        pA("heap_offset = 1;");
+        pA("heap_base = matbpR;");
+        pA("heap_offset = %d;", 1 << 16);
         read_heap_inline_direct("matfixE4");
-        pA("heap_offset = 2;");
+        pA("heap_base = matbpR;");
+        pA("heap_offset = %d;", 2 << 16);
         read_heap_inline_direct("matfixE5");
 
         /* E1*E5 - E2*E4 -> E6
@@ -2519,11 +2523,13 @@ static void ope_matrix_cross_product_vv(const char* strA, const char* strL, cons
         /* 演算結果を strA へ書き込む
          */
         pA("heap_base = matbpA;");
-        pA("heap_offset = 0;");
+        pA("heap_offset = %d;", 0 << 16);
         write_heap_inline_direct("matfixE6");
-        pA("heap_offset = 1;");
+        pA("heap_base = matbpA;");
+        pA("heap_offset = %d;", 1 << 16);
         write_heap_inline_direct("matfixE7");
-        pA("heap_offset = 2;");
+        pA("heap_base = matbpA;");
+        pA("heap_offset = %d;", 2 << 16);
         write_heap_inline_direct("matfixE8");
 
         endF();
