@@ -3082,6 +3082,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __OPE_PLUS __OPE_MINUS
 %token __OPE_ATTACH __OPE_ADDRESS
 %token __LB __RB __DECL_END __IDENTIFIER __LABEL __DEFINE_LABEL __EOF
+%token __BLOCK_LB __BLOCK_RB
 %token __CONST_STRING __CONST_FLOAT __CONST_INTEGER
 
 %type <ival> __CONST_INTEGER
@@ -3099,7 +3100,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> selection_if selection_if_v selection_if_t selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
 %type <sval> ope_matrix
-%type <sval> syntax_tree declaration_list declaration
+%type <sval> syntax_tree declaration_list declaration declaration_block
 %type <sval> define_function define_def_function define_full_function
 %type <sval> var_identifier
 %type <ival> expression_list identifier_list attach_base
@@ -3118,6 +3119,18 @@ syntax_tree
 declaration_list
         : declaration
         | declaration declaration_list
+        | declaration_block declaration_list
+        ;
+
+declaration_block
+        : __BLOCK_LB __BLOCK_RB {
+                /* 空の場合は何もしない */
+        }
+        | __BLOCK_LB {
+                varlist_scope_push();   /* コンパイル時 */
+        } declaration_list __BLOCK_RB {
+                varlist_scope_pop();    /* コンパイル時 */
+        }
         ;
 
 declaration
