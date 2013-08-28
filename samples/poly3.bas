@@ -1,4 +1,5 @@
 dim scw; scw:=480; dim sch; sch:=240
+dim ot(8192,10)
 dim pool(1000); dim m(3,3); dim v(3); dim rd; rd:=3.14159265358979/180;
 dim vt(8); vt(0):=100>>16; vt(1):=104>>16; vt(2):=108>>16; vt(3):=112>>16;
            vt(4):=116>>16; vt(5):=120>>16; vt(6):=124>>16; vt(7):=128>>16;
@@ -46,6 +47,7 @@ openwin scw sch
         mat vts(4)<-v:=vts(4)<-v+ov; mat vts(5)<-v:=vts(5)<-v+ov; mat vts(6)<-v:=vts(6)<-v+ov; mat vts(7)<-v:=vts(7)<-v+ov;
 
         dim col; dim va(3); dim vb(3);
+        init_ot();
 
 rem 0 1 2 3
         col:=torgb 255 0 0
@@ -88,3 +90,11 @@ rem 7 4 0 3
         col:=torgb 100 140 180
         fillrect 0  scw sch 0 0 col
 goto *LLL
+
+function init_ot()
+        dim i;
+        for i := 0 to 8191 step 1
+                ot(i,0):=-1;
+                print ot(i,0)
+        next
+end function

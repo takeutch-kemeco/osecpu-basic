@@ -3541,7 +3541,95 @@ comparison
         ;
 
 read_variable
-        : var_identifier {
+        : __OPE_ADDRESS var_identifier {
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search($2);
+                if (var == NULL)
+                        yyerror("syntax err: 未定義のスカラー変数のアドレスを得ようとしました");
+
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                 */
+                pop_attachstack_direct("attachstack_socket");
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                   "else {heap_base = %d;}", var->base_ptr);
+
+                /* heap_base自体を（アドレス自体を）スタックにプッシュする */
+                push_stack_direct("heap_base");
+        }
+        | __OPE_ADDRESS var_identifier __LB expression_list __RB {
+                /* ラベルリストに名前が存在しなければ、これは配列変数 */
+                if (labellist_search_unsafe($2) == -1) {
+                        /* 変数のスペックを得る。（コンパイル時） */
+                        struct Var* var = varlist_search($2);
+                        if (var == NULL)
+                                yyerror("syntax err: 未定義の配列変数のアドレスを得ようとしました");
+
+                        /* 変数がスカラーな場合はエラー */
+                        if (var->row_len == 1 && var->col_len == 1)
+                                yyerror("syntax err: スカラー変数へ添字による指定をしました");
+
+                        /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
+                        */
+                        /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
+                        if (var->row_len == 1 && $4 != 1)
+                                yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
+
+                        /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
+                        else if (var->row_len >= 2 && $4 != 2)
+                                yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
+
+                        /* 配列の次元によって分岐（コンパイル時）
+                         */
+                        /* １次元配列の場合 */
+                        if (var->row_len == 1) {
+                                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                                 */
+                                pop_attachstack_direct("attachstack_socket");
+                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                                   "else {heap_base = %d;}", var->base_ptr);
+
+                                /* heap_base へオフセットを足す
+                                 */
+                                pop_stack_direct("heap_offset");
+                                pA("heap_offset >>= 16;");
+                                pA("heap_base += heap_offset;");
+
+                        /* 2次元配列の場合 */
+                        } else if (var->row_len >= 2) {
+                                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                                 */
+                                pop_attachstack_direct("attachstack_socket");
+                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                                   "else {heap_base = %d;}", var->base_ptr);
+
+                                /* heap_base へオフセットを足す
+                                 */
+                                /* これは[行, 列]の列 */
+                                pop_stack_direct("heap_offset");
+
+                                /* これは[行, 列]の行。
+                                 * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
+                                 */
+                                pop_stack_direct("stack_socket");
+                                pA("heap_offset += stack_socket * %d;", var->col_len);
+
+                                pA("heap_offset >>= 16;");
+                                pA("heap_base += heap_offset;");
+
+                        /* 1,2次元以外の場合はシステムエラー */
+                        } else {
+                                yyerror("system err: __OPE_ADDRESS read_variable, col_len の値が不正です");
+                        }
+
+                        /* heap_base自体を（アドレス自体を）スタックにプッシュする */
+                        push_stack_direct("heap_base");
+
+                /* そうでなければ、エラー */
+                } else {
+                        yyerror("system err: read_variable, 関数ポインターは未サポートです");
+                }
+        }
+        | var_identifier {
                 /* 変数のスペックを得る。（コンパイル時） */
                 struct Var* var = varlist_search($1);
                 if (var == NULL)
