@@ -3082,6 +3082,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __OPE_PLUS __OPE_MINUS
 %token __OPE_ATTACH __OPE_ADDRESS
 %token __LB __RB __DECL_END __IDENTIFIER __LABEL __DEFINE_LABEL __EOF
+%token __ARRAY_LB __ARRAY_RB
 %token __BLOCK_LB __BLOCK_RB
 %token __CONST_STRING __CONST_FLOAT __CONST_INTEGER
 
@@ -3329,10 +3330,10 @@ initializer
         : __STATE_DIM __IDENTIFIER {
                 varlist_add_local($2, 1, 1);
         }
-        | __STATE_DIM __IDENTIFIER __LB __CONST_INTEGER __RB {
+        | __STATE_DIM __IDENTIFIER __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
                 varlist_add_local($2, 1, $4);
         }
-        | __STATE_DIM __IDENTIFIER __LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __RB {
+        | __STATE_DIM __IDENTIFIER __ARRAY_LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __ARRAY_RB {
                 varlist_add_local($2, $4, $6);
         }
         ;
@@ -3358,7 +3359,7 @@ assignment
         : var_identifier __OPE_SUBST expression {
                 __assignment_scaler($1);
         }
-        | var_identifier __LB expression_list __RB __OPE_SUBST expression {
+        | var_identifier __ARRAY_LB expression_list __ARRAY_RB __OPE_SUBST expression {
                 __assignment_array($1, $3);
         }
         ;
@@ -3569,78 +3570,71 @@ read_variable
                 /* heap_base自体を（アドレス自体を）スタックにプッシュする */
                 push_stack_direct("heap_base");
         }
-        | __OPE_ADDRESS var_identifier __LB expression_list __RB {
-                /* ラベルリストに名前が存在しなければ、これは配列変数 */
-                if (labellist_search_unsafe($2) == -1) {
-                        /* 変数のスペックを得る。（コンパイル時） */
-                        struct Var* var = varlist_search($2);
-                        if (var == NULL)
-                                yyerror("syntax err: 未定義の配列変数のアドレスを得ようとしました");
+        | __OPE_ADDRESS var_identifier __ARRAY_LB expression_list __ARRAY_RB {
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search($2);
+                if (var == NULL)
+                        yyerror("syntax err: 未定義の配列変数のアドレスを得ようとしました");
 
-                        /* 変数がスカラーな場合はエラー */
-                        if (var->row_len == 1 && var->col_len == 1)
-                                yyerror("syntax err: スカラー変数へ添字による指定をしました");
+                /* 変数がスカラーな場合はエラー */
+                if (var->row_len == 1 && var->col_len == 1)
+                        yyerror("syntax err: スカラー変数へ添字による指定をしました");
 
-                        /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
-                        */
-                        /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                        if (var->row_len == 1 && $4 != 1)
-                                yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
+                /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
+                */
+                /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
+                if (var->row_len == 1 && $4 != 1)
+                        yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
 
-                        /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                        else if (var->row_len >= 2 && $4 != 2)
-                                yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
+                /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
+                else if (var->row_len >= 2 && $4 != 2)
+                        yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
 
-                        /* 配列の次元によって分岐（コンパイル時）
+                /* 配列の次元によって分岐（コンパイル時）
+                 */
+                /* １次元配列の場合 */
+                if (var->row_len == 1) {
+                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                          */
-                        /* １次元配列の場合 */
-                        if (var->row_len == 1) {
-                                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                                 */
-                                pop_attachstack_direct("attachstack_socket");
-                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                                   "else {heap_base = %d;}", var->base_ptr);
+                        pop_attachstack_direct("attachstack_socket");
+                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                           "else {heap_base = %d;}", var->base_ptr);
 
-                                /* heap_base へオフセットを足す
-                                 */
-                                pop_stack_direct("heap_offset");
-                                pA("heap_offset >>= 16;");
-                                pA("heap_base += heap_offset;");
+                        /* heap_base へオフセットを足す
+                         */
+                        pop_stack_direct("heap_offset");
+                        pA("heap_offset >>= 16;");
+                        pA("heap_base += heap_offset;");
 
-                        /* 2次元配列の場合 */
-                        } else if (var->row_len >= 2) {
-                                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                                 */
-                                pop_attachstack_direct("attachstack_socket");
-                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                                   "else {heap_base = %d;}", var->base_ptr);
+                /* 2次元配列の場合 */
+                } else if (var->row_len >= 2) {
+                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                         */
+                        pop_attachstack_direct("attachstack_socket");
+                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                           "else {heap_base = %d;}", var->base_ptr);
 
-                                /* heap_base へオフセットを足す
-                                 */
-                                /* これは[行, 列]の列 */
-                                pop_stack_direct("heap_offset");
+                        /* heap_base へオフセットを足す
+                         */
+                        /* これは[行, 列]の列 */
+                        pop_stack_direct("heap_offset");
 
-                                /* これは[行, 列]の行。
-                                 * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
-                                 */
-                                pop_stack_direct("stack_socket");
-                                pA("heap_offset += stack_socket * %d;", var->col_len);
+                        /* これは[行, 列]の行。
+                         * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
+                         */
+                        pop_stack_direct("stack_socket");
+                        pA("heap_offset += stack_socket * %d;", var->col_len);
 
-                                pA("heap_offset >>= 16;");
-                                pA("heap_base += heap_offset;");
+                        pA("heap_offset >>= 16;");
+                        pA("heap_base += heap_offset;");
 
-                        /* 1,2次元以外の場合はシステムエラー */
-                        } else {
-                                yyerror("system err: __OPE_ADDRESS read_variable, col_len の値が不正です");
-                        }
-
-                        /* heap_base自体を（アドレス自体を）スタックにプッシュする */
-                        push_stack_direct("heap_base");
-
-                /* そうでなければ、エラー */
+                /* 1,2次元以外の場合はシステムエラー */
                 } else {
-                        yyerror("system err: read_variable, 関数ポインターは未サポートです");
+                        yyerror("system err: __OPE_ADDRESS read_variable, col_len の値が不正です");
                 }
+
+                /* heap_base自体を（アドレス自体を）スタックにプッシュする */
+                push_stack_direct("heap_base");
         }
         | var_identifier {
                 /* 変数のスペックを得る。（コンパイル時） */
@@ -3665,76 +3659,76 @@ read_variable
                 /* 結果をスタックにプッシュする */
                 push_stack_direct("stack_socket");
         }
-        | var_identifier __LB expression_list __RB {
-                /* ラベルリストに名前が存在しなければ、これは配列変数 */
-                if (labellist_search_unsafe($1) == -1) {
-                        /* 変数のスペックを得る。（コンパイル時） */
-                        struct Var* var = varlist_search($1);
-                        if (var == NULL)
-                                yyerror("syntax err: 未定義の配列変数から読もうとしました");
+        | var_identifier __ARRAY_LB expression_list __ARRAY_RB {
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search($1);
+                if (var == NULL)
+                        yyerror("syntax err: 未定義の配列変数から読もうとしました");
 
-                        /* 変数がスカラーな場合はエラー */
-                        if (var->row_len == 1 && var->col_len == 1)
-                                yyerror("syntax err: スカラー変数へ添字による読み込みを行おうとしました");
+                /* 変数がスカラーな場合はエラー */
+                if (var->row_len == 1 && var->col_len == 1)
+                        yyerror("syntax err: スカラー変数へ添字による読み込みを行おうとしました");
 
-                        /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
-                        */
-                        /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                        if (var->row_len == 1 && $3 != 1)
-                                yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
+                /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
+                */
+                /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
+                if (var->row_len == 1 && $3 != 1)
+                        yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
 
-                        /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                        else if (var->row_len >= 2 && $3 != 2)
-                                yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
+                /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
+                else if (var->row_len >= 2 && $3 != 2)
+                        yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
 
-                        /* 配列の次元によって分岐（コンパイル時）
+                /* 配列の次元によって分岐（コンパイル時）
+                 */
+                /* １次元配列の場合 */
+                if (var->row_len == 1) {
+                        pop_stack_direct("heap_offset");
+
+                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                        pop_attachstack_direct("attachstack_socket");
+                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                           "else {heap_base = %d;}", var->base_ptr);
+
+                        read_heap_inline_direct("stack_socket");
+
+                /* 2次元配列の場合 */
+                } else if (var->row_len >= 2) {
+                        /* これは[行, 列]の列 */
+                        pop_stack_direct("heap_offset");
+
+                        /* これは[行, 列]の行。
+                         * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
                          */
-                        /* １次元配列の場合 */
-                        if (var->row_len == 1) {
-                                pop_stack_direct("heap_offset");
+                        pop_stack_direct("stack_socket");
+                        pA("heap_offset += stack_socket * %d;", var->col_len);
 
-                                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                                pop_attachstack_direct("attachstack_socket");
-                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                                   "else {heap_base = %d;}", var->base_ptr);
+                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                        pop_attachstack_direct("attachstack_socket");
+                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                           "else {heap_base = %d;}", var->base_ptr);
 
-                                read_heap_inline_direct("stack_socket");
+                        read_heap_inline_direct("stack_socket");
 
-                        /* 2次元配列の場合 */
-                        } else if (var->row_len >= 2) {
-                                /* これは[行, 列]の列 */
-                                pop_stack_direct("heap_offset");
-
-                                /* これは[行, 列]の行。
-                                 * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
-                                 */
-                                pop_stack_direct("stack_socket");
-                                pA("heap_offset += stack_socket * %d;", var->col_len);
-
-                                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                                pop_attachstack_direct("attachstack_socket");
-                                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                                   "else {heap_base = %d;}", var->base_ptr);
-
-                                read_heap_inline_direct("stack_socket");
-
-                        /* 1,2次元以外の場合はシステムエラー */
-                        } else {
-                                yyerror("system err: read_variable, col_len の値が不正です");
-                        }
-
-                        /* 結果をスタックにプッシュする */
-                        push_stack_direct("stack_socket");
-
-                /* そうでなければ、これは関数実行 */
+                /* 1,2次元以外の場合はシステムエラー */
                 } else {
-                        /* gosub とほぼ同じ */
-                        pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-                        pA(push_labelstack);
-                        pA("PLIMM(P3F, %d);\n", labellist_search($1));
-                        pA("LB(1, %d);\n", cur_label_index_head);
-                        cur_label_index_head++;
+                        yyerror("system err: read_variable, col_len の値が不正です");
                 }
+
+                /* 結果をスタックにプッシュする */
+                push_stack_direct("stack_socket");
+        }
+        | var_identifier __LB expression_list __RB {
+                /* ラベルリストに名前が存在しなければエラー */
+                if (labellist_search_unsafe($1) == -1)
+                        yyerror("syntac err: 未定義の関数を実行しようとしました");
+
+                /* gosub とほぼ同じ */
+                pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+                pA(push_labelstack);
+                pA("PLIMM(P3F, %d);\n", labellist_search($1));
+                pA("LB(1, %d);\n", cur_label_index_head);
+                cur_label_index_head++;
         }
         ;
 
@@ -4027,7 +4021,7 @@ define_def_function
         ;
 
 define_full_function
-        : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __DECL_END {
+        : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __BLOCK_LB {
                 /* define_def_function の場合とほぼ同じ
                  */
                 pA("LB(1, %d);\n", labellist_search($2));
@@ -4058,7 +4052,7 @@ define_full_function
                 /* 戻り値の代入用に、関数名と同名のローカル変数（スカラー）を作成する */
                 varlist_add_local($2, 1, 1);
 
-        } declaration_list __STATE_END_FUNCTION {
+        } declaration_list __BLOCK_RB {
                 /* 関数名と同名のローカル変数の値を、スタックにプッシュして、これを戻り値とする
                  */
                 /* 勘数名変数（戻り値代入先）のスペックを得る。（コンパイル時） */

@@ -103,6 +103,9 @@ FILE* yyaskB;
 <main_process>"{"       return(__BLOCK_LB);
 <main_process>"}"       return(__BLOCK_RB);
 
+<main_process>"["       return(__ARRAY_LB);
+<main_process>"]"       return(__ARRAY_RB);
+
 <main_process>[\n]      {linenumber++; return(__DECL_END);}
 <main_process>";"       return(__DECL_END);
 
