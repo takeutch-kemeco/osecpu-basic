@@ -133,7 +133,6 @@ FILE* yyaskB;
 
 <main_process>"function" {return(__STATE_FUNCTION);}
 
-<main_process>"def"     return(__STATE_DEF);
 <main_process>","       return(__OPE_COMMA);
 
 <main_process>"on"      return(__OPE_ON);

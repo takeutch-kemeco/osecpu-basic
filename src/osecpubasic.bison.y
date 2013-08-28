@@ -3318,7 +3318,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __STATE_READ __STATE_DATA __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
 %token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
 %token __OPE_SUBST
-%token __STATE_LET __STATE_DEF __STATE_DIM
+%token __STATE_LET __STATE_DIM
 %token __STATE_FUNCTION
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
 
@@ -3356,7 +3356,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> iterator_for initializer expression assignment jump define_label function
 %type <sval> ope_matrix
 %type <sval> syntax_tree declaration_list declaration declaration_block
-%type <sval> define_function define_def_function define_full_function
+%type <sval> define_function
 %type <sval> var_identifier
 %type <ival> expression_list identifier_list attach_base
 
@@ -4063,54 +4063,6 @@ identifier_list
         ;
 
 define_function
-        : define_def_function
-        | define_full_function
-        ;
-
-define_def_function
-        : __STATE_DEF __IDENTIFIER __LB identifier_list __RB __OPE_SUBST {
-                /* __STATE_DEF __IDENTIFIER も、ラベルの一種として字句解析の段階で登録されている前提
-                 * ここを、関数呼び出しの際にジャンプしてくる位置とする
-                 */
-                pA("LB(1, %d);\n", labellist_search($2));
-
-                /* 以降の変数をローカル変数とするために、スコープを現時点までに設定 */
-                varlist_scope_push();
-
-                /* identifier_list個だけ expression が stack_push されてる前提で、
-                 * 順番にポップしつつローカル変数へ登録していく
-                 */
-                int32_t i;
-                for (i = 0; i < $4; i++) {
-                        char iden[0x1000];
-                        idenlist_pop(iden);
-
-                        varlist_add_local(iden, 1, 1);
-
-                        /* 変数のスペックを得る。（コンパイル時） */
-                        struct Var* var = varlist_search_local(iden);
-                        if (var == NULL)
-                                yyerror("system err: defによる関数定義において、ローカル変数の作成に失敗しました");
-
-                        pA("heap_offset = 0;");
-
-                        /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
-                        pA("heap_base = %d;", var->base_ptr);
-
-                        pop_stack_direct("stack_socket");
-                        write_heap_inline_direct("stack_socket");
-                }
-        } expression {
-                /* ローカル変数を破棄する */
-                varlist_scope_pop();
-
-                /* 関数呼び出し元の位置まで戻る */
-                pA(pop_labelstack);
-                pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
-        }
-        ;
-
-define_full_function
         : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __BLOCK_LB {
                 __define_user_function_begin($2, $4);
         } declaration_list __BLOCK_RB {
