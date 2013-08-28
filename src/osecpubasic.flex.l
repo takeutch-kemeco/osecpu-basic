@@ -115,8 +115,6 @@ FILE* yyaskB;
 <main_process>"step"    return(__STATE_STEP);
 <main_process>"next"    return(__STATE_NEXT);
 
-<main_process>"end"     return(__STATE_END);
-
 <main_process>"read"    return(__STATE_READ);
 <main_process>"data"    return(__STATE_DATA);
 
@@ -133,9 +131,7 @@ FILE* yyaskB;
 
 <main_process>","       return(__OPE_COMMA);
 
-<main_process>"on"      return(__OPE_ON);
 <main_process>"goto"    return(__OPE_GOTO);
-<main_process>"gosub"   return(__OPE_GOSUB);
 <main_process>"return"  return(__OPE_RETURN);
 
 <main_process>"print"   return(__FUNC_PRINT);

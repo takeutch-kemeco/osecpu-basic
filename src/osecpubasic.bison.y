@@ -3333,8 +3333,8 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 }
 
 %token __STATE_IF __STATE_ELSE
-%token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT __STATE_END
-%token __STATE_READ __STATE_DATA __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
+%token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT
+%token __STATE_READ __STATE_DATA __OPE_GOTO __OPE_RETURN
 %token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
 %token __OPE_SUBST
 %token __STATE_LET __STATE_DIM
@@ -4018,52 +4018,6 @@ define_label
 jump
         : __OPE_GOTO __LABEL {
                 pA("PLIMM(P3F, %d);\n", labellist_search($2));
-        }
-        | __OPE_GOSUB __LABEL {
-                /* まず最初に、リターン先ラベルを CUR_RETURN_LABEL にセットする命令を作成し、
-                 * その CUR_RETURN_LABEL の内容をラベルスタックへプッシュし、
-                 * 次に、普通に __LABEL へと goto する命令を作成する
-                 */
-                pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-                pA(push_labelstack);
-                pA("PLIMM(P3F, %d);\n", labellist_search($2));
-
-                /* そして、実際に戻り位置としてのラベル（無名ラベル）をここに作成し、
-                 * そして、ラベルを作成したので cur_label_index_head を一つ進める
-                 */
-                pA("LB(1, %d);\n", cur_label_index_head);
-                cur_label_index_head++;
-        }
-        | __OPE_RETURN {
-                /* 戻り先ラベルがラベルスタックに保存されてる前提で、 そこからポップし（その値は CUR_RETURN_LABEL 入る）
-                 * その CUR_RETURN_LABEL が指すラベル位置へと goto する。
-                 * すなわち、gosub 先で、さらに gosub しても、戻りアドレスはラベルスタックへ詰まれるので、
-                 * gosub 先で、さらに再帰的に gosub することが可能。
-                 */
-                pA(pop_labelstack);
-                pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
-        }
-        | __OPE_ON expression __OPE_GOTO __LABEL {
-                pop_stack_direct("stack_socket");
-                pA("if (stack_socket == 0x00010000) {");
-
-                /* goto と同様（$4が違うだけ）*/
-                pA("PLIMM(P3F, %d);\n", labellist_search($4));
-
-                pA("}");
-        }
-        | __OPE_ON expression __OPE_GOSUB __LABEL {
-                pop_stack_direct("stack_socket");
-                pA("if (stack_socket == 0x00010000) {");
-
-                /* gosub と同様（$4が違うだけ）*/
-                pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-                pA(push_labelstack);
-                pA("PLIMM(P3F, %d);\n", labellist_search($4));
-                pA("LB(1, %d);\n", cur_label_index_head);
-                cur_label_index_head++;
-
-                pA("}");
         }
         ;
 
