@@ -1472,6 +1472,8 @@ static void __read_variable_array(const char* iden, const int32_t dim)
 
 /* 以下、ユーザー定義関数関連 */
 
+/* 関数呼び出し
+ */
 static void __call_user_function(const char* iden)
 {
         /* ラベルリストに名前が存在しなければエラー */
@@ -1484,6 +1486,69 @@ static void __call_user_function(const char* iden)
         pA("PLIMM(P3F, %d);\n", labellist_search(iden));
         pA("LB(1, %d);\n", cur_label_index_head);
         cur_label_index_head++;
+}
+
+/* 関数定義の前半部
+ * __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __BLOCK_LB
+ */
+static void __define_user_function_begin(const char* iden, const int32_t arglen)
+{
+        pA("LB(1, %d);\n", labellist_search(iden));
+
+        varlist_scope_push();
+
+        int32_t i;
+        for (i = 0; i < arglen; i++) {
+                char iden[0x1000];
+                idenlist_pop(iden);
+
+                varlist_add_local(iden, 1, 1);
+
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search_local(iden);
+                if (var == NULL)
+                        yyerror("system err: functionによる関数定義において、ローカル変数の作成に失敗しました");
+
+                pA("heap_offset = 0;");
+
+                /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
+                pA("heap_base = %d;", var->base_ptr);
+
+                pop_stack_direct("stack_socket");
+                write_heap_inline_direct("stack_socket");
+        }
+
+        /* 戻り値の代入用に、関数名と同名のローカル変数（スカラー）を作成する */
+        varlist_add_local(iden, 1, 1);
+}
+
+/* 関数定義の後半部
+ * declaration_list __BLOCK_RB
+ */
+static void __define_user_function_end(const char* iden)
+{
+        /* 関数名と同名のローカル変数の値を、スタックにプッシュして、これを戻り値とする
+         */
+        /* 勘数名変数（戻り値代入先）のスペックを得る。（コンパイル時） */
+        struct Var* var = varlist_search(iden);
+        if (var == NULL)
+                yyerror("system err: functionによる関数定義において、関数名と同名のローカル変数の作成に失敗しました");
+
+        pA("heap_offset = 0;");
+
+        /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
+        pA("heap_base = %d;", var->base_ptr);
+
+        read_heap_inline_direct("stack_socket");
+
+        push_stack_direct("stack_socket");
+
+        /* ローカル変数を破棄する */
+        varlist_scope_pop();
+
+        /* 関数呼び出し元の位置まで戻る */
+        pA(pop_labelstack);
+        pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
 }
 
 /* 以下、各種プリセット関数 */
@@ -3254,7 +3319,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
 %token __OPE_SUBST
 %token __STATE_LET __STATE_DEF __STATE_DIM
-%token __STATE_FUNCTION __STATE_END_FUNCTION
+%token __STATE_FUNCTION
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
 
 %token __FUNC_SIN __FUNC_COS __FUNC_TAN __FUNC_SQRT
@@ -3332,7 +3397,7 @@ declaration
         | iterator_for
         | jump __DECL_END
         | define_label __DECL_END
-        | define_function __DECL_END
+        | define_function
         | __DECL_END
         ;
 
@@ -4047,59 +4112,9 @@ define_def_function
 
 define_full_function
         : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __BLOCK_LB {
-                /* define_def_function の場合とほぼ同じ
-                 */
-                pA("LB(1, %d);\n", labellist_search($2));
-
-                varlist_scope_push();
-
-                int32_t i;
-                for (i = 0; i < $4; i++) {
-                        char iden[0x1000];
-                        idenlist_pop(iden);
-
-                        varlist_add_local(iden, 1, 1);
-
-                        /* 変数のスペックを得る。（コンパイル時） */
-                        struct Var* var = varlist_search_local(iden);
-                        if (var == NULL)
-                                yyerror("system err: functionによる関数定義において、ローカル変数の作成に失敗しました");
-
-                        pA("heap_offset = 0;");
-
-                        /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
-                        pA("heap_base = %d;", var->base_ptr);
-
-                        pop_stack_direct("stack_socket");
-                        write_heap_inline_direct("stack_socket");
-                }
-
-                /* 戻り値の代入用に、関数名と同名のローカル変数（スカラー）を作成する */
-                varlist_add_local($2, 1, 1);
-
+                __define_user_function_begin($2, $4);
         } declaration_list __BLOCK_RB {
-                /* 関数名と同名のローカル変数の値を、スタックにプッシュして、これを戻り値とする
-                 */
-                /* 勘数名変数（戻り値代入先）のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($2);
-                if (var == NULL)
-                        yyerror("system err: functionによる関数定義において、関数名と同名のローカル変数の作成に失敗しました");
-
-                pA("heap_offset = 0;");
-
-                /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
-                pA("heap_base = %d;", var->base_ptr);
-
-                read_heap_inline_direct("stack_socket");
-
-                push_stack_direct("stack_socket");
-
-                /* ローカル変数を破棄する */
-                varlist_scope_pop();
-
-                /* 関数呼び出し元の位置まで戻る */
-                pA(pop_labelstack);
-                pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
+                __define_user_function_end($2);
         }
         ;
 

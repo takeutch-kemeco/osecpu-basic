@@ -4,14 +4,16 @@ a01(); a02(); a01(); a02(); a01(); a02(); a01(); a02();
 a02(); a02(); a02(); a02(); a02(); a02(); a02(); a02();
 a01(); a01(); a01(); a01(); a01(); a01(); a01(); a01();
 
-goto *END
+goto *END;
 
 function a01()
-        print 1
-end function
+{
+        print 1;
+}
 
 function a02()
-        print 2
-end function
+{
+        print 2;
+}
 
-*END
+*END;
