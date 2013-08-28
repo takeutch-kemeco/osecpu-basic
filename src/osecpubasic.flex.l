@@ -69,33 +69,31 @@ FILE* yyaskB;
 <main_process>"-"       return(__OPE_SUB);
 <main_process>"*"       return(__OPE_MUL);
 <main_process>"/"       return(__OPE_DIV);
-<main_process>"mod"     return(__OPE_MOD);
+<main_process>"%"       return(__OPE_MOD);
 
-<main_process>"^"       return(__OPE_POWER);
+<main_process>"pow"     return(__OPE_POWER);
 
-<main_process>"or"      return(__OPE_OR);
+<main_process>"|"       return(__OPE_OR);
 <main_process>"and"     return(__OPE_AND);
-<main_process>"xor"     return(__OPE_XOR);
-<main_process>"not"     return(__OPE_NOT);
+<main_process>"^"       return(__OPE_XOR);
+<main_process>"~"       return(__OPE_NOT);
 
 <main_process>"<<"      return(__OPE_LSHIFT);
 <main_process>">>"      return(__OPE_RSHIFT);
 
-<main_process>"<-"      return(__OPE_ATTACH);
+<main_process>"@"       return(__OPE_ATTACH);
 <main_process>"&"       return(__OPE_ADDRESS);
 
-<main_process>":="      return(__OPE_SUBST);
+<main_process>"="       return(__OPE_SUBST);
 
-<main_process>"="       return(__OPE_COMPARISON);
-<main_process>"<>"      return(__OPE_NOT_COMPARISON);
+<main_process>"=="      return(__OPE_COMPARISON);
+<main_process>"!="      return(__OPE_NOT_COMPARISON);
 
 <main_process>"<"       return(__OPE_ISSMALL);
 <main_process>"<="      return(__OPE_ISSMALL_COMP);
-<main_process>"=<"      return(__OPE_ISSMALL_COMP);
 
 <main_process>">"       return(__OPE_ISLARGE);
 <main_process>">="      return(__OPE_ISLARGE_COMP);
-<main_process>"=>"      return(__OPE_ISLARGE_COMP);
 
 <main_process>"("       return(__LB);
 <main_process>")"       return(__RB);
