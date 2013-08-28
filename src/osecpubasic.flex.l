@@ -106,11 +106,10 @@ FILE* yyaskB;
 <main_process>"["       return(__ARRAY_LB);
 <main_process>"]"       return(__ARRAY_RB);
 
-<main_process>[\n]      {linenumber++; return(__DECL_END);}
+<main_process>[\n]      {linenumber++;}
 <main_process>";"       return(__DECL_END);
 
 <main_process>"if"      return(__STATE_IF);
-<main_process>"then"    return(__STATE_THEN);
 <main_process>"else"    return(__STATE_ELSE);
 
 <main_process>"for"     return(__STATE_FOR);

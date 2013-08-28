@@ -3248,7 +3248,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
         struct Var* varptr;
 }
 
-%token __STATE_IF __STATE_THEN __STATE_ELSE
+%token __STATE_IF __STATE_ELSE
 %token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT __STATE_END
 %token __STATE_READ __STATE_DATA __OPE_ON __OPE_GOTO __OPE_GOSUB __OPE_RETURN
 %token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
@@ -3287,7 +3287,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> func_filltri func_fillrect
 
 %type <sval> operation const_variable read_variable
-%type <sval> selection_if selection_if_v selection_if_t selection_if_e
+%type <sval> selection_if selection_if_v selection_if_e
 %type <sval> iterator_for initializer expression assignment jump define_label function
 %type <sval> ope_matrix
 %type <sval> syntax_tree declaration_list declaration declaration_block
@@ -3762,21 +3762,17 @@ read_variable
         ;
 
 selection_if
-        : selection_if_v selection_if_t selection_if_e
-        | selection_if_v selection_if_t {
-                pA("\n");
+        : selection_if_v selection_if_e
+        | selection_if_v {
+                pA(" ");
         }
         ;
 
 selection_if_v
-        : __STATE_IF expression {
+        : __STATE_IF __LB expression __RB {
                 pop_stack_direct("stack_socket");
-                pA("if (stack_socket == 0x00010000) {");
-        }
-        ;
-
-selection_if_t
-        : __STATE_THEN declaration {
+                pA("if (stack_socket != 0) {");
+        } declaration {
                 pA_nl("}");
         }
 
