@@ -1297,6 +1297,195 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
         write_heap_inline_direct("heap_socket");
 }
 
+/* 以下、各種リード関数 */
+
+static void __read_variable_ptr_scaler(const char* iden)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* var = varlist_search(iden);
+        if (var == NULL)
+                yyerror("syntax err: 未定義のスカラー変数のアドレスを得ようとしました");
+
+        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+         */
+        pop_attachstack_direct("attachstack_socket");
+        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+           "else {heap_base = %d;}", var->base_ptr);
+
+        /* heap_base自体を（アドレス自体を）スタックにプッシュする */
+        push_stack_direct("heap_base");
+}
+
+static void __read_variable_ptr_array(const char* iden, const int32_t dim)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* var = varlist_search(iden);
+        if (var == NULL)
+                yyerror("syntax err: 未定義の配列変数のアドレスを得ようとしました");
+
+        /* 変数がスカラーな場合はエラー */
+        if (var->row_len == 1 && var->col_len == 1)
+                yyerror("syntax err: スカラー変数へ添字による指定をしました");
+
+        /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
+        */
+        /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
+        if (var->row_len == 1 && dim != 1)
+                yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
+
+        /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
+        else if (var->row_len >= 2 && dim != 2)
+                yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
+
+        /* 配列の次元によって分岐（コンパイル時）
+         */
+        /* １次元配列の場合 */
+        if (var->row_len == 1) {
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                 */
+                pop_attachstack_direct("attachstack_socket");
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                   "else {heap_base = %d;}", var->base_ptr);
+
+                /* heap_base へオフセットを足す
+                 */
+                pop_stack_direct("heap_offset");
+                pA("heap_offset >>= 16;");
+                pA("heap_base += heap_offset;");
+
+        /* 2次元配列の場合 */
+        } else if (var->row_len >= 2) {
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                 */
+                pop_attachstack_direct("attachstack_socket");
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                   "else {heap_base = %d;}", var->base_ptr);
+
+                /* heap_base へオフセットを足す
+                 */
+                /* これは[行, 列]の列 */
+                pop_stack_direct("heap_offset");
+
+                /* これは[行, 列]の行。
+                 * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
+                 */
+                pop_stack_direct("stack_socket");
+                pA("heap_offset += stack_socket * %d;", var->col_len);
+
+                pA("heap_offset >>= 16;");
+                pA("heap_base += heap_offset;");
+
+        /* 1,2次元以外の場合はシステムエラー */
+        } else {
+                yyerror("system err: __OPE_ADDRESS read_variable, col_len の値が不正です");
+        }
+
+        /* heap_base自体を（アドレス自体を）スタックにプッシュする */
+        push_stack_direct("heap_base");
+}
+
+static void __read_variable_scaler(const char* iden)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* var = varlist_search(iden);
+        if (var == NULL)
+                yyerror("syntax err: 未定義のスカラー変数から読もうとしました");
+
+        /* 変数が配列な場合はエラー */
+        if (var->row_len != 1 || var->col_len != 1)
+                yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
+
+        /* スカラーなので読み込みオフセットは 0 */
+        pA("heap_offset = 0;");
+
+        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+        pop_attachstack_direct("attachstack_socket");
+        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+           "else {heap_base = %d;}", var->base_ptr);
+
+        read_heap_inline_direct("stack_socket");
+
+        /* 結果をスタックにプッシュする */
+        push_stack_direct("stack_socket");
+}
+
+static void __read_variable_array(const char* iden, const int32_t dim)
+{
+        /* 変数のスペックを得る。（コンパイル時） */
+        struct Var* var = varlist_search(iden);
+        if (var == NULL)
+                yyerror("syntax err: 未定義の配列変数から読もうとしました");
+
+        /* 変数がスカラーな場合はエラー */
+        if (var->row_len == 1 && var->col_len == 1)
+                yyerror("syntax err: スカラー変数へ添字による読み込みを行おうとしました");
+
+        /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
+        */
+        /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
+        if (var->row_len == 1 && dim != 1)
+                yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
+
+        /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
+        else if (var->row_len >= 2 && dim != 2)
+                yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
+
+        /* 配列の次元によって分岐（コンパイル時）
+         */
+        /* １次元配列の場合 */
+        if (var->row_len == 1) {
+                pop_stack_direct("heap_offset");
+
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                pop_attachstack_direct("attachstack_socket");
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                   "else {heap_base = %d;}", var->base_ptr);
+
+                read_heap_inline_direct("stack_socket");
+
+        /* 2次元配列の場合 */
+        } else if (var->row_len >= 2) {
+                /* これは[行, 列]の列 */
+                pop_stack_direct("heap_offset");
+
+                /* これは[行, 列]の行。
+                 * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
+                 */
+                pop_stack_direct("stack_socket");
+                pA("heap_offset += stack_socket * %d;", var->col_len);
+
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                pop_attachstack_direct("attachstack_socket");
+                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
+                   "else {heap_base = %d;}", var->base_ptr);
+
+                read_heap_inline_direct("stack_socket");
+
+        /* 1,2次元以外の場合はシステムエラー */
+        } else {
+                yyerror("system err: read_variable, col_len の値が不正です");
+        }
+
+        /* 結果をスタックにプッシュする */
+        push_stack_direct("stack_socket");
+}
+
+/* 以下、ユーザー定義関数関連 */
+
+static void __call_user_function(const char* iden)
+{
+        /* ラベルリストに名前が存在しなければエラー */
+        if (labellist_search_unsafe(iden) == -1)
+                yyerror("syntac err: 未定義の関数を実行しようとしました");
+
+        /* gosub とほぼ同じ */
+        pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+        pA(push_labelstack);
+        pA("PLIMM(P3F, %d);\n", labellist_search(iden));
+        pA("LB(1, %d);\n", cur_label_index_head);
+        cur_label_index_head++;
+}
+
 /* 以下、各種プリセット関数 */
 
 /* 文字列出力命令を出力する
@@ -3556,179 +3745,19 @@ comparison
 
 read_variable
         : __OPE_ADDRESS var_identifier {
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($2);
-                if (var == NULL)
-                        yyerror("syntax err: 未定義のスカラー変数のアドレスを得ようとしました");
-
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                 */
-                pop_attachstack_direct("attachstack_socket");
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                   "else {heap_base = %d;}", var->base_ptr);
-
-                /* heap_base自体を（アドレス自体を）スタックにプッシュする */
-                push_stack_direct("heap_base");
+                __read_variable_ptr_scaler($2);
         }
         | __OPE_ADDRESS var_identifier __ARRAY_LB expression_list __ARRAY_RB {
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($2);
-                if (var == NULL)
-                        yyerror("syntax err: 未定義の配列変数のアドレスを得ようとしました");
-
-                /* 変数がスカラーな場合はエラー */
-                if (var->row_len == 1 && var->col_len == 1)
-                        yyerror("syntax err: スカラー変数へ添字による指定をしました");
-
-                /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
-                */
-                /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                if (var->row_len == 1 && $4 != 1)
-                        yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
-
-                /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                else if (var->row_len >= 2 && $4 != 2)
-                        yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
-
-                /* 配列の次元によって分岐（コンパイル時）
-                 */
-                /* １次元配列の場合 */
-                if (var->row_len == 1) {
-                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                         */
-                        pop_attachstack_direct("attachstack_socket");
-                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                           "else {heap_base = %d;}", var->base_ptr);
-
-                        /* heap_base へオフセットを足す
-                         */
-                        pop_stack_direct("heap_offset");
-                        pA("heap_offset >>= 16;");
-                        pA("heap_base += heap_offset;");
-
-                /* 2次元配列の場合 */
-                } else if (var->row_len >= 2) {
-                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                         */
-                        pop_attachstack_direct("attachstack_socket");
-                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                           "else {heap_base = %d;}", var->base_ptr);
-
-                        /* heap_base へオフセットを足す
-                         */
-                        /* これは[行, 列]の列 */
-                        pop_stack_direct("heap_offset");
-
-                        /* これは[行, 列]の行。
-                         * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
-                         */
-                        pop_stack_direct("stack_socket");
-                        pA("heap_offset += stack_socket * %d;", var->col_len);
-
-                        pA("heap_offset >>= 16;");
-                        pA("heap_base += heap_offset;");
-
-                /* 1,2次元以外の場合はシステムエラー */
-                } else {
-                        yyerror("system err: __OPE_ADDRESS read_variable, col_len の値が不正です");
-                }
-
-                /* heap_base自体を（アドレス自体を）スタックにプッシュする */
-                push_stack_direct("heap_base");
+                __read_variable_ptr_array($2, $4);
         }
         | var_identifier {
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($1);
-                if (var == NULL)
-                        yyerror("syntax err: 未定義のスカラー変数から読もうとしました");
-
-                /* 変数が配列な場合はエラー */
-                if (var->row_len != 1 || var->col_len != 1)
-                        yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
-
-                /* スカラーなので読み込みオフセットは 0 */
-                pA("heap_offset = 0;");
-
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                pop_attachstack_direct("attachstack_socket");
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                   "else {heap_base = %d;}", var->base_ptr);
-
-                read_heap_inline_direct("stack_socket");
-
-                /* 結果をスタックにプッシュする */
-                push_stack_direct("stack_socket");
+                __read_variable_scaler($1);
         }
         | var_identifier __ARRAY_LB expression_list __ARRAY_RB {
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($1);
-                if (var == NULL)
-                        yyerror("syntax err: 未定義の配列変数から読もうとしました");
-
-                /* 変数がスカラーな場合はエラー */
-                if (var->row_len == 1 && var->col_len == 1)
-                        yyerror("syntax err: スカラー変数へ添字による読み込みを行おうとしました");
-
-                /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
-                */
-                /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-                if (var->row_len == 1 && $3 != 1)
-                        yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
-
-                /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-                else if (var->row_len >= 2 && $3 != 2)
-                        yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
-
-                /* 配列の次元によって分岐（コンパイル時）
-                 */
-                /* １次元配列の場合 */
-                if (var->row_len == 1) {
-                        pop_stack_direct("heap_offset");
-
-                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                        pop_attachstack_direct("attachstack_socket");
-                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                           "else {heap_base = %d;}", var->base_ptr);
-
-                        read_heap_inline_direct("stack_socket");
-
-                /* 2次元配列の場合 */
-                } else if (var->row_len >= 2) {
-                        /* これは[行, 列]の列 */
-                        pop_stack_direct("heap_offset");
-
-                        /* これは[行, 列]の行。
-                         * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
-                         */
-                        pop_stack_direct("stack_socket");
-                        pA("heap_offset += stack_socket * %d;", var->col_len);
-
-                        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                        pop_attachstack_direct("attachstack_socket");
-                        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                           "else {heap_base = %d;}", var->base_ptr);
-
-                        read_heap_inline_direct("stack_socket");
-
-                /* 1,2次元以外の場合はシステムエラー */
-                } else {
-                        yyerror("system err: read_variable, col_len の値が不正です");
-                }
-
-                /* 結果をスタックにプッシュする */
-                push_stack_direct("stack_socket");
+                __read_variable_array($1, $3);
         }
         | var_identifier __LB expression_list __RB {
-                /* ラベルリストに名前が存在しなければエラー */
-                if (labellist_search_unsafe($1) == -1)
-                        yyerror("syntac err: 未定義の関数を実行しようとしました");
-
-                /* gosub とほぼ同じ */
-                pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-                pA(push_labelstack);
-                pA("PLIMM(P3F, %d);\n", labellist_search($1));
-                pA("LB(1, %d);\n", cur_label_index_head);
-                cur_label_index_head++;
+                __call_user_function($1);
         }
         ;
 
