@@ -1491,8 +1491,20 @@ static void __call_user_function(const char* iden)
 /* 関数定義の前半部
  * __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __BLOCK_LB
  */
-static void __define_user_function_begin(const char* iden, const int32_t arglen)
+static void __define_user_function_begin(const char* iden,
+                                         const int32_t arglen,
+                                         const int32_t skip_label)
 {
+        /* 通常フロー中ではここに到達し、その場合はこの関数定義は読み飛ばす
+         * 関数の最後位置へ skip_label 番号のラベルが存在する前提で、そこへのジャンプ命令をここに書く。
+         *
+         * すなわち __define_use_function_begin() と、同_end() の、これら関数はペアで呼ばれるが、
+         * その際に引数の skip_label には同じ値を渡す必要がある。
+         * （ペア同士ならば、引数 skip_label が同じ値である暗黙の前提）
+         */
+        pA("PLIMM(P3F, %d);", skip_label);
+
+        /* 関数呼び出し時には、この位置が関数の先頭、すなわちジャンプ先アドレスとなる */
         pA("LB(1, %d);\n", labellist_search(iden));
 
         varlist_scope_push();
@@ -1525,7 +1537,8 @@ static void __define_user_function_begin(const char* iden, const int32_t arglen)
 /* 関数定義の後半部
  * declaration_list __BLOCK_RB
  */
-static void __define_user_function_end(const char* iden)
+static void __define_user_function_end(const char* iden,
+                                       const int32_t skip_label)
 {
         /* 関数名と同名のローカル変数の値を、スタックにプッシュして、これを戻り値とする
          */
@@ -1549,6 +1562,12 @@ static void __define_user_function_end(const char* iden)
         /* 関数呼び出し元の位置まで戻る */
         pA(pop_labelstack);
         pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
+
+        /* 通常フロー中では、この関数定義を読み飛ばし、ここへとジャンプしてくる前提
+         * また、この skip_label の値は、
+         * この関数とペアで呼ばれる関数 __define_user_function_begin() へのそれと同じ値である前提。
+         */
+        pA("LB(1, %d);", skip_label);
 }
 
 /* 以下、各種プリセット関数 */
@@ -4064,9 +4083,14 @@ identifier_list
 
 define_function
         : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __BLOCK_LB {
-                __define_user_function_begin($2, $4);
+                const int32_t skip_label = cur_label_index_head;
+                cur_label_index_head++;
+                $<ival>$ = skip_label;
+
+                __define_user_function_begin($2, $4, skip_label);
+
         } declaration_list __BLOCK_RB {
-                __define_user_function_end($2);
+                __define_user_function_end($2, $<ival>7);
         }
         ;
 
