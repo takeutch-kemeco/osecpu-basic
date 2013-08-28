@@ -3309,7 +3309,6 @@ syntax_tree
 declaration_list
         : declaration
         | declaration declaration_list
-        | declaration_block declaration_list
         ;
 
 declaration_block
@@ -3324,7 +3323,8 @@ declaration_block
         ;
 
 declaration
-        : initializer __DECL_END
+        : declaration_block
+        | initializer __DECL_END
         | assignment __DECL_END
         | ope_matrix __DECL_END
         | expression __DECL_END
