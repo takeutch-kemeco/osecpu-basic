@@ -3621,6 +3621,15 @@ initializer
         | __STATE_DIM __IDENTIFIER __ARRAY_LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __ARRAY_RB {
                 varlist_add_local($2, $4, $6);
         }
+        | initializer __OPE_COMMA __IDENTIFIER {
+                varlist_add_local($3, 1, 1);
+        }
+        | initializer __OPE_COMMA __IDENTIFIER __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
+                varlist_add_local($3, 1, $5);
+        }
+        | initializer __OPE_COMMA __IDENTIFIER __ARRAY_LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __ARRAY_RB {
+                varlist_add_local($3, $5, $7);
+        }
         ;
 
 attach_base
