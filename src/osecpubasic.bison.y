@@ -3339,6 +3339,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
         int32_t ival;
         float fval;
         char sval[0x1000];
+        int32_t ival_list[0x400];
         struct Var* varptr;
 }
 
@@ -3384,7 +3385,9 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> operation const_variable read_variable
 %type <sval> selection_if selection_if_v selection_if_e
 %type <sval> iterator iterator_while iterator_for
-%type <sval> initializer expression assignment jump define_label function
+%type <sval> initializer
+%type <ival_list> initializer_param
+%type <sval> expression assignment jump define_label function
 %type <sval> ope_matrix
 %type <sval> syntax_tree declaration_list declaration declaration_block
 %type <sval> define_function
@@ -3611,24 +3614,27 @@ func_sleep
         }
         ;
 
+initializer_param
+        : {
+                $$[0] = 1;
+                $$[1] = 1;
+        }
+        | __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
+                $$[0] = $2;
+                $$[1] = 1;
+        }
+        | __ARRAY_LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __ARRAY_RB {
+                $$[0] = $4;
+                $$[1] = $2;
+        }
+        ;
+
 initializer
-        : __STATE_DIM __IDENTIFIER {
-                varlist_add_local($2, 1, 1);
+        : __STATE_DIM __IDENTIFIER initializer_param {
+                varlist_add_local($2, $3[1], $3[0]);
         }
-        | __STATE_DIM __IDENTIFIER __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
-                varlist_add_local($2, 1, $4);
-        }
-        | __STATE_DIM __IDENTIFIER __ARRAY_LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __ARRAY_RB {
-                varlist_add_local($2, $4, $6);
-        }
-        | initializer __OPE_COMMA __IDENTIFIER {
-                varlist_add_local($3, 1, 1);
-        }
-        | initializer __OPE_COMMA __IDENTIFIER __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
-                varlist_add_local($3, 1, $5);
-        }
-        | initializer __OPE_COMMA __IDENTIFIER __ARRAY_LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __ARRAY_RB {
-                varlist_add_local($3, $5, $7);
+        | initializer __OPE_COMMA __IDENTIFIER initializer_param {
+                varlist_add_local($3, $4[1], $4[0]);
         }
         ;
 
