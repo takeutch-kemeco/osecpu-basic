@@ -55,9 +55,12 @@ FILE* yyaskB;
 <pre_process>"end"[ ]*"function" {}
 <pre_process>.                  {}
 
-<main_process>^"rem"            BEGIN(main_process_comment);
-<main_process_comment>[\n]      {linenumber++; BEGIN(main_process);}
+<main_process>"//".*[\n]        {linenumber++;}
+
+<main_process>"/*"              BEGIN(main_process_comment);
+<main_process_comment>[\n]      {linenumber++;}
 <main_process_comment>.         {}
+<main_process_comment>"*/"      BEGIN(main_process);
 
 <main_process>["].*["]          {strncpy(yylval.sval, yytext + 1, strlen(yytext + 1) - 1); return(__CONST_STRING);}
 
