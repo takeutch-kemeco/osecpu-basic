@@ -1,10 +1,11 @@
-print fact(5)
-
-goto *END
+dim x=123;
+print fact(5);
+print x;
 
 function fact(x)
-        if x > 1 then fact := x * fact(x - 1); else fact := 1;
-end function
-
-*END
-
+{
+        if (x > 1)
+                return x * fact(x - 1);
+        else
+                return 1;
+}

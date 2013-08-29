@@ -1517,6 +1517,7 @@ static void __define_user_function_begin(const char* iden,
         /* 関数呼び出し時には、この位置が関数の先頭、すなわちジャンプ先アドレスとなる */
         pA("LB(1, %d);\n", labellist_search(iden));
 
+        /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始 */
         varlist_scope_push();
 
         int32_t i;
@@ -1539,39 +1540,27 @@ static void __define_user_function_begin(const char* iden,
                 pop_stack_direct("stack_socket");
                 write_heap_inline_direct("stack_socket");
         }
+}
 
-        /* 戻り値の代入用に、関数名と同名のローカル変数（スカラー）を作成する */
-        varlist_add_local(iden, 1, 1);
+/* 現在の関数からのリターン
+ */
+static void __define_user_function_return(void)
+{
+        /* 関数呼び出し元の位置まで戻る */
+        pA(pop_labelstack);
+        pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
 }
 
 /* 関数定義の後半部
  * declaration_list __BLOCK_RB
  */
-static void __define_user_function_end(const char* iden,
-                                       const int32_t skip_label)
+static void __define_user_function_end(const int32_t skip_label)
 {
-        /* 関数名と同名のローカル変数の値を、スタックにプッシュして、これを戻り値とする
-         */
-        /* 勘数名変数（戻り値代入先）のスペックを得る。（コンパイル時） */
-        struct Var* var = varlist_search(iden);
-        if (var == NULL)
-                yyerror("system err: functionによる関数定義において、関数名と同名のローカル変数の作成に失敗しました");
-
-        pA("heap_offset = 0;");
-
-        /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
-        pA("heap_base = %d;", var->base_ptr);
-
-        read_heap_inline_direct("stack_socket");
-
-        push_stack_direct("stack_socket");
-
-        /* ローカル変数を破棄する */
+        /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する */
         varlist_scope_pop();
 
-        /* 関数呼び出し元の位置まで戻る */
-        pA(pop_labelstack);
-        pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
+        /* 現在の関数からのリターン */
+        __define_user_function_return();
 
         /* 通常フロー中では、この関数定義を読み飛ばし、ここへとジャンプしてくる前提
          * また、この skip_label の値は、
@@ -3997,6 +3986,9 @@ jump
         : __OPE_GOTO __LABEL {
                 pA("PLIMM(P3F, %d);\n", labellist_search($2));
         }
+        | __OPE_RETURN expression {
+                __define_user_function_return();
+        }
         ;
 
 identifier_list
@@ -4014,15 +4006,15 @@ identifier_list
         ;
 
 define_function
-        : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __BLOCK_LB {
+        : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB {
                 const int32_t skip_label = cur_label_index_head;
                 cur_label_index_head++;
                 $<ival>$ = skip_label;
 
                 __define_user_function_begin($2, $4, skip_label);
 
-        } declaration_list __BLOCK_RB {
-                __define_user_function_end($2, $<ival>7);
+        } __BLOCK_LB declaration_list __BLOCK_RB {
+                __define_user_function_end($<ival>6);
         }
         ;
 
