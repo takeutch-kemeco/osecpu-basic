@@ -1,21 +1,21 @@
-rem 最初と最後がほぼ-1に成らなければ異常
+/* 最初と最後がほぼ-1に成らなければ異常
+ */
 
-dim a
-a := -1
-print a
+dim a = -1;
+print a;
 
-a := a * -0.5; print a;
-a := a * -0.5; print a;
-a := a * -0.5; print a;
-a := a * -0.5; print a;
-a := a * -0.5; print a;
-a := a * -0.5; print a;
-a := a * -0.5; print a;
+a = a * -0.5; print a;
+a = a * -0.5; print a;
+a = a * -0.5; print a;
+a = a * -0.5; print a;
+a = a * -0.5; print a;
+a = a * -0.5; print a;
+a = a * -0.5; print a;
 
-a := a / -0.5; print a;
-a := a / -0.5; print a;
-a := a / -0.5; print a;
-a := a / -0.5; print a;
-a := a / -0.5; print a;
-a := a / -0.5; print a;
-a := a / -0.5; print a;
+a = a / -0.5; print a;
+a = a / -0.5; print a;
+a = a / -0.5; print a;
+a = a / -0.5; print a;
+a = a / -0.5; print a;
+a = a / -0.5; print a;
+a = a / -0.5; print a;

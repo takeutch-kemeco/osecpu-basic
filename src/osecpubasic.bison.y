@@ -3989,6 +3989,9 @@ jump
         | __OPE_RETURN expression {
                 __define_user_function_return();
         }
+        | __OPE_RETURN {
+                __define_user_function_return();
+        }
         ;
 
 identifier_list
