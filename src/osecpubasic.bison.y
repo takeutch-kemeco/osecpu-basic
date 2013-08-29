@@ -3632,9 +3632,16 @@ initializer_param
 initializer
         : __STATE_DIM __IDENTIFIER initializer_param {
                 varlist_add_local($2, $3[1], $3[0]);
+                strcpy($$, $2);
         }
         | initializer __OPE_COMMA __IDENTIFIER initializer_param {
                 varlist_add_local($3, $4[1], $4[0]);
+                strcpy($$, $3);
+        }
+        | initializer __OPE_SUBST expression {
+                pA("attachstack_socket = -1;");
+                push_attachstack_direct("attachstack_socket");
+                __assignment_scaler($1);
         }
         ;
 

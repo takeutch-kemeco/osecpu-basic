@@ -10,3 +10,12 @@ print a;
 print b;
 print c;
 print d;
+
+dim e=123;
+dim f=345,g,h=456,i,j=567;
+print e;
+print f;
+print g;
+print h;
+print i;
+print j;
