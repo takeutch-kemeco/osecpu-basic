@@ -113,9 +113,6 @@ FILE* yyaskB;
 <main_process>"while"   return(__STATE_WHILE);
 
 <main_process>"for"     return(__STATE_FOR);
-<main_process>"to"      return(__STATE_TO);
-<main_process>"step"    return(__STATE_STEP);
-<main_process>"next"    return(__STATE_NEXT);
 
 <main_process>"read"    return(__STATE_READ);
 <main_process>"data"    return(__STATE_DATA);

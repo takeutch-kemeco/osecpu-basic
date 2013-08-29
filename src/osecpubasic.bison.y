@@ -1210,6 +1210,11 @@ static void __assignment_scaler(const char* iden)
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
         write_heap_inline_direct("stack_socket");
+
+        /* 変数へ書き込んだ値をスタックへもプッシュしておく
+         * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
+         */
+        push_stack_direct("stack_socket");
 }
 
 /* 名前がidenの配列変数中の、任意インデックス番目の要素へ、値を代入する。
@@ -1295,6 +1300,11 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
         write_heap_inline_direct("heap_socket");
+
+        /* 変数へ書き込んだ値をスタックへもプッシュしておく
+         * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
+         */
+        push_stack_direct("heap_socket");
 }
 
 /* 以下、各種リード関数 */
@@ -3334,7 +3344,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 
 %token __STATE_IF __STATE_ELSE
 %token __STATE_WHILE
-%token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT
+%token __STATE_FOR
 %token __STATE_READ __STATE_DATA __OPE_GOTO __OPE_RETURN
 %token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
 %token __OPE_SUBST
@@ -3411,7 +3421,6 @@ declaration_block
 declaration
         : declaration_block
         | initializer __DECL_END
-        | assignment __DECL_END
         | ope_matrix __DECL_END
         | expression __DECL_END
         | selection_if
@@ -3426,6 +3435,7 @@ expression
         : operation
         | const_variable
         | read_variable
+        | assignment
         | comparison
         | function
         ;
@@ -3877,6 +3887,7 @@ iterator
 
 iterator_while
         : __STATE_WHILE {
+                /* ループの復帰位置をここに設定 */
                 const int32_t loop_head = cur_label_index_head;
                 cur_label_index_head++;
                 $<ival>$ = loop_head;
@@ -3888,151 +3899,71 @@ iterator_while
                 pA("if (stack_socket != 0) {");
 
         } declaration {
+                /* ループの復帰 */
                 pA("PLIMM(P3F, %d);", $<ival>2);
                 pA_nl("}");
         }
         ;
 
 iterator_for
-        : __STATE_FOR var_identifier {
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search($2);
-                if (var == NULL)
-                        yyerror("syntax err: 未定義のスカラー変数を参照しようとしました");
-
-                /* 変数が配列な場合はエラー */
-                if (var->col_len != 1 || var->row_len != 1)
-                        yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
-
-                /* var（変数のスペック）は他の場所でも使うので、コンパイル時に参照できるように $$ で出力する。
-                 * （以降は$<varptr>3で参照できる）
-                 */
-                $<varptr>$ = var;
-
-        } __OPE_SUBST expression {
-                /* このセクションはスカラー変数への代入
-                 */
-
-                /* スカラーなので書き込みオフセットは 0 */
-                pA("heap_offset = 0;");
-
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                 * このアタッチは以降も使うので、ポップ直後にプッシュしておく
-                 */
-                pop_attachstack_direct("attachstack_socket");
-                push_attachstack_direct("attachstack_socket");
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                   "else {heap_base = %d;}", $<varptr>3->base_ptr);
-
-                /* 書き込む値を読んで書き込む */
+        : __STATE_FOR __LB expression {
+                /* スタックを掃除 */
                 pop_stack_direct("stack_socket");
-                write_heap_inline_direct("stack_socket");
 
-                /* そして、代入後であるここに無名ラベルを作る（このforループは、以降はこの位置へと戻ってくる）
-                 * また、このラベルは next で戻ってくる際に使うので、コンパイル時に参照できるように $$ で出力する。
-                 * （以降は$<ival>6で参照できる）
-                 * これはラベル番号で int32 型の値である。
-                 * そして、ラベルを作成したので cur_label_index_head を一つ進める。
-                 */
-                pA("LB(1, %d);\n", cur_label_index_head);
+                /* head ラベルID */
+                int32_t loop_head = cur_label_index_head;
+                cur_label_index_head++;
+                $<ival>$ = loop_head;
+
+                /* head ラベル */
+                pA("LB(1, %d);", loop_head);
+
+        } __DECL_END {
+                /* end ラベルID */
                 $<ival>$ = cur_label_index_head;
                 cur_label_index_head++;
 
-        } __STATE_TO expression {
-                /* 条件を比較するために
-                 * まずスタックに詰まれてる __STATE_TO expression (の戻り値)を得て、 forfixR（右辺用） へと退避しておく。
-                 * （また、このポップは、変数を読む際に余分なスタックが残っていないように、スタックを掃除しておく意味も兼ねる）
-                 */
-                pop_stack_direct("forfixR");
+        } expression {
+                /* main ラベルID */
+                int32_t loop_main = cur_label_index_head;
+                cur_label_index_head++;
+                $<ival>$ = loop_main;
 
-                /* 次にスカラー変数から値を読み、 forfixL （左辺用） へと退避しておく。
-                 */
-                pA("heap_offset = 0;");
-
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                 * このアタッチは以降も使うので、ポップ直後にプッシュしておく
-                 */
-                pop_attachstack_direct("attachstack_socket");
-                push_attachstack_direct("attachstack_socket");
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                   "else {heap_base = %d;}", $<varptr>3->base_ptr);
-
-                read_heap_inline_direct("forfixL");
-
-        } __STATE_STEP expression {
-                /* 条件比較の方向を判断するために、stepの値を読む必要がある
-                 * そして、最後の next の時点でインクリメントに使用するのに備えて、再びプッシュしておく
-                 */
-                pop_stack_direct("forfixtmp");
-                push_stack_direct("forfixtmp");
-
-                /* step が正の場合は　<= による比較となり、 負の場合は >= による比較となる。
-                 * これは実際には forfixL, forfixR の値を入れ替えることで対応する。（比較の条件式をどちらのケースでも共用できるように）
-                 * したがって、”step が負の場合に forfixL, forfixR を入れ替える命令”をここに書く。
-                 */
-                pA("if (forfixtmp < 0) {forfixtmp = forfixL; forfixL = forfixR; forfixR = forfixtmp;}");
-
-                /* これら forfixL, forfixR を比較し分岐する命令を書く。
-                 * （真の場合の分岐は、そのまま以降の declaration_list となる）
-                 */
-                pA("if (forfixL <= forfixR) {");
-
-        } declaration_list __STATE_NEXT {
-                /* ここは真の場合の命令の続きで、declaration_list の本体が終了した時点 */
-
-                /* ここでスカラー変数の値を step によってインクリメントする。
-                 * まずは step の値をポップして取得し forfixR へと退避し、
-                 * 次に、スカラー変数の値を取得して forfixL へと退避し、
-                 * これら forfixL, forfixR を加算し、結果をスカラー変数へ再び代入する。
-                 */
-                pop_stack_direct("forfixR");
-
-                /* このセクションはスカラー変数の読み込みなので、read_variable とスカラー版とほぼ同様
-                 */
-
-                /* スカラーなので読み込みオフセットは 0 */
-                pA("heap_offset = 0;");
-
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                 * このアタッチは以降も使うので、ポップ直後にプッシュしておく
-                 */
-                pop_attachstack_direct("attachstack_socket");
-                push_attachstack_direct("attachstack_socket");
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                   "else {heap_base = %d;}", $<varptr>3->base_ptr);
-
-                /* 結果をforfixLにセットする */
-                read_heap_inline_direct("forfixL");
-
-                /* インクリメントして、その結果をスカラー変数へ代入する
-                 */
-                pA("heap_socket = forfixL + forfixR;");
-
-                pA("heap_offset = 0;");
-
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                 * このアタッチは以降も使うので、ポップ直後にプッシュしておく
-                 */
-                pop_attachstack_direct("attachstack_socket");
-                push_attachstack_direct("attachstack_socket");
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                   "else {heap_base = %d;}", $<varptr>3->base_ptr);
-
-                write_heap_inline_direct("heap_socket");
-
-                /* その後、先頭で作成したラベル位置へと再び戻るために、 goto させる命令を書く。
-                 * これには $<ival>6 により示されるラベル位置を用いる。
-                 * そして、真の場合の命令はここまでとなり、以降は偽の場合の命令となる
-                 */
-                pA("PLIMM(P3F, %d);\n", $<ival>6);
-                pA("} else {");
-
-                /* 偽の場合は、アタッチスタックとスタックをポップして（step等を捨てるため）して、そのまま終わる */
+                /* スタックから条件判定結果をポップ */
                 pop_stack_direct("stack_socket");
-                pop_attachstack_direct("attachstack_socket");
-                pA("}");
+
+                /* 条件判定結果が真ならば main ラベルへジャンプ */
+                pA("if (stack_socket != 0) {PLIMM(P3F, %d);}", loop_main);
+
+                /* 条件判定結果が真でないならば（偽ならば） end ラベルへジャンプ */
+                pA("PLIMM(P3F, %d);", $<ival>6);
+
+        } __DECL_END {
+                /* pre_head ラベルID */
+                int32_t loop_pre_head = cur_label_index_head;
+                cur_label_index_head++;
+                $<ival>$ = loop_pre_head;
+
+                /* pre_head ラベル */
+                pA("LB(1, %d);", loop_pre_head);
+
+        } expression __RB {
+                /* スタックを掃除 */
+                pop_stack_direct("stack_socket");
+
+                /* head ラベルへジャンプ */
+                pA("PLIMM(P3F, %d);", $<ival>4);
+
+                /* main ラベル */
+                pA("LB(1, %d);", $<ival>8);
+
+        } declaration {
+                /* pre_head ラベルへジャンプ */
+                pA("PLIMM(P3F, %d);", $<ival>10);
+
+                /* end ラベル */
+                pA("LB(1, %d);", $<ival>6);
         }
-        ;
 
 define_label
         : __DEFINE_LABEL {
