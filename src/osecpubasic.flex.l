@@ -110,6 +110,8 @@ FILE* yyaskB;
 <main_process>"if"      return(__STATE_IF);
 <main_process>"else"    return(__STATE_ELSE);
 
+<main_process>"while"   return(__STATE_WHILE);
+
 <main_process>"for"     return(__STATE_FOR);
 <main_process>"to"      return(__STATE_TO);
 <main_process>"step"    return(__STATE_STEP);

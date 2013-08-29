@@ -3333,6 +3333,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 }
 
 %token __STATE_IF __STATE_ELSE
+%token __STATE_WHILE
 %token __STATE_FOR __STATE_TO __STATE_STEP __STATE_NEXT
 %token __STATE_READ __STATE_DATA __OPE_GOTO __OPE_RETURN
 %token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
@@ -3372,7 +3373,8 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 
 %type <sval> operation const_variable read_variable
 %type <sval> selection_if selection_if_v selection_if_e
-%type <sval> iterator_for initializer expression assignment jump define_label function
+%type <sval> iterator iterator_while iterator_for
+%type <sval> initializer expression assignment jump define_label function
 %type <sval> ope_matrix
 %type <sval> syntax_tree declaration_list declaration declaration_block
 %type <sval> define_function
@@ -3413,7 +3415,7 @@ declaration
         | ope_matrix __DECL_END
         | expression __DECL_END
         | selection_if
-        | iterator_for
+        | iterator
         | jump __DECL_END
         | define_label __DECL_END
         | define_function
@@ -3865,6 +3867,29 @@ selection_if_e
                 pA(" else {");
         } declaration {
                 pA("}");
+        }
+        ;
+
+iterator
+        : iterator_while
+        | iterator_for
+        ;
+
+iterator_while
+        : __STATE_WHILE {
+                const int32_t loop_head = cur_label_index_head;
+                cur_label_index_head++;
+                $<ival>$ = loop_head;
+
+                pA("LB(1, %d);", loop_head);
+
+        } __LB expression __RB {
+                pop_stack_direct("stack_socket");
+                pA("if (stack_socket != 0) {");
+
+        } declaration {
+                pA("PLIMM(P3F, %d);", $<ival>2);
+                pA_nl("}");
         }
         ;
 
