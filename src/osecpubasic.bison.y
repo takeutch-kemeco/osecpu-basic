@@ -264,6 +264,13 @@ static void push_stack_direct(const char* register_name)
 {
         pA("PASMEM0(%s, T_SINT32, stack_ptr, stack_head);", register_name);
         pA("stack_head++;");
+
+#ifdef DEBUG_STACK
+        pA("junkApi_putConstString('push_stack_direct()\\n');");
+        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
+        pA("junkApi_putConstString(', ');");
+#endif /* DEBUG_STACK */
+
 }
 
 /* スタックから任意のレジスターへ値をポップする。
@@ -273,6 +280,13 @@ static void pop_stack_direct(const char* register_name)
 {
         pA("stack_head--;");
         pA("PALMEM0(%s, T_SINT32, stack_ptr, stack_head);", register_name);
+
+#ifdef DEBUG_STACK
+        pA("junkApi_putConstString('pop_stack_direct()\\n');");
+        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
+        pA("junkApi_putConstString(', ');");
+#endif /* DEBUG_STACK */
+
 }
 
 /* スタックの初期化
@@ -3412,9 +3426,9 @@ declaration_block
 
 declaration
         : declaration_block
-        | initializer __DECL_END
-        | ope_matrix __DECL_END
-        | expression __DECL_END
+        | initializer __DECL_END {pA("stack_head = 0;");}
+        | ope_matrix __DECL_END {pA("stack_head = 0;");}
+        | expression __DECL_END {pA("stack_head = 0;");}
         | selection_if
         | iterator
         | jump __DECL_END
