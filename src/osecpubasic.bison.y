@@ -1538,6 +1538,7 @@ static void __define_user_function_begin(const char* iden,
         for (i = 0; i < arglen; i++) {
                 char iden[0x1000];
                 idenlist_pop(iden);
+puts(iden);
 
                 varlist_add_local(iden, 1, 1);
 
@@ -4016,9 +4017,9 @@ identifier_list
                 idenlist_push($1);
                 $$ = 1;
         }
-        | __IDENTIFIER __OPE_COMMA identifier_list {
-                idenlist_push($1);
-                $$ = 1 + $3;
+        | identifier_list __OPE_COMMA __IDENTIFIER {
+                idenlist_push($3);
+                $$ = 1 + $1;
         }
         ;
 
