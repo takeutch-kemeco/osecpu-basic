@@ -1538,7 +1538,6 @@ static void __define_user_function_begin(const char* iden,
         for (i = 0; i < arglen; i++) {
                 char iden[0x1000];
                 idenlist_pop(iden);
-puts(iden);
 
                 varlist_add_local(iden, 1, 1);
 
