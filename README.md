@@ -348,6 +348,7 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 ・演算モード mat を用いて、配列をベクトルや行列とみなして、全体に行列演算を行えます。
 
 ・構文定義は以下となります:
+
     ope_matrix
         : mat var_identifier = var_identifier
         | mat var_identifier = zer
