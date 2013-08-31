@@ -1156,25 +1156,57 @@ static void __func_lshift(void)
  * fixL >> fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  *
- * 論理シフトとして動作する。
+ * 算術シフトとして動作する。
  */
-static void __func_rshift(void)
+static void __func_arithmetic_rshift(void)
 {
         beginF();
 
         pA("fixR >>= 16;");
 
-        pA("if (fixR >= 1) {");
-                pA("if ((fixL & 0x80000000) != 0) {");
-                        pA("fixL &= 0x7fffffff;");
-                        pA("fixL >>= 1;");
-                        pA("fixL |= 0x40000000;");
-
-                        pA("fixR--;");
+        pA("if (fixR >= 32) {");
+                pA("fixA = 0;");
+        pA("} else {");
+                pA("if (fixL < 0) {");
+                        pA("fixL = ~fixL;");
+                        pA("fixL++;");
+                        pA("fixL >>= fixR;");
+                        pA("fixL = ~fixL;");
+                        pA("fixL++;");
+                        pA("fixA = fixL;");
+                pA("} else {");
+                        pA("fixA = fixL >> fixR;");
                 pA("}");
         pA("}");
 
-        pA("fixA = fixL >> fixR;");
+        endF();
+}
+
+/* 右シフト命令を出力する（論理シフト）
+ * fixL >> fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ *
+ * 論理シフトとして動作する。
+ */
+static void __func_logical_rshift(void)
+{
+        beginF();
+
+        pA("fixR >>= 16;");
+
+        pA("if (fixR >= 32) {");
+                pA("fixA = 0;");
+        pA("} else {");
+                pA("if ((fixL < 0) & (fixR >= 1)) {");
+                        pA("fixL &= 0x7fffffff;");
+                        pA("fixL >>= fixR;");
+                        pA("fixR--;");
+                        pA("fixA = 0x40000000 >> fixR;");
+                        pA("fixA |= fixL;");
+                pA("} else {");
+                        pA("fixA = fixL >> fixR;");
+                pA("}");
+        pA("}");
 
         endF();
 }
@@ -3365,7 +3397,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
 %left  __OPE_OR __OPE_AND __OPE_XOR __OPE_NOT
-%left  __OPE_LSHIFT __OPE_RSHIFT
+%left  __OPE_LSHIFT __OPE_LOGICAL_RSHIFT __OPE_ARITHMETIC_RSHIFT
 %left  __OPE_COMMA
 %token __OPE_PLUS __OPE_MINUS
 %token __OPE_ATTACH __OPE_ADDRESS
@@ -3807,9 +3839,14 @@ operation
                 __func_lshift();
                 push_stack_direct("fixA");
         }
-        | expression __OPE_RSHIFT expression {
+        | expression __OPE_LOGICAL_RSHIFT expression {
                 read_eoe_arg();
-                __func_rshift();
+                __func_logical_rshift();
+                push_stack_direct("fixA");
+        }
+        | expression __OPE_ARITHMETIC_RSHIFT expression {
+                read_eoe_arg();
+                __func_arithmetic_rshift();
                 push_stack_direct("fixA");
         }
         | __OPE_ADD expression %prec __OPE_PLUS {

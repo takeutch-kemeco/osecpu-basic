@@ -82,7 +82,8 @@ FILE* yyaskB;
 <main_process>"~"       return(__OPE_NOT);
 
 <main_process>"<<"      return(__OPE_LSHIFT);
-<main_process>">>"      return(__OPE_RSHIFT);
+<main_process>">>"      return(__OPE_LOGICAL_RSHIFT);
+<main_process>">>>"     return(__OPE_ARITHMETIC_RSHIFT);
 
 <main_process>"@"       return(__OPE_ATTACH);
 <main_process>"&"       return(__OPE_ADDRESS);
