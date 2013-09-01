@@ -580,7 +580,7 @@ static void pop_heapstack(void)
 static char init_heapstack[] = {
         "VPtr heapstack_ptr:P06;\n"
         "junkApi_malloc(heapstack_ptr, T_SINT32, 0x100000);\n"
-        "SInt32 heapstack_head:R11\n"
+        "SInt32 heapstack_head:R11;\n"
         "heapstack_head = 0;\n"
 };
 
