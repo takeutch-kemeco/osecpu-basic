@@ -673,20 +673,20 @@ static char debug_eoe[] = {
  * fixA1 ～ fixA3 も、 fixA 同様に戻り値の受け渡しに使える。
  */
 static char init_eoe_arg[] = {
-        "SInt32 fixA:R07;"
-        "SInt32 fixL:R08;"
-        "SInt32 fixR:R09;"
-        "SInt32 fixLx:R0A;"
-        "SInt32 fixRx:R0B;"
-        "SInt32 fixS:R0C;"
-        "SInt32 fixT:R0D;"
-        "SInt32 fixT1:R0E;"
-        "SInt32 fixT2:R0F;"
-        "SInt32 fixT3:R10;"
-        "SInt32 fixT4:R25;"
-        "SInt32 fixA1:R22;"
-        "SInt32 fixA2:R23;"
-        "SInt32 fixA3:R24;"
+        "SInt32 fixA:R07;\n"
+        "SInt32 fixL:R08;\n"
+        "SInt32 fixR:R09;\n"
+        "SInt32 fixLx:R0A;\n"
+        "SInt32 fixRx:R0B;\n"
+        "SInt32 fixS:R0C;\n"
+        "SInt32 fixT:R0D;\n"
+        "SInt32 fixT1:R0E;\n"
+        "SInt32 fixT2:R0F;\n"
+        "SInt32 fixT3:R10;\n"
+        "SInt32 fixT4:R25;\n"
+        "SInt32 fixA1:R22;\n"
+        "SInt32 fixA2:R23;\n"
+        "SInt32 fixA3:R24;\n"
 };
 
 /* ope_matrix 用変数の初期化
