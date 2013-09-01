@@ -696,33 +696,33 @@ static char init_eoe_arg[] = {
 static char init_matrix[] = {
         /* 主にループ処理の必要な大きな行列処理時に用いる想定
          */
-        "SInt32 matfixL: R14;"
-        "SInt32 matfixR: R15;"
-        "SInt32 matfixA: R16;"
-        "SInt32 matfixtmp: R17;"
-        "SInt32 matcountcol: R18;"
-        "SInt32 matcountrow: R19;"
-        "SInt32 matcol: R1A;"
-        "SInt32 matrow: R1B;"
+        "SInt32 matfixL: R14;\n"
+        "SInt32 matfixR: R15;\n"
+        "SInt32 matfixA: R16;\n"
+        "SInt32 matfixtmp: R17;\n"
+        "SInt32 matcountcol: R18;\n"
+        "SInt32 matcountrow: R19;\n"
+        "SInt32 matcol: R1A;\n"
+        "SInt32 matrow: R1B;\n"
 
         /* 主に3*3以下の小さな行列処理時に用いる想定
          * （ループ目的の場合の名前とは、一部のレジスターがunion関係となっている）
          */
-        "SInt32 matfixE0: R14;"
-        "SInt32 matfixE1: R15;"
-        "SInt32 matfixE2: R16;"
-        "SInt32 matfixE3: R17;"
-        "SInt32 matfixE4: R18;"
-        "SInt32 matfixE5: R19;"
-        "SInt32 matfixE6: R1A;"
-        "SInt32 matfixE7: R1B;"
-        "SInt32 matfixE8: R1C;"
+        "SInt32 matfixE0: R14;\n"
+        "SInt32 matfixE1: R15;\n"
+        "SInt32 matfixE2: R16;\n"
+        "SInt32 matfixE3: R17;\n"
+        "SInt32 matfixE4: R18;\n"
+        "SInt32 matfixE5: R19;\n"
+        "SInt32 matfixE6: R1A;\n"
+        "SInt32 matfixE7: R1B;\n"
+        "SInt32 matfixE8: R1C;\n"
 
         /* 3項それぞれのベースアドレス保存用。（アタッチへの対応用）
          */
-        "SInt32 matbpL: R26;"
-        "SInt32 matbpR: R27;"
-        "SInt32 matbpA: R28;"
+        "SInt32 matbpL: R26;\n"
+        "SInt32 matbpR: R27;\n"
+        "SInt32 matbpA: R28;\n"
 };
 
 /* 全ての初期化
