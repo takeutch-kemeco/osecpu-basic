@@ -113,6 +113,31 @@ void idenlist_pop(char* dst)
         strcpy(dst, idenlist[idenlist_head]);
 }
 
+/* プログラムフローにおける現時点でのスコープの深さ
+ * ローカルが深まる毎に +1 されて、浅くなる毎に -1 される前提。
+ * スコープが最も浅い場合はグローバルで、これは 0 となる。
+ *
+ * コンパイラーを書く上において、この値を各所で適切に設定する責任はプログラマーに委ねられる。（自動的には行われない）
+ *
+ * この値が 0 か 非0 かに伴い、スコープがグローバル時での変数定義の動作を変えるために用いる。
+ * 0 ならば変数はヒープから確保し、 非0 ならば変数はスタック上に確保する際に、この値を参考に分岐させるのに用いる。
+ */
+static int32_t cur_scope_depth = 0;
+
+/* プログラムフローにおける現時点でのスコープの深さを1段進める */
+static void inc_cur_scope_depth(void)
+{
+        cur_scope_depth++;
+}
+
+/* プログラムフローにおける現時点でのスコープの深さを1段戻す */
+static void dec_cur_scope_depth(void)
+{
+        cur_scope_depth--;
+        if (cur_scope_depth < 0)
+                yyerror("system err: dec_cur_scope_depth();");
+}
+
 #define VAR_STR_LEN IDENLIST_STR_LEN
 struct Var {
         char str[VAR_STR_LEN];
@@ -120,6 +145,7 @@ struct Var {
         int32_t array_len;      /* 配列全体の長さ */
         int32_t col_len;        /* 行の長さ */
         int32_t row_len;        /* 列の長さ */
+        int32_t is_local;       /* この変数がローカルならば非0、グローバルならば0となる */
 };
 
 #define VARLIST_LEN 0x1000
@@ -221,6 +247,7 @@ static void varlist_add_common(const char* str, const int32_t row_len, const int
         cur->row_len = row_len;
         cur->array_len = col_len * row_len;
         cur->base_ptr = (varlist_head == 0) ? 0 : prev->base_ptr + prev->array_len;
+        cur->is_local = (cur_scope_depth >= 1) ? 1 : 0;
 
         varlist_head++;
 }
@@ -236,22 +263,6 @@ static void varlist_add_common(const char* str, const int32_t row_len, const int
 static void varlist_add_local(const char* str, const int32_t row_len, const int32_t col_len)
 {
         if (varlist_search_local(str) != NULL)
-                return;
-
-        varlist_add_common(str, row_len, col_len);
-}
-
-/* 変数リストに新たに変数を追加する。
- * 既に同名の変数が存在した場合は何もしない。
- * row_len : この変数の行（たて方向、y方向）の長さを指定する。 スカラーまたは１次元配列の場合は 1 でなければならない。
- * col_len : この変数の列（よこ方向、x方向）の長さを指定する。 スカラーならば 1 でなければならない。
- * これらの値はint32型。（fix32型ではないので注意)
- *
- * col_len, row_len に 1 未満の数を指定した場合は syntax err となる。
- */
-static void varlist_add(const char* str, const int32_t row_len, const int32_t col_len)
-{
-        if (varlist_search(str) != NULL)
                 return;
 
         varlist_add_common(str, row_len, col_len);
@@ -1574,7 +1585,9 @@ static void __define_user_function_begin(const char* iden,
         /* 関数呼び出し時には、この位置が関数の先頭、すなわちジャンプ先アドレスとなる */
         pA("LB(1, %d);\n", labellist_search(iden));
 
-        /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時） */
+        /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時）
+         */
+        inc_cur_scope_depth();
         varlist_scope_push();
 
         int32_t i;
@@ -1613,7 +1626,9 @@ static void __define_user_function_return(void)
  */
 static void __define_user_function_end(const int32_t skip_label)
 {
-        /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時） */
+        /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
+         */
+        dec_cur_scope_depth();
         varlist_scope_pop();
 
         /* 現在の関数からのリターン */
@@ -3461,8 +3476,10 @@ declaration_block
                 /* 空の場合は何もしない */
         }
         | __BLOCK_LB {
+                inc_cur_scope_depth();  /* コンパイル時 */
                 varlist_scope_push();   /* コンパイル時 */
         } declaration_list __BLOCK_RB {
+                dec_cur_scope_depth();  /* コンパイル時 */
                 varlist_scope_pop();    /* コンパイル時 */
         }
         ;
