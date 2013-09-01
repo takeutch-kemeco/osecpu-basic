@@ -257,6 +257,23 @@ static void varlist_add(const char* str, const int32_t row_len, const int32_t co
         varlist_add_common(str, row_len, col_len);
 }
 
+/* 変数リストの現在の最後の変数を、新しいスコープの先頭とみなして、それの base_ptr に0をセットする
+ *
+ * 新しいスコープ内にて、新たにローカル変数 a, b, c を宣言する場合の例:
+ * push_heapstack();
+ * varlist_add_local("a", 1, 1); // とりあえず a を宣言する
+ * varlist_set_scope_head(); // これでヒープの最後の変数である a の base_ptr へ 0 がセットされる
+ * varlist_add_local("b", 1, 1); // その後 b, c は普通に宣言していけばいい
+ * varlist_add_local("c", 1, 1);
+ */
+static void varlist_set_scope_head(void)
+{
+        if (varlist_head > 0) {
+                struct Var* prev = varlist + varlist_head - 1;
+                prev->base_ptr = 0;
+        }
+}
+
 /* 任意のレジスターの値をスタックにプッシュする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  */
@@ -305,7 +322,7 @@ static char init_stack[] = {
  */
 static int32_t cur_label_index_head = 0;
 
-/* ラベルの仕様可能最大数 */
+/* ラベルの使用可能最大数 */
 #define LABEL_INDEX_LEN 2048
 #define LABEL_INDEX_LEN_STR "2048"
 
