@@ -505,8 +505,10 @@ static void retF(void)
         func_label_init_flag = 1;
 
 /* ヒープメモリー上の、任意アドレスからの任意オフセット位置へ、任意のレジスタの内容を書き込む。
- * 概ね write_heap_inline() と同様だが、
- * セットする値を heap_socket ではなく直接レジスターで指定できる点が異なる。
+ * 事前に以下のレジスタに値をセットしておくこと:
+ * heap_base   : 書き込みのベースアドレス。Int32型単位なので注意。（fix32型では”無い”）
+ * heap_socket : ヒープに書き込みたい値。fix32型単位なので注意。
+ * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
  *
  * また、他の多くの _direct() も同様だが、
  * サフィックス _direct() の関数は、その内部処理を beginF(), endF() で囲んでいない。（囲めないので）
@@ -521,26 +523,12 @@ static void write_heap_inline_direct(const char* register_name)
         pA("PASMEM0(%s, T_SINT32, heap_ptr, heap_base);", register_name);
 }
 
-/* ヒープメモリー上の、任意アドレスからの任意オフセット位置へfix32型を書き込む。
+/* ヒープメモリー上の、任意アドレスからの任意オフセット位置から、任意のレジスタへ内容を読み込む。
  * 事前に以下のレジスタに値をセットしておくこと:
- * heap_base   : 書き込みのベースアドレス。Int32型単位なので注意。（fix32型では”無い”）
- * heap_socket : ヒープに書き込みたい値。fix32型単位なので注意。
+ * heap_base   : 読み込みのベースアドレス。Int32型単位なので注意。（fix32型では”無い”）
  * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
  *
- * 以前は identifier から struct Var* を得て base_ptr を heap_base へセットする所までこの関数が行っていたが、
- * 今はそれらの処理は別途、自分で書く必要がある。
- * （これらの処理はコンパイル時定数となるので beginF(), endF() で囲めない原因となっていた）
- *
- * コンパイル時の定数設定は不要となったので beginF(), endF() で囲めるようになった。
- */
-static void write_heap_inline(void)
-{
-        write_heap_inline_direct("heap_socket");
-}
-
-/* ヒープメモリー上の、任意アドレスからの任意オフセット位置から、任意のレジスタへ内容を読み込む。
- * 概ね read_heap_inline() と同様だが、
- * セットする値を heap_socket ではなく直接レジスターで指定できる点が異なる。
+ * register_name : ヒープメモリーから、値を実際に読み込む先となるレジスター(SInt32型レジスターのみ)
  *
  * また、他の多くの _direct() も同様だが、
  * サフィックス _direct() の関数は、その内部処理を beginF(), endF() で囲んでいない。（囲めないので）
@@ -553,24 +541,6 @@ static void read_heap_inline_direct(const char* register_name)
         pA("heap_offset &= 0x0000ffff;");
         pA("heap_base += heap_offset;");
         pA("PALMEM0(%s, T_SINT32, heap_ptr, heap_base);", register_name);
-}
-
-/* ヒープメモリー上の、identifier に割り当てられた領域内の任意オフセット位置からfix32型を読み込む。
- * 事前に以下のレジスタに値をセットしておくこと:
- * heap_base   : 読み込みのベースアドレス。Int32型単位なので注意。（fix32型では”無い”）
- * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
- *
- * 読み込んだ値は heap_socket へ格納される。これはfix32型なので注意。
- *
- * 以前は identifier から struct Var* を得て base_ptr を heap_base へセットする所までこの関数が行っていたが、
- * 今はそれらの処理は別途、自分で書く必要がある。
- * （これらの処理はコンパイル時定数となるので beginF(), endF() で囲めない原因となっていた）
- *
- * コンパイル時の定数設定は不要となったので beginF(), endF() で囲めるようになった。
- */
-static void read_heap_inline(void)
-{
-        read_heap_inline_direct("heap_socket");
 }
 
 /* ヒープメモリーの初期化
