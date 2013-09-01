@@ -375,18 +375,20 @@ void labellist_add(const char* str)
  * 事前に以下のレジスタをセットしておくこと:
  * labelstack_socket : プッシュしたい値。（VPtr型）
  */
-static char push_labelstack[] = {
-        "PAPSMEM0(labelstack_socket, T_VPTR, labelstack_ptr, labelstack_head);\n"
-        "labelstack_head++;\n"
-};
+static void push_labelstack(const char* register_name)
+{
+        pA("PAPSMEM0(%s, T_VPTR, labelstack_ptr, labelstack_head);", register_name);
+        pA("labelstack_head++;");
+}
 
 /* ラベルスタックからラベル型（VPtr型）をポップする
  * ポップした値は labelstack_socket に格納される。
  */
-static char pop_labelstack[] = {
-        "labelstack_head--;\n"
-        "PAPLMEM0(labelstack_socket, T_VPTR, labelstack_ptr, labelstack_head);\n"
-};
+static void pop_labelstack(const char* register_name)
+{
+        pA("labelstack_head--;");
+        pA("PAPLMEM0(%s, T_VPTR, labelstack_ptr, labelstack_head);", register_name);
+}
 
 /* ラベルスタックの初期化
  * gosub, return の実装において、呼び出しを再帰的に行った場合でも return での戻りラベルを正しく扱えるように、
@@ -453,7 +455,7 @@ static char init_attachstack[] = {
 static void callF(const int32_t label)
 {
         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-        pA(push_labelstack);
+        push_labelstack("labelstack_socket");
         pA("PLIMM(P3F, %d);\n", label);
 
         pA("LB(1, %d);\n", cur_label_index_head);
@@ -465,7 +467,7 @@ static void callF(const int32_t label)
  */
 static void retF(void)
 {
-        pA(pop_labelstack);
+        pop_labelstack("labelstack_socket");
         pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
 }
 
@@ -1532,7 +1534,7 @@ static void __call_user_function(const char* iden)
 
         /* gosub とほぼ同じ */
         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-        pA(push_labelstack);
+        push_labelstack("labelstack_socket");
         pA("PLIMM(P3F, %d);\n", labellist_search(iden));
         pA("LB(1, %d);\n", cur_label_index_head);
         cur_label_index_head++;
@@ -1587,7 +1589,7 @@ static void __define_user_function_begin(const char* iden,
 static void __define_user_function_return(void)
 {
         /* 関数呼び出し元の位置まで戻る */
-        pA(pop_labelstack);
+        pop_labelstack("labelstack_socket");
         pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
 }
 
