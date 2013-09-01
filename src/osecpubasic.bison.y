@@ -412,7 +412,7 @@ static char init_labelstack[] = {
  * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  * また、代入プロセスが省略できるので高速化する
  */
-static void push_attachstack_direct(const char* register_name)
+static void push_attachstack(const char* register_name)
 {
         pA("PASMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
         pA("attachstack_head++;");
@@ -422,7 +422,7 @@ static void push_attachstack_direct(const char* register_name)
  * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  * また、代入プロセスが省略できるので高速化する
  */
-static void pop_attachstack_direct(const char* register_name)
+static void pop_attachstack(const char* register_name)
 {
         pA("attachstack_head--;");
         pA("PALMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
@@ -1246,7 +1246,7 @@ static void __assignment_scaler(const char* iden)
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
          * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
          */
-        pop_attachstack_direct("attachstack_socket");
+        pop_attachstack("attachstack_socket");
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
         write_heap("stack_socket");
@@ -1336,7 +1336,7 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
          * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
          */
-        pop_attachstack_direct("attachstack_socket");
+        pop_attachstack("attachstack_socket");
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
         write_heap("heap_socket");
@@ -1358,7 +1358,7 @@ static void __read_variable_ptr_scaler(const char* iden)
 
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
          */
-        pop_attachstack_direct("attachstack_socket");
+        pop_attachstack("attachstack_socket");
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
            "else {heap_base = %d;}", var->base_ptr);
 
@@ -1393,7 +1393,7 @@ static void __read_variable_ptr_array(const char* iden, const int32_t dim)
         if (var->row_len == 1) {
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                  */
-                pop_attachstack_direct("attachstack_socket");
+                pop_attachstack("attachstack_socket");
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
                    "else {heap_base = %d;}", var->base_ptr);
 
@@ -1407,7 +1407,7 @@ static void __read_variable_ptr_array(const char* iden, const int32_t dim)
         } else if (var->row_len >= 2) {
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                  */
-                pop_attachstack_direct("attachstack_socket");
+                pop_attachstack("attachstack_socket");
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
                    "else {heap_base = %d;}", var->base_ptr);
 
@@ -1449,7 +1449,7 @@ static void __read_variable_scaler(const char* iden)
         pA("heap_offset = 0;");
 
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-        pop_attachstack_direct("attachstack_socket");
+        pop_attachstack("attachstack_socket");
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
            "else {heap_base = %d;}", var->base_ptr);
 
@@ -1487,7 +1487,7 @@ static void __read_variable_array(const char* iden, const int32_t dim)
                 pop_stack("heap_offset");
 
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                pop_attachstack_direct("attachstack_socket");
+                pop_attachstack("attachstack_socket");
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
                    "else {heap_base = %d;}", var->base_ptr);
 
@@ -1505,7 +1505,7 @@ static void __read_variable_array(const char* iden, const int32_t dim)
                 pA("heap_offset += stack_socket * %d;", var->col_len);
 
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                pop_attachstack_direct("attachstack_socket");
+                pop_attachstack("attachstack_socket");
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
                    "else {heap_base = %d;}", var->base_ptr);
 
@@ -3669,7 +3669,7 @@ initializer
         }
         | initializer __OPE_SUBST expression {
                 pA("attachstack_socket = -1;");
-                push_attachstack_direct("attachstack_socket");
+                push_attachstack("attachstack_socket");
                 __assignment_scaler($1);
         }
         ;
@@ -3677,11 +3677,11 @@ initializer
 attach_base
         : {
                 pA("attachstack_socket = -1;");
-                push_attachstack_direct("attachstack_socket");
+                push_attachstack("attachstack_socket");
         }
         | expression __OPE_ATTACH {
                 pop_stack("stack_socket");
-                push_attachstack_direct("stack_socket");
+                push_attachstack("stack_socket");
         }
         ;
 
@@ -3702,19 +3702,19 @@ assignment
 
 ope_matrix
         : __STATE_MAT var_identifier __OPE_SUBST var_identifier {
-                pop_attachstack_direct("matbpL");
-                pop_attachstack_direct("matbpA");
+                pop_attachstack("matbpL");
+                pop_attachstack("matbpA");
 
                 ope_matrix_copy($2, $4);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_ZER {
-                pop_attachstack_direct("matbpA");
+                pop_attachstack("matbpA");
 
                 pA("matfixL = 0;");
                 ope_matrix_scalar($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_CON {
-                pop_attachstack_direct("matbpA");
+                pop_attachstack("matbpA");
 
                 pA("matfixL = %d;", 1 << 16);
                 ope_matrix_scalar($2);
@@ -3722,39 +3722,39 @@ ope_matrix
         | __STATE_MAT var_identifier __OPE_SUBST expression __OPE_MUL __STATE_MAT_CON {
                 pop_stack("matfixL");
 
-                pop_attachstack_direct("matbpA");
+                pop_attachstack("matbpA");
 
                 ope_matrix_scalar($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_IDN {
-                pop_attachstack_direct("matbpA");
+                pop_attachstack("matbpA");
 
                 ope_matrix_idn($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_TRN __LB var_identifier __RB {
-                pop_attachstack_direct("matbpL");
-                pop_attachstack_direct("matbpA");
+                pop_attachstack("matbpL");
+                pop_attachstack("matbpA");
 
                 ope_matrix_trn($2, $6);
         }
         | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_ADD var_identifier {
-                pop_attachstack_direct("matbpR");
-                pop_attachstack_direct("matbpL");
-                pop_attachstack_direct("matbpA");
+                pop_attachstack("matbpR");
+                pop_attachstack("matbpL");
+                pop_attachstack("matbpA");
 
                 ope_matrix_add($2, $4, $6);
         }
         | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_SUB var_identifier {
-                pop_attachstack_direct("matbpR");
-                pop_attachstack_direct("matbpL");
-                pop_attachstack_direct("matbpA");
+                pop_attachstack("matbpR");
+                pop_attachstack("matbpL");
+                pop_attachstack("matbpA");
 
                 ope_matrix_sub($2, $4, $6);
         }
         | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_MUL var_identifier {
-                pop_attachstack_direct("matbpR");
-                pop_attachstack_direct("matbpL");
-                pop_attachstack_direct("matbpA");
+                pop_attachstack("matbpR");
+                pop_attachstack("matbpL");
+                pop_attachstack("matbpA");
 
                 ope_matrix_mul($2, $4, $6);
         }
