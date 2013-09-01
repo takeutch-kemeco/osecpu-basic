@@ -520,7 +520,6 @@ static void retF(void)
 static void write_heap(const char* register_name)
 {
         pA("heap_offset >>= 16;");
-        pA("heap_offset &= 0x0000ffff;");
         pA("heap_base += heap_offset;");
         pA("PASMEM0(%s, T_SINT32, heap_ptr, heap_base);", register_name);
 }
@@ -540,7 +539,6 @@ static void write_heap(const char* register_name)
 static void read_heap(const char* register_name)
 {
         pA("heap_offset >>= 16;");
-        pA("heap_offset &= 0x0000ffff;");
         pA("heap_base += heap_offset;");
         pA("PALMEM0(%s, T_SINT32, heap_ptr, heap_base);", register_name);
 }
