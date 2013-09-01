@@ -574,6 +574,7 @@ static void read_heap_inline(void)
 }
 
 /* ヒープメモリーの初期化
+ * heap_head   : 現在の、新規確保が可能な領域の先頭を指すインデックス。(fix32型)
  */
 static char init_heap[] = {
         "VPtr heap_ptr:P04;\n"
@@ -581,7 +582,36 @@ static char init_heap[] = {
         "SInt32 heap_socket:R04;\n"
         "SInt32 heap_base:R06;\n"
         "SInt32 heap_offset:R05;\n"
+        "SInt32 heap_head:R12;\n"
         "heap_base = 0;\n"
+        "heap_head = 0;\n"
+};
+
+/* ヒープスタックへheap_headをプッシュ
+ */
+static void push_heapstack(void)
+{
+        pA("PASMEM0(heap_head, T_SINT32, heapstack_ptr, heapstack_head);");
+        pA("heapstack_head++;");
+}
+
+/* ヒープススタックからheap_headをポップ
+ */
+static void pop_heapstack(void)
+{
+        pA("heapstack_head--;");
+        pA("PALMEM0(heap_head, T_SINT32, heapstack_ptr, heapstack_head);");
+}
+
+/* ヒープスタックの初期化
+ * ヒープスタックは、ヒープメモリーの現在のheap_head（新規変数用に使用可能位置の先頭）を保存することで、
+ * 自動変数の確保や解放に用いるため
+ */
+static char init_heapstack[] = {
+        "VPtr heapstack_ptr:P06;\n"
+        "junkApi_malloc(heapstack_ptr, T_SINT32, 0x100000);\n"
+        "SInt32 heapstack_head:R11\n"
+        "heapstack_head = 0;\n"
 };
 
 /* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
@@ -733,14 +763,8 @@ void init_all(void)
 
         pA("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
 
-        /* forループ処理の作業用 */
-        pA("SInt32 forfixL: R11;");
-        pA("SInt32 forfixR: R12;");
-        pA("SInt32 forfixtmp: R13;\n");
-
-        /* matの作業用 */
-
         pA(init_heap);
+        pA(init_heapstack);
         pA(init_stack);
         pA(init_labelstack);
         pA(init_attachstack);
@@ -1563,7 +1587,7 @@ static void __define_user_function_begin(const char* iden,
         /* 関数呼び出し時には、この位置が関数の先頭、すなわちジャンプ先アドレスとなる */
         pA("LB(1, %d);\n", labellist_search(iden));
 
-        /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始 */
+        /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時） */
         varlist_scope_push();
 
         int32_t i;
@@ -1602,7 +1626,7 @@ static void __define_user_function_return(void)
  */
 static void __define_user_function_end(const int32_t skip_label)
 {
-        /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する */
+        /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時） */
         varlist_scope_pop();
 
         /* 現在の関数からのリターン */

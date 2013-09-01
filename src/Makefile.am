@@ -5,6 +5,7 @@ osecpubasic_SOURCES = main.c \
 LFLAGS = -Cf -8 -i
 YFLAGS = -dv
 CFLAGS = -O0
+#CFLAGS = -O0 -DDISABLE_TUNE
 #CFLAGS = -O0 -g -DDEBUG_STACK
 LIBS = -lm -lfl
 
