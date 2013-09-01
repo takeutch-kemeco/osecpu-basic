@@ -375,19 +375,19 @@ void labellist_add(const char* str)
  * 事前に以下のレジスタをセットしておくこと:
  * labelstack_socket : プッシュしたい値。（VPtr型）
  */
-static void push_labelstack(const char* register_name)
+static void push_labelstack(void)
 {
-        pA("PAPSMEM0(%s, T_VPTR, labelstack_ptr, labelstack_head);", register_name);
+        pA("PAPSMEM0(labelstack_socket, T_VPTR, labelstack_ptr, labelstack_head);");
         pA("labelstack_head++;");
 }
 
 /* ラベルスタックからラベル型（VPtr型）をポップする
  * ポップした値は labelstack_socket に格納される。
  */
-static void pop_labelstack(const char* register_name)
+static void pop_labelstack(void)
 {
         pA("labelstack_head--;");
-        pA("PAPLMEM0(%s, T_VPTR, labelstack_ptr, labelstack_head);", register_name);
+        pA("PAPLMEM0(labelstack_socket, T_VPTR, labelstack_ptr, labelstack_head);");
 }
 
 /* ラベルスタックの初期化
@@ -455,7 +455,7 @@ static char init_attachstack[] = {
 static void callF(const int32_t label)
 {
         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-        push_labelstack("labelstack_socket");
+        push_labelstack();
         pA("PLIMM(P3F, %d);\n", label);
 
         pA("LB(1, %d);\n", cur_label_index_head);
@@ -467,7 +467,7 @@ static void callF(const int32_t label)
  */
 static void retF(void)
 {
-        pop_labelstack("labelstack_socket");
+        pop_labelstack();
         pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
 }
 
@@ -1534,7 +1534,7 @@ static void __call_user_function(const char* iden)
 
         /* gosub とほぼ同じ */
         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
-        push_labelstack("labelstack_socket");
+        push_labelstack();
         pA("PLIMM(P3F, %d);\n", labellist_search(iden));
         pA("LB(1, %d);\n", cur_label_index_head);
         cur_label_index_head++;
@@ -1589,7 +1589,7 @@ static void __define_user_function_begin(const char* iden,
 static void __define_user_function_return(void)
 {
         /* 関数呼び出し元の位置まで戻る */
-        pop_labelstack("labelstack_socket");
+        pop_labelstack();
         pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
 }
 
