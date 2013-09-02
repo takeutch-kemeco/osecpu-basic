@@ -250,6 +250,11 @@ static void varlist_add_common(const char* str, const int32_t row_len, const int
         cur->is_local = (cur_scope_depth >= 1) ? 1 : 0;
 
         varlist_head++;
+
+#ifdef DEBUG_VARLIST
+        printf("col_len[%d], row_len[%d], array_len[%d], base_ptr[%d], is_local[%d]\n",
+               cur->col_len, cur->row_len, cur->array_len, cur->base_ptr, cur->is_local);
+#endif /* DEBUG_VARLIST */
 }
 
 /* 変数リストに新たにローカル変数を追加する。
@@ -3725,17 +3730,10 @@ initializer_param
         | __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
                 $$[0] = $2;
                 $$[1] = 1;
-
-                /* __CONST_INTEGER でスタックが +1 状態なのを掃除 */
-                pop_stack_dummy();
         }
         | __ARRAY_LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __ARRAY_RB {
                 $$[0] = $4;
                 $$[1] = $2;
-
-                /* __CONST_INTEGER * 2 でスタックが +2 状態なのを掃除 */
-                pop_stack_dummy();
-                pop_stack_dummy();
         }
         ;
 
