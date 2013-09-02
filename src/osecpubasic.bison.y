@@ -317,6 +317,24 @@ static void pop_stack(const char* register_name)
 
 }
 
+/* スタックへのダミープッシュ
+ * 実際には値をメモリーへプッシュすることはしないが、ヘッド位置だけを動かす。
+ * 実際にダミーデータを用いて push_stack() するよりも軽い。
+ */
+static void push_stack_dummy(void)
+{
+        pA("stack_head++;");
+}
+
+/* スタックからのダミーポップ
+ * 実際には値をメモリーからポップすることはしないが、ヘッド位置だけを動かす。
+ * 実際にダミーデータを用いて pop_stack() するよりも軽い。
+ */
+static void pop_stack_dummy(void)
+{
+        pA("stack_head--;");
+}
+
 /* スタックの初期化
  */
 static char init_stack[] = {
@@ -1613,9 +1631,12 @@ static void __define_user_function_begin(const char* iden,
 }
 
 /* 現在の関数からのリターン
+ * リターンさせる値をあらかじめ fixA にセットしておくこと
  */
 static void __define_user_function_return(void)
 {
+        push_stack("fixA");
+
         /* 関数呼び出し元の位置まで戻る */
         pop_labelstack();
         pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
@@ -1631,7 +1652,12 @@ static void __define_user_function_end(const int32_t skip_label)
         dec_cur_scope_depth();
         varlist_scope_pop();
 
-        /* 現在の関数からのリターン */
+        /* 現在の関数からのリターン
+         * プログラムフローがこの位置へ至る状態は、関数内でreturnが実行されなかった場合。
+         * しかし、関数は expression なので、終了後に"必ず"スタックが +1 された状態でなければならないので、
+         * fixAにデフォルト値として 0 をセットし、 return 0 と同様の処理となる。
+         */
+        pA("fixA = 0;");
         __define_user_function_return();
 
         /* 通常フロー中では、この関数定義を読み飛ばし、ここへとジャンプしてくる前提
@@ -3486,9 +3512,15 @@ declaration_block
 
 declaration
         : declaration_block
-        | initializer __DECL_END {pA("stack_head = 0;");}
-        | ope_matrix __DECL_END {pA("stack_head = 0;");}
-        | expression __DECL_END {pA("stack_head = 0;");}
+        | initializer __DECL_END
+        | ope_matrix __DECL_END
+        | expression __DECL_END  {
+                /* expression に属するステートメントは、
+                 * 終了時点で”必ず”スタックへのプッシュが1個だけ余計に残ってるという前提。
+                 * それを掃除するため。
+                 */
+                pop_stack_dummy();
+        }
         | selection_if
         | iterator
         | jump __DECL_END
@@ -3545,6 +3577,7 @@ func_print
         : __FUNC_PRINT expression {
                 pop_stack("fixL");
                 __func_print();
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
@@ -3561,6 +3594,7 @@ func_poke
                 pop_stack("fixR");
                 pop_stack("fixL");
                 __func_poke();
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
@@ -3601,6 +3635,7 @@ func_openwin
                 pop_stack("fixR");       /* y */
                 pop_stack("fixL");       /* x */
                 __func_openwin();
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
@@ -3623,6 +3658,7 @@ func_drawpoint
                 pop_stack("fixL");       /* x0 */
                 pop_stack("fixT");       /* mode */
                 __func_drawpoint();
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
@@ -3636,6 +3672,7 @@ func_drawline
                 pop_stack("fixL");       /* x0 */
                 pop_stack("fixT");       /* mode */
                 __func_drawline();
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
@@ -3653,6 +3690,7 @@ func_filltri
                 pop_stack("fixL");       /* x0 */
                 pop_stack("fixT");       /* mode */
                 __func_filltri();
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
@@ -3666,6 +3704,7 @@ func_fillrect
                 pop_stack("fixL");       /* x0 */
                 pop_stack("fixT");       /* mode */
                 __func_fillrect();
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
@@ -3674,6 +3713,7 @@ func_sleep
                 pop_stack("fixR");       /* msec */
                 pop_stack("fixL");       /* mode */
                 __func_sleep();
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
@@ -3685,10 +3725,17 @@ initializer_param
         | __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
                 $$[0] = $2;
                 $$[1] = 1;
+
+                /* __CONST_INTEGER でスタックが +1 状態なのを掃除 */
+                pop_stack_dummy();
         }
         | __ARRAY_LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __ARRAY_RB {
                 $$[0] = $4;
                 $$[1] = $2;
+
+                /* __CONST_INTEGER * 2 でスタックが +2 状態なのを掃除 */
+                pop_stack_dummy();
+                pop_stack_dummy();
         }
         ;
 
@@ -3705,6 +3752,9 @@ initializer
                 pA("attachstack_socket = -1;");
                 push_attachstack("attachstack_socket");
                 __assignment_scaler($1);
+
+                /* __assignment_scaler() でスタックが +1 状態なのを掃除 */
+                pop_stack_dummy();
         }
         ;
 
@@ -3795,7 +3845,9 @@ ope_matrix
         ;
 
 const_variable
-        : __CONST_STRING
+        : __CONST_STRING {
+                push_stack_dummy();
+        }
         | __CONST_FLOAT {
                 double a;
                 double b = modf($1, &a);
@@ -4066,9 +4118,15 @@ jump
                 pA("PLIMM(P3F, %d);\n", labellist_search($2));
         }
         | __OPE_RETURN expression {
+                pop_stack("fixA");
                 __define_user_function_return();
         }
         | __OPE_RETURN {
+                /* 空の return の場合は return 0 として動作させる。
+                 * これは、ユーザー定義関数は expression なので、
+                 * 終了後に必ずスタックが +1 状態である必要があるため。
+                 */
+                pA("fixA = 0;");
                 __define_user_function_return();
         }
         ;
