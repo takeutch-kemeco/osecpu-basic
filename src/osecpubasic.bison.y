@@ -295,10 +295,14 @@ static void varlist_set_scope_head(void)
  *
  * 最終的には、システムで用いるメモリーは、全て、このメモリー領域を利用するように置き換えたい。
  */
-static char init_mem[] = {
-        "VPtr mem_ptr:P04;\n"
-        "junkApi_malloc(mem_ptr, T_SINT32, 0x100000);\n"
-};
+
+#define MEM_SIZE (0x100000)
+
+static void init_mem(void)
+{
+        pA("VPtr mem_ptr:P04;");
+        pA("junkApi_malloc(mem_ptr, T_SINT32, %d);", MEM_SIZE);
+}
 
 static void write_mem(const char* regname_data,
                       const char* regname_address)
@@ -312,36 +316,41 @@ static void read_mem(const char* regname_data,
         pA("PALMEM0(%s, T_SINT32, mem_ptr, %s);", regname_data, regname_address);
 }
 
+/* スタック構造関連
+ * これはプッシュ・ポップだけの単純なスタック構造を提供する。
+ * 実際には mem の STACK_BEGIN_ADDRESS 以降のメモリー領域を用いる。
+ */
+
+#define STACK_BEGIN_ADDRESS (MEM_SIZE - 0x1000)
+
 /* 任意のレジスターの値をスタックにプッシュする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  */
-static void push_stack(const char* register_name)
+static void push_stack(const char* regname_data)
 {
-        pA("PASMEM0(%s, T_SINT32, stack_ptr, stack_head);", register_name);
+        write_mem(regname_data, "stack_head");
         pA("stack_head++;");
 
 #ifdef DEBUG_STACK
-        pA("junkApi_putConstString('push_stack()\\n');");
+        pA("junkApi_putConstString('push_stack():');");
         pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
-        pA("junkApi_putConstString(', ');");
+        pA("junkApi_putConstString('\\n');");
 #endif /* DEBUG_STACK */
-
 }
 
 /* スタックから任意のレジスターへ値をポップする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  */
-static void pop_stack(const char* register_name)
+static void pop_stack(const char* regname_data)
 {
         pA("stack_head--;");
-        pA("PALMEM0(%s, T_SINT32, stack_ptr, stack_head);", register_name);
+        read_mem(regname_data, "stack_head");
 
 #ifdef DEBUG_STACK
-        pA("junkApi_putConstString('pop_stack()\\n');");
+        pA("junkApi_putConstString('pop_stack():');");
         pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
-        pA("junkApi_putConstString(', ');");
+        pA("junkApi_putConstString('\\n');");
 #endif /* DEBUG_STACK */
-
 }
 
 /* スタックへのダミープッシュ
@@ -364,13 +373,12 @@ static void pop_stack_dummy(void)
 
 /* スタックの初期化
  */
-static char init_stack[] = {
-        "VPtr stack_ptr:P03;\n"
-        "junkApi_malloc(stack_ptr, T_SINT32, 0x100000);\n"
-        "SInt32 stack_socket:R02;\n"
-        "SInt32 stack_head:R03;\n"
-        "stack_head = 0;\n"
-};
+static void init_stack(void)
+{
+        pA("SInt32 stack_socket:R02;");
+        pA("SInt32 stack_head:R03;");
+        pA("stack_head = %d;", STACK_BEGIN_ADDRESS);
+}
 
 /* 現在の使用可能なラベルインデックスのヘッド
  * この値から LABEL_INDEX_LEN 未満までの間が、まだ未使用なユニークラベルのサフィックス番号。
@@ -775,9 +783,9 @@ void init_all(void)
 
         pA("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
 
-        pA(init_mem);
+        init_mem();
         pA(init_heap);
-        pA(init_stack);
+        init_stack();
         pA(init_labelstack);
         pA(init_attachstack);
         pA(init_eoe_arg);
