@@ -289,6 +289,29 @@ static void varlist_set_scope_head(void)
         }
 }
 
+/* 低レベルなメモリー領域
+ * これは単純なリード・ライトしか備えていない、システム中での最も低レベルなメモリー領域と、そのIOを提供する。
+ * それらリード・ライトがどのような意味を持つかは、呼出側（高レベル側）が各自でルールを決めて運用する。
+ *
+ * 最終的には、システムで用いるメモリーは、全て、このメモリー領域を利用するように置き換えたい。
+ */
+static char init_mem[] = {
+        "VPtr mem_ptr:P04;\n"
+        "junkApi_malloc(mem_ptr, T_SINT32, 0x100000);\n"
+};
+
+static void write_mem(const char* regname_data,
+                      const char* regname_address)
+{
+        pA("PASMEM0(%s, T_SINT32, mem_ptr, %s);", regname_data, regname_address);
+}
+
+static void read_mem(const char* regname_data,
+                     const char* regname_address)
+{
+        pA("PALMEM0(%s, T_SINT32, mem_ptr, %s);", regname_data, regname_address);
+}
+
 /* 任意のレジスターの値をスタックにプッシュする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  */
@@ -597,7 +620,6 @@ static void read_heap(const char* register_name)
  */
 static char init_heap[] = {
         "VPtr heap_ptr:P04;\n"
-        "junkApi_malloc(heap_ptr, T_SINT32, 0x100000);\n"
         "SInt32 heap_socket:R04;\n"
         "SInt32 heap_base:R06;\n"
         "SInt32 heap_offset:R05;\n"
@@ -753,6 +775,7 @@ void init_all(void)
 
         pA("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
 
+        pA(init_mem);
         pA(init_heap);
         pA(init_stack);
         pA(init_labelstack);
