@@ -332,7 +332,7 @@ static void push_stack(const char* regname_data)
         pA("stack_head++;");
 
 #ifdef DEBUG_STACK
-        pA("junkApi_putConstString('push_stack():');");
+        pA("junkApi_putConstString('push_stack(),stack_head=');");
         pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
         pA("junkApi_putConstString('\\n');");
 #endif /* DEBUG_STACK */
@@ -347,7 +347,7 @@ static void pop_stack(const char* regname_data)
         read_mem(regname_data, "stack_head");
 
 #ifdef DEBUG_STACK
-        pA("junkApi_putConstString('pop_stack():');");
+        pA("junkApi_putConstString('pop_stack(),stack_head=');");
         pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
         pA("junkApi_putConstString('\\n');");
 #endif /* DEBUG_STACK */
@@ -377,7 +377,10 @@ static void init_stack(void)
 {
         pA("SInt32 stack_socket:R02;");
         pA("SInt32 stack_head:R03;");
+        pA("SInt32 stack_frame:R12;");
+
         pA("stack_head = %d;", STACK_BEGIN_ADDRESS);
+        pA("stack_frame = 0;");
 }
 
 /* 現在の使用可能なラベルインデックスのヘッド
@@ -741,6 +744,60 @@ static char init_matrix[] = {
         "SInt32 matbpR: R27;\n"
         "SInt32 matbpA: R28;\n"
 };
+
+/* スコープ操作関連
+ */
+
+/* スコープを1段進める場合の定形処理
+ */
+static void inc_scope(void)
+{
+        /* 現在の stack_frame を fixA1 へ退避しておく */
+        pA("fixA1 = stack_frame;");
+
+        /* ローカル変数として @stack_prev_frame を作成し、
+         * その後、それのオフセットに 0 をセットする（コンパイル時）
+         */
+        const char stack_prev_frame_iden[] = "@stack_prev_frame";
+        varlist_add_local(stack_prev_frame_iden, 1, 1);
+        varlist_set_scope_head();
+
+        /* 現在の stack_frame に stack_head をセットする */
+        pA("stack_frame = stack_head;");
+
+        /* @stack_prev_frame へ fixA1 へ退避しておいた古い stack_frame の値をセットし、
+         * その後、この変数のサイズ分だけ stack_head を進める。
+         */
+        write_mem("fixA1", "stack_frame");
+        pA("stack_head++;");
+
+#ifdef DEBUG_SCOPE
+        pA("junkApi_putConstString('inc_scope(),stack_head=');");
+        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
+        pA("junkApi_putConstString(', stack_frame=');");
+        pA("junkApi_putStringDec('\\1', stack_frame, 10, 1);");
+        pA("junkApi_putConstString('\\n');");
+#endif /* DEBUG_SCOPE */
+}
+
+/* スコープを1段戻す場合の定形処理
+ */
+static void dec_scope(void)
+{
+        /* ローカル変数 @stack_prev_frame の値を stack_frame へセットする。
+         * その後、stack_head を stack_frame
+         */
+        read_mem("fixA1", "stack_frame");
+        pA("stack_frame = fixA1;");
+
+#ifdef DEBUG_SCOPE
+        pA("junkApi_putConstString('dec_scope(),stack_head=');");
+        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
+        pA("junkApi_putConstString(', stack_frame=');");
+        pA("junkApi_putStringDec('\\1', stack_frame, 10, 1);");
+        pA("junkApi_putConstString('\\n');");
+#endif /* DEBUG_SCOPE */
+}
 
 /* 全ての初期化
  */
@@ -1252,7 +1309,7 @@ static void __assignment_scaler(const char* iden)
                 yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
 
         /* ヒープ書き込み位置のデフォルト値をセットする命令を出力する（コンパイル時） */
-        pA("heap_base = %d;", var->base_ptr);
+        pA("heap_base = %d + stack_frame;", var->base_ptr);
 
         /* 書き込む値を読んでおく */
         pop_stack("stack_socket");
@@ -1321,7 +1378,7 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
                 yyerror("syntax err: 配列の添字の個数が多すぎます。この言語では２次元配列までしか使えません");
 
         /* ヒープ書き込み位置のデフォルト値をセットする命令を出力する（コンパイル時） */
-        pA("heap_base = %d;", var->base_ptr);
+        pA("heap_base = %d + stack_frame;", var->base_ptr);
 
         /* 書き込む値をスタックから読み込む命令を出力（コンパイル時） */
         pop_stack("heap_socket");
@@ -1463,7 +1520,7 @@ static void __read_variable_scaler(const char* iden)
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
         pop_attachstack("attachstack_socket");
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-           "else {heap_base = %d;}", var->base_ptr);
+           "else {heap_base = %d + stack_frame;}", var->base_ptr);
 
         read_mem("stack_socket", "heap_base");
 
@@ -1501,7 +1558,7 @@ static void __read_variable_array(const char* iden, const int32_t dim)
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
                 pop_attachstack("attachstack_socket");
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                   "else {heap_base = %d;}", var->base_ptr);
+                   "else {heap_base = %d + stack_frame;}", var->base_ptr);
 
                 pA("heap_base += heap_offset >> 16;");
                 read_mem("stack_socket", "heap_base");
@@ -1520,7 +1577,7 @@ static void __read_variable_array(const char* iden, const int32_t dim)
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
                 pop_attachstack("attachstack_socket");
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                   "else {heap_base = %d;}", var->base_ptr);
+                   "else {heap_base = %d + stack_frame;}", var->base_ptr);
 
                 pA("heap_base += heap_offset >> 16;");
                 read_mem("stack_socket", "heap_base");
@@ -1575,6 +1632,7 @@ static void __define_user_function_begin(const char* iden,
          */
         inc_cur_scope_depth();
         varlist_scope_push();
+        inc_scope();
 
         int32_t i;
         for (i = 0; i < arglen; i++) {
@@ -1589,7 +1647,7 @@ static void __define_user_function_begin(const char* iden,
                         yyerror("system err: functionによる関数定義において、ローカル変数の作成に失敗しました");
 
                 /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
-                pA("heap_base = %d;", var->base_ptr);
+                pA("heap_base = %d + stack_frame;", var->base_ptr);
 
                 pop_stack("stack_socket");
                 write_mem("stack_socket", "heap_base");
@@ -1603,6 +1661,8 @@ static void __define_user_function_return(void)
 {
         push_stack("fixA");
 
+        dec_scope();
+
         /* 関数呼び出し元の位置まで戻る */
         pop_labelstack();
         pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
@@ -1613,11 +1673,6 @@ static void __define_user_function_return(void)
  */
 static void __define_user_function_end(const int32_t skip_label)
 {
-        /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
-         */
-        dec_cur_scope_depth();
-        varlist_scope_pop();
-
         /* 現在の関数からのリターン
          * プログラムフローがこの位置へ至る状態は、関数内でreturnが実行されなかった場合。
          * しかし、関数は expression なので、終了後に"必ず"スタックが +1 された状態でなければならないので、
@@ -1625,6 +1680,11 @@ static void __define_user_function_end(const int32_t skip_label)
          */
         pA("fixA = 0;");
         __define_user_function_return();
+
+        /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
+         */
+        dec_cur_scope_depth();
+        varlist_scope_pop();
 
         /* 通常フロー中では、この関数定義を読み飛ばし、ここへとジャンプしてくる前提
          * また、この skip_label の値は、
@@ -2359,8 +2419,8 @@ static void ope_matrix_copy(const char* strA, const char* strL)
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
-        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d + stack_frame;}", varL->base_ptr);
 
         /* 要素数をセット（コンパイル時） */
         pA("matcountrow = %d;", varL->array_len - 1);
@@ -2403,7 +2463,7 @@ static void ope_matrix_scalar(const char* strA)
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
 
         beginF();
 
@@ -2439,7 +2499,7 @@ static void ope_matrix_idn(const char* strA)
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
 
         /* 要素数をセット（コンパイル時） */
         pA("matcountrow = %d;", varA->array_len - 1);
@@ -2503,8 +2563,8 @@ static void ope_matrix_trn(const char* strA, const char* strL)
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
-        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d + stack_frame;}", varL->base_ptr);
 
         /* 要素数をセット（コンパイル時） */
         pA("matcol = %d;", varA->col_len);
@@ -2602,9 +2662,9 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
-        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
-        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d + stack_frame;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d + stack_frame;}", varR->base_ptr);
 
         /* コピーする配列の要素数が異なる場合はエラーとする（コンパイル時） */
         if (!
@@ -2702,9 +2762,9 @@ static void ope_matrix_mul_vv(const char* strA, const char* strL, const char* st
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
-        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
-        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d + stack_frame;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d + stack_frame;}", varR->base_ptr);
 
         /* strL と strR の要素数が異なる場合はエラーとする（コンパイル時） */
         if ((varL->col_len != varR->col_len) || (varL->row_len != varR->row_len))
@@ -2767,9 +2827,9 @@ static void ope_matrix_cross_product_vv(const char* strA, const char* strL, cons
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
-        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
-        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d + stack_frame;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d + stack_frame;}", varR->base_ptr);
 
         /* strA, strL, strR が全て3次ベクトルの場合のみ動作する。それ以外はエラーとする（コンパイル時） */
         if (!
@@ -2861,9 +2921,9 @@ static void ope_matrix_mul_sv(const char* strA, const char* strL, const char* st
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
-        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
-        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d + stack_frame;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d + stack_frame;}", varR->base_ptr);
 
         /* strA と strR の要素数が異なる場合はエラーとする（コンパイル時） */
         if ((varA->col_len != varR->col_len) || (varA->row_len != varR->row_len))
@@ -2935,9 +2995,9 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
-        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
-        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d + stack_frame;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d + stack_frame;}", varR->base_ptr);
 
         /* 要素数をセット（コンパイル時） */
         pA("matrow = %d;", varA->row_len);
@@ -3073,9 +3133,9 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
-        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
-        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d + stack_frame;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d + stack_frame;}", varR->base_ptr);
 
         /* 要素数をセット（コンパイル時） */
         pA("matrow = %d;", varR->row_len);
@@ -3176,9 +3236,9 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
 
         /* 実行時に matbp? < 0 （空の場合）ならば、
          * デフォルトの base_ptr を設定する命令の定数設定（コンパイル時） */
-        pA("if (matbpA < 0) {matbpA = %d;}", varA->base_ptr);
-        pA("if (matbpL < 0) {matbpL = %d;}", varL->base_ptr);
-        pA("if (matbpR < 0) {matbpR = %d;}", varR->base_ptr);
+        pA("if (matbpA < 0) {matbpA = %d + stack_frame;}", varA->base_ptr);
+        pA("if (matbpL < 0) {matbpL = %d + stack_frame;}", varL->base_ptr);
+        pA("if (matbpR < 0) {matbpR = %d + stack_frame;}", varR->base_ptr);
 
         /* 要素数をセット（コンパイル時） */
         pA("matrow = %d;", varL->row_len);
