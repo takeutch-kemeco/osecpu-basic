@@ -321,7 +321,7 @@ static void read_mem(const char* regname_data,
  * 実際には mem の STACK_BEGIN_ADDRESS 以降のメモリー領域を用いる。
  */
 
-#define STACK_BEGIN_ADDRESS (MEM_SIZE - 0x1000)
+#define STACK_BEGIN_ADDRESS (MEM_SIZE - 0x10000)
 
 /* 任意のレジスターの値をスタックにプッシュする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
@@ -587,51 +587,18 @@ static void retF(void)
         pA("LB(1, %d);\n", end_label);                                  \
         func_label_init_flag = 1;
 
-/* ヒープメモリー上の、任意アドレスからの任意オフセット位置へ、任意のレジスタの内容を書き込む。
- * 事前に以下のレジスタに値をセットしておくこと:
- * heap_base   : 書き込みのベースアドレス。Int32型単位なので注意。（fix32型では”無い”）
- * heap_socket : ヒープに書き込みたい値。fix32型単位なので注意。
- * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
- *
- * また、他の多くの _direct() も同様だが、
- * サフィックス _direct() の関数は、その内部処理を beginF(), endF() で囲んでいない。（囲めないので）
- *
- * この関数自体を beginF(), endF() で囲む分には問題無い。
+/* ヒープメモリー関連
  */
-static void write_heap(const char* register_name)
-{
-        pA("heap_offset >>= 16;");
-        pA("heap_base += heap_offset;");
-        pA("PASMEM0(%s, T_SINT32, heap_ptr, heap_base);", register_name);
-}
-
-/* ヒープメモリー上の、任意アドレスからの任意オフセット位置から、任意のレジスタへ内容を読み込む。
- * 事前に以下のレジスタに値をセットしておくこと:
- * heap_base   : 読み込みのベースアドレス。Int32型単位なので注意。（fix32型では”無い”）
- * heap_offset : identifier に割り当てられた領域中でのインデックス。fix32型単位なので注意。
- *
- * register_name : ヒープメモリーから、値を実際に読み込む先となるレジスター(SInt32型レジスターのみ)
- *
- * また、他の多くの _direct() も同様だが、
- * サフィックス _direct() の関数は、その内部処理を beginF(), endF() で囲んでいない。（囲めないので）
- *
- * この関数自体を beginF(), endF() で囲む分には問題無い。
- */
-static void read_heap(const char* register_name)
-{
-        pA("heap_offset >>= 16;");
-        pA("heap_base += heap_offset;");
-        pA("PALMEM0(%s, T_SINT32, heap_ptr, heap_base);", register_name);
-}
 
 /* ヒープメモリーの初期化
  */
-static char init_heap[] = {
-        "VPtr heap_ptr:P04;\n"
-        "SInt32 heap_socket:R04;\n"
-        "SInt32 heap_base:R06;\n"
-        "SInt32 heap_offset:R05;\n"
-        "heap_base = 0;\n"
+void init_heap(void)
+{
+        pA("VPtr heap_ptr:P04;");
+        pA("SInt32 heap_socket:R04;");
+        pA("SInt32 heap_base:R06;");
+        pA("SInt32 heap_offset:R05;");
+        pA("heap_base = 0;");
 };
 
 /* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
@@ -784,7 +751,7 @@ void init_all(void)
         pA("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
 
         init_mem();
-        pA(init_heap);
+        init_heap();
         init_stack();
         pA(init_labelstack);
         pA(init_attachstack);
@@ -1290,16 +1257,13 @@ static void __assignment_scaler(const char* iden)
         /* 書き込む値を読んでおく */
         pop_stack("stack_socket");
 
-        /* スカラーなので書き込みオフセットは0 */
-        pA("heap_offset = 0;");
-
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
          * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
          */
         pop_attachstack("attachstack_socket");
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
-        write_heap("stack_socket");
+        write_mem("stack_socket", "heap_base");
 
         /* 変数へ書き込んだ値をスタックへもプッシュしておく
          * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
@@ -1389,7 +1353,8 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
         pop_attachstack("attachstack_socket");
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
-        write_heap("heap_socket");
+        pA("heap_base += heap_offset >> 16;");
+        write_mem("heap_socket", "heap_base");
 
         /* 変数へ書き込んだ値をスタックへもプッシュしておく
          * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
@@ -1495,15 +1460,12 @@ static void __read_variable_scaler(const char* iden)
         if (var->row_len != 1 || var->col_len != 1)
                 yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
 
-        /* スカラーなので読み込みオフセットは 0 */
-        pA("heap_offset = 0;");
-
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
         pop_attachstack("attachstack_socket");
         pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
            "else {heap_base = %d;}", var->base_ptr);
 
-        read_heap("stack_socket");
+        read_mem("stack_socket", "heap_base");
 
         /* 結果をスタックにプッシュする */
         push_stack("stack_socket");
@@ -1541,7 +1503,8 @@ static void __read_variable_array(const char* iden, const int32_t dim)
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
                    "else {heap_base = %d;}", var->base_ptr);
 
-                read_heap("stack_socket");
+                pA("heap_base += heap_offset >> 16;");
+                read_mem("stack_socket", "heap_base");
 
         /* 2次元配列の場合 */
         } else if (var->row_len >= 2) {
@@ -1559,7 +1522,8 @@ static void __read_variable_array(const char* iden, const int32_t dim)
                 pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
                    "else {heap_base = %d;}", var->base_ptr);
 
-                read_heap("stack_socket");
+                pA("heap_base += heap_offset >> 16;");
+                read_mem("stack_socket", "heap_base");
 
         /* 1,2次元以外の場合はシステムエラー */
         } else {
@@ -1624,13 +1588,11 @@ static void __define_user_function_begin(const char* iden,
                 if (var == NULL)
                         yyerror("system err: functionによる関数定義において、ローカル変数の作成に失敗しました");
 
-                pA("heap_offset = 0;");
-
                 /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
                 pA("heap_base = %d;", var->base_ptr);
 
                 pop_stack("stack_socket");
-                write_heap("stack_socket");
+                write_mem("stack_socket", "heap_base");
         }
 }
 
@@ -2411,13 +2373,11 @@ static void ope_matrix_copy(const char* strA, const char* strL)
         pA("LB(1, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
-                pA("heap_offset = matcountrow << 16;");
-                pA("heap_base = matbpL;");
-                read_heap("heap_socket");
+                pA("heap_base = matbpL + matcountrow;");
+                read_mem("heap_socket", "heap_base");
 
-                pA("heap_offset = matcountrow << 16;");
-                pA("heap_base = matbpA;");
-                write_heap("heap_socket");
+                pA("heap_base = matbpA + matcountrow;");
+                write_mem("heap_socket", "heap_base");
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
@@ -2453,9 +2413,8 @@ static void ope_matrix_scalar(const char* strA)
         pA("LB(1, %d);", local_label);
 
         pA("if (matcountrow >= 0) {");
-                pA("heap_offset = matcountrow << 16;");
-                pA("heap_base = matbpA;");
-                write_heap("matfixL");
+                pA("heap_base = matbpA + matcountrow;");
+                write_mem("matfixL", "heap_base");
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
@@ -2499,16 +2458,14 @@ static void ope_matrix_idn(const char* strA)
                 /* インデックスが col_len + 1 の倍数であれば対角成分 */
                 pA("if ((matcountrow %% matfixtmp) == 0) {");
                         pA("heap_socket = %d;", 1 << 16);
-                        pA("heap_offset = matcountrow << 16;");
-                        pA("heap_base = matbpA;");
-                        write_heap("heap_socket");
+                        pA("heap_base = matbpA + matcountrow;");
+                        write_mem("heap_socket", "heap_base");
 
                 /* 対角成分では無い場合 */
                 pA("} else {");
                         pA("heap_socket = 0;");
-                        pA("heap_offset = matcountrow << 16;");
-                        pA("heap_base = matbpA;");
-                        write_heap("heap_socket");
+                        pA("heap_base = matbpA + matcountrow;");
+                        write_mem("heap_socket", "heap_base");
 
                 pA("}");
 
@@ -2579,31 +2536,25 @@ static void ope_matrix_trn(const char* strA, const char* strL)
                          */
                         pA("matfixL = matrow * matcountcol;");
                         pA("matfixL += matcountrow;");
-                        pA("matfixL <<= 16;");
 
                         /* strA の書き込みオフセットを計算（strLの行と列を入れ替えたオフセット）
                          */
                         pA("matfixA = matcol * matcountrow;");
                         pA("matfixA += matcountcol;");
-                        pA("matfixA <<= 16;");
 
                         /* 要素のスワップ
                          * strA, strL の記憶領域が同一の場合でも動作するように一時変数を噛ませてスワップ
                          */
-                        pA("heap_offset = matfixA;");
-                        pA("heap_base == matbpA;");
-                        read_heap("matfixtmp");
+                        pA("heap_base = matbpA + matfixA;");
+                        read_mem("matfixA", "heap_base");
 
-                        pA("heap_offset = matfixL;");
-                        pA("heap_base = matbpL;");
-                        read_heap("heap_socket");
-                        pA("heap_offset = matfixA;");
-                        pA("heap_base = matbpA;");
-                        write_heap("heap_socket");
+                        pA("heap_base = matbpL + matfixL;");
+                        read_mem("heap_socket", "heap_base");
+                        pA("heap_base = matbpA + matfixA;");
+                        write_mem("heap_socket", "heap_base");
 
-                        pA("heap_offset = matfixL;");
-                        pA("heap_base = matbpL;");
-                        write_heap("matfixtmp");
+                        pA("heap_base = matbpL + matfixL;");
+                        write_mem("matfixtmp", "heap_base");
 
                         /* 内側forループの復帰
                          */
@@ -2680,13 +2631,11 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
                  * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
                  * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                  */
-                pA("heap_offset = matcountrow << 16;");
-                pA("heap_base = matbpL;");
-                read_heap("fixL");
+                pA("heap_base = matbpL + matcountrow;");
+                read_mem("fixL", "heap_base");
 
-                pA("heap_offset = matcountrow << 16;");
-                pA("heap_base = matbpR;");
-                read_heap("fixR");
+                pA("heap_base = matbpR + matcountrow;");
+                read_mem("fixR", "heap_base");
 
                 /* 演算種類応じて分岐
                  * } else if { を使わないのは意図的。（アセンブラーのバグ対策）
@@ -2697,9 +2646,8 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
                         pA("heap_socket = fixL + fixR;");
 
                         /* 演算結果をstrAへ書き込む */
-                        pA("heap_offset = matcountrow << 16;");
-                        pA("heap_base = matbpA;");
-                        write_heap("heap_socket");
+                        pA("heap_base = matbpA + matcountrow;");
+                        write_mem("heap_socket", "heap_base");
                 pA("}");
 
                 /* 減算の場合 */
@@ -2707,9 +2655,8 @@ static void ope_matrix_merge_common(const char* strA, const char* strL, const ch
                         pA("heap_socket = fixL - fixR;");
 
                         /* 演算結果をstrAへ書き込む */
-                        pA("heap_offset = matcountrow << 16;");
-                        pA("heap_base = matbpA;");
-                        write_heap("heap_socket");
+                        pA("heap_base = matbpA + matcountrow;");
+                        write_mem("heap_socket", "heap_base");
                 pA("}");
 
                 pA("matcountrow--;");
@@ -2781,13 +2728,11 @@ static void ope_matrix_mul_vv(const char* strA, const char* strL, const char* st
                  * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
                  * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                  */
-                pA("heap_offset = matcountrow << 16;");
-                pA("heap_base = matbpL;");
-                read_heap("fixL");
+                pA("heap_base = matbpL + matcountrow;");
+                read_mem("fixL", "heap_base");
 
-                pA("heap_offset = matcountrow << 16;");
-                pA("heap_base = matbpR;");
-                read_heap("fixR");
+                pA("heap_base = matbpR + matcountrow;");
+                read_mem("fixR", "heap_base");
 
                 __func_mul();
 
@@ -2801,9 +2746,7 @@ static void ope_matrix_mul_vv(const char* strA, const char* strL, const char* st
         pA("}");
 
         /* 演算結果を strA へ書き込む */
-        pA("heap_offset = 0;");
-        pA("heap_base = matbpA;");
-        write_heap("matfixA");
+        write_mem("matfixA", "matbpA");
 
         endF();
 }
@@ -2840,25 +2783,19 @@ static void ope_matrix_cross_product_vv(const char* strA, const char* strL, cons
 
         /* 短いベクトル同士の演算なので、値を一度に全てレジスターへ読んで計算できる
          */
-        pA("heap_base = matbpL;");
-        pA("heap_offset = %d;", 0 << 16);
-        read_heap("matfixE0");
-        pA("heap_base = matbpL;");
-        pA("heap_offset = %d;", 1 << 16);
-        read_heap("matfixE1");
-        pA("heap_base = matbpL;");
-        pA("heap_offset = %d;", 2 << 16);
-        read_heap("matfixE2");
+        pA("heap_base = matbpL + 0;");
+        read_mem("matfixE0", "heap_base");
+        pA("heap_base = matbpL + 1;");
+        read_mem("matfixE1", "heap_base");
+        pA("heap_base = matbpL + 2;");
+        read_mem("matfixE2", "heap_base");
 
-        pA("heap_base = matbpR;");
-        pA("heap_offset = %d;", 0 << 16);
-        read_heap("matfixE3");
-        pA("heap_base = matbpR;");
-        pA("heap_offset = %d;", 1 << 16);
-        read_heap("matfixE4");
-        pA("heap_base = matbpR;");
-        pA("heap_offset = %d;", 2 << 16);
-        read_heap("matfixE5");
+        pA("heap_base = matbpR + 0;");
+        read_mem("matfixE3", "heap_base");
+        pA("heap_base = matbpR + 1;");
+        read_mem("matfixE4", "heap_base");
+        pA("heap_base = matbpR + 2;");
+        read_mem("matfixE5", "heap_base");
 
         /* E1*E5 - E2*E4 -> E6
          */
@@ -2898,15 +2835,12 @@ static void ope_matrix_cross_product_vv(const char* strA, const char* strL, cons
 
         /* 演算結果を strA へ書き込む
          */
-        pA("heap_base = matbpA;");
-        pA("heap_offset = %d;", 0 << 16);
-        write_heap("matfixE6");
-        pA("heap_base = matbpA;");
-        pA("heap_offset = %d;", 1 << 16);
-        write_heap("matfixE7");
-        pA("heap_base = matbpA;");
-        pA("heap_offset = %d;", 2 << 16);
-        write_heap("matfixE8");
+        pA("heap_base = matbpA + 0;");
+        write_mem("matfixE6", "heap_base");
+        pA("heap_base = matbpA + 1;");
+        write_mem("matfixE7", "heap_base");
+        pA("heap_base = matbpA + 2;");
+        write_mem("matfixE8", "heap_base");
 
         endF();
 }
@@ -2942,9 +2876,7 @@ static void ope_matrix_mul_sv(const char* strA, const char* strL, const char* st
 
         /* strL から matfixL へ値を読み込む
          */
-        pA("heap_offset = 0;");
-        pA("heap_base = matbpL;");
-        read_heap("matfixL");
+        read_mem("matfixL", "matbpL");
 
         /* 局所ループ用に無名ラベルをセット */
         const int32_t local_label = cur_label_index_head;
@@ -2956,9 +2888,8 @@ static void ope_matrix_mul_sv(const char* strA, const char* strL, const char* st
                  * heap_socket を fixR へ代入してるのはタイポ間違いではない。意図的。
                  * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                  */
-                pA("heap_offset = matcountrow << 16;");
-                pA("heap_base = matbpR;");
-                read_heap("fixR");
+                pA("heap_base = matbpR + matcountrow;");
+                read_mem("fixR", "heap_base");
 
                  /* fixL = matfixL も同様の理由。
                  * また、matfixL はスカラーなのに、毎回 fixL へセットしてる理由は、
@@ -2970,9 +2901,8 @@ static void ope_matrix_mul_sv(const char* strA, const char* strL, const char* st
                 __func_mul();
 
                 /* 演算結果をstrAへ書き込む */
-                pA("heap_offset = matcountrow << 16;");
-                pA("heap_base = matbpA;");
-                write_heap("fixA");
+                pA("heap_base = matbpA + matcountrow;");
+                write_mem("fixA", "heap_base");
 
                 pA("matcountrow--;");
                 pA("PLIMM(P3F, %d);", local_label);
@@ -3049,13 +2979,11 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                                  */
                                 pA("matfixL = matcol * matcountrow;");
                                 pA("matfixL += matfixtmp;");
-                                pA("matfixL <<= 16;");
 
                                 /* strR の読み込みオフセットを計算
                                  */
                                 pA("matfixR = matcol * matfixtmp;");
                                 pA("matfixR += matcountcol;");
-                                pA("matfixR <<= 16;");
 
                                 /* strLの要素 * strRの要素 の演算を行い、
                                  * 計算の途中経過をmatfixAへ加算
@@ -3063,13 +2991,11 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                                  * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
                                  * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                                  */
-                                pA("heap_offset = matfixL;");
-                                pA("heap_base = matbpL;");
-                                read_heap("fixL");
+                                pA("heap_base = matbpL + matfixL;");
+                                read_mem("fixL", "heap_base");
 
-                                pA("heap_offset = matfixR;");
-                                pA("heap_base = matbpR;");
-                                read_heap("fixR");
+                                pA("heap_base = matbpR + matfixR;");
+                                read_mem("fixR", "heap_base");
 
                                 /* 固定小数点数なので乗算は __func_mul() を使う必要がある
                                  * 乗算結果は matfixA に加算して累積させる
@@ -3098,15 +3024,14 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
                          */
                         pA("heap_offset = matcol * matcountrow;");
                         pA("heap_offset += matcountcol;");
-                        pA("heap_offset <<= 16;");
 
 #ifdef DEBUG_OPE_MATRIX_MUL_MM
                         pA("junkApi_putConstString('\\nstrA : ');");
                         pA("junkApi_putStringDec('\\1', heap_socket, 6, 0);");
 #endif /* DEBUG_OPE_MATRIX_MUL_MM */
 
-                        pA("heap_base = matbpA;");
-                        write_heap("matfixA");
+                        pA("heap_base = matbpA + heap_offset;");
+                        write_mem("matfixA", "heap_base");
 
                         /* 中間forループの復帰
                          */
@@ -3182,13 +3107,11 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
                         /* strL の読み込みオフセットを計算
                          */
                         pA("matfixL = matcountcol;");
-                        pA("matfixL <<= 16;");
 
                         /* strR の読み込みオフセットを計算
                          */
                         pA("matfixR = matrow * matcountcol;");
                         pA("matfixR += matcountcol;");
-                        pA("matfixR <<= 16;");
 
                         /* strLの要素 * strRの要素 の演算を行い、
                          * 計算の途中経過をmatfixAへ加算
@@ -3196,13 +3119,11 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
                          * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
                          * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                          */
-                        pA("heap_offset = matfixL;");
-                        pA("heap_base = matbpL;");
-                        read_heap("fixL");
+                        pA("heap_base = matbpL + matfixL;");
+                        read_mem("fixL", "heap_base");
 
-                        pA("heap_offset = matfixR;");
-                        pA("heap_base = matbpR;");
-                        read_heap("fixR");
+                        pA("heap_base = matbpR + matfixR;");
+                        read_mem("fixR", "heap_base");
 
                         /* 固定小数点数なので乗算は __func_mul() を使う必要がある
                          * 乗算結果は matfixA に加算して累積させる
@@ -3218,11 +3139,8 @@ static void ope_matrix_mul_vm(const char* strA, const char* strL, const char* st
 
                 /* strA へ結果を書き込む
                  */
-                pA("heap_offset = matcountrow;");
-                pA("heap_offset <<= 16;");
-
-                pA("heap_base = matbpA;");
-                write_heap("matfixA");
+                pA("heap_base = matbpA + matcountrow;");
+                write_mem("matfixA", "heap_base");
 
                 /* 外側forループの復帰
                  */
@@ -3293,12 +3211,10 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
                          */
                         pA("matfixL = matcol * matcountrow;");
                         pA("matfixL += matcountcol;");
-                        pA("matfixL <<= 16;");
 
                         /* strR の読み込みオフセットを計算
                          */
                         pA("matfixR = matcountcol;");
-                        pA("matfixR <<= 16;");
 
                         /* strLの要素 * strRの要素 の演算を行い、
                          * 計算の途中経過をmatfixAへ加算
@@ -3306,13 +3222,11 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
                          * heap_socket を fixL, fixR へ代入してるのはタイポ間違いではない。意図的。
                          * 固定小数点数なので、乗算は __func_mul() を使わなければ行えない為。
                          */
-                        pA("heap_offset = matfixL;");
-                        pA("heap_base = matbpL;");
-                        read_heap("fixL");
+                        pA("heap_base = matbpL + matfixL;");
+                        read_mem("fixL", "heap_base");
 
-                        pA("heap_offset = matfixR;");
-                        pA("heap_base = matbpR;");
-                        read_heap("fixR");
+                        pA("heap_base = matbpR + matfixR;");
+                        read_mem("fixR", "heap_base");
 
                         /* 固定小数点数なので乗算は __func_mul() を使う必要がある
                          * 乗算結果は matfixA に加算して累積させる
@@ -3328,11 +3242,8 @@ static void ope_matrix_mul_mv(const char* strA, const char* strL, const char* st
 
                 /* strA へ結果を書き込む
                  */
-                pA("heap_offset = matcountrow;");
-                pA("heap_offset <<= 16;");
-
-                pA("heap_base = matbpA;");
-                write_heap("matfixA");
+                pA("heap_base = matbpA + matcountrow;");
+                write_mem("matfixA", "heap_base");
 
                 /* 外側forループの復帰
                  */
