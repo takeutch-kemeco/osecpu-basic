@@ -62,7 +62,13 @@ FILE* yyaskB;
 <main_process_comment>.         {}
 <main_process_comment>"*/"      BEGIN(main_process);
 
-<main_process>["].*["]          {strncpy(yylval.sval, yytext + 1, strlen(yytext + 1) - 1); return(__CONST_STRING);}
+<main_process>["][^"]*["] {
+        const char *s = yytext + 1;
+        const size_t len = strlen(s) - 1;
+        strncpy(yylval.sval, s, len);
+        yylval.sval[len] = '\0';
+        return(__CONST_STRING);
+}
 
 <main_process>[0][0-9]+[.]?[0-9]* {printf("%s\n構文エラー : 数値の先頭に不適切な 0 があります\n", yytext); exit(EXIT_FAILURE);}
 <main_process>[0-9]* {yylval.ival = atoi(yytext); return(__CONST_INTEGER);}
@@ -133,9 +139,12 @@ FILE* yyaskB;
 <main_process>"function" {return(__STATE_FUNCTION);}
 
 <main_process>","       return(__OPE_COMMA);
+<main_process>":"       return(__OPE_COLON);
 
 <main_process>"goto"    return(__OPE_GOTO);
 <main_process>"return"  return(__OPE_RETURN);
+
+<main_process>"asm"     return(__STATE_ASM);
 
 <main_process>"print"   return(__FUNC_PRINT);
 <main_process>"input"   return(__FUNC_INPUT);

@@ -1,4 +1,4 @@
-## OsecpuBasic version 0.0.4
+## OsecpuBasic version 0.0.5
 
 OsecpuBasic は文法がC言語よりなBASIC言語のコンパイラーです。
 
@@ -423,3 +423,29 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
     dim y[10];
     mat x = 123 * con;
     mat (&x[10])@y = 234 * con;
+
+***
+
+インラインアセンブラ
+
+・現状では本当に素の、ただ文字列を .ask にそのまま出力するだけのインラインアセンブラです。
+普通のインラインアセンブラのようなサービス、例えば、レジスターを自動的にスタックへ退避するようなサービスは一切無いです。
+
+・構文定義は以下となります:
+
+    const_strings
+        : __CONST_STRING
+        | const_strings __CONST_STRING
+    
+    inline_assembler
+        : asm ( const_strings )
+
+・使い方の具体的な例は以下のようになります:
+
+    asm("junkApi_putConstString('hello\nworld\n');");
+    
+    asm(
+        "junkApi_putConstString('hello ');"
+        "junkApi_putConstString('world\n');"
+    );
+

@@ -3518,6 +3518,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
 %token __OPE_SUBST
 %token __STATE_LET __STATE_DIM
+%token __STATE_ASM
 %token __STATE_FUNCTION
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
 
@@ -3531,7 +3532,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
 %left  __OPE_OR __OPE_AND __OPE_XOR __OPE_NOT
 %left  __OPE_LSHIFT __OPE_LOGICAL_RSHIFT __OPE_ARITHMETIC_RSHIFT
-%left  __OPE_COMMA
+%left  __OPE_COMMA __OPE_COLON
 %token __OPE_PLUS __OPE_MINUS
 %token __OPE_ATTACH __OPE_ADDRESS
 %token __LB __RB __DECL_END __IDENTIFIER __LABEL __DEFINE_LABEL __EOF
@@ -3542,6 +3543,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <ival> __CONST_INTEGER
 %type <fval> __CONST_FLOAT
 %type <sval> __CONST_STRING __IDENTIFIER __LABEL __DEFINE_LABEL
+%type <sval> const_strings
 
 %type <sval> func_print func_peek func_poke
 
@@ -3607,6 +3609,7 @@ declaration
         | jump __DECL_END
         | define_label __DECL_END
         | define_function
+        | inline_assembler
         | __DECL_END
         ;
 
@@ -4234,6 +4237,20 @@ define_function
 
         } __BLOCK_LB declaration_list __BLOCK_RB {
                 __define_user_function_end($<ival>6);
+        }
+        ;
+
+const_strings
+        : __CONST_STRING
+        | const_strings __CONST_STRING {
+                strcpy($$, $1);
+                strcat($$, $2);
+        }
+        ;
+
+inline_assembler
+        : __STATE_ASM __LB const_strings __RB {
+                pA($3);
         }
         ;
 
