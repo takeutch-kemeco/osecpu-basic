@@ -1,18 +1,13 @@
-a01(); a01(); a01();
-dim x = a01();
+a01(1,2,3);
+dim aaa = 234;
+dim x = a01(4,5,6);
 print x;
 
-a02(); a02(); a02();
-dim y = a02();
-print y;
-
-function a01()
+function a01(x,y,z)
 {
-        print 1;
-}
-
-function a02()
-{
-        print 2;
-        return 3;
+        print aaa;
+        print x;
+        print y;
+        print z;
+        return 123;
 }

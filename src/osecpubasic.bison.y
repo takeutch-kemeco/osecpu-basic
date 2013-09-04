@@ -745,60 +745,6 @@ static char init_matrix[] = {
         "SInt32 matbpA: R28;\n"
 };
 
-/* スコープ操作関連
- */
-
-/* スコープを1段進める場合の定形処理
- */
-static void inc_scope(void)
-{
-        /* 現在の stack_frame を fixA1 へ退避しておく */
-        pA("fixA1 = stack_frame;");
-
-        /* ローカル変数として @stack_prev_frame を作成し、
-         * その後、それのオフセットに 0 をセットする（コンパイル時）
-         */
-        const char stack_prev_frame_iden[] = "@stack_prev_frame";
-        varlist_add_local(stack_prev_frame_iden, 1, 1);
-        varlist_set_scope_head();
-
-        /* 現在の stack_frame に stack_head をセットする */
-        pA("stack_frame = stack_head;");
-
-        /* @stack_prev_frame へ fixA1 へ退避しておいた古い stack_frame の値をセットし、
-         * その後、この変数のサイズ分だけ stack_head を進める。
-         */
-        write_mem("fixA1", "stack_frame");
-        pA("stack_head++;");
-
-#ifdef DEBUG_SCOPE
-        pA("junkApi_putConstString('inc_scope(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
-        pA("junkApi_putConstString(', stack_frame=');");
-        pA("junkApi_putStringDec('\\1', stack_frame, 10, 1);");
-        pA("junkApi_putConstString('\\n');");
-#endif /* DEBUG_SCOPE */
-}
-
-/* スコープを1段戻す場合の定形処理
- */
-static void dec_scope(void)
-{
-        /* ローカル変数 @stack_prev_frame の値を stack_frame へセットする。
-         * その後、stack_head を stack_frame
-         */
-        read_mem("fixA1", "stack_frame");
-        pA("stack_frame = fixA1;");
-
-#ifdef DEBUG_SCOPE
-        pA("junkApi_putConstString('dec_scope(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
-        pA("junkApi_putConstString(', stack_frame=');");
-        pA("junkApi_putStringDec('\\1', stack_frame, 10, 1);");
-        pA("junkApi_putConstString('\\n');");
-#endif /* DEBUG_SCOPE */
-}
-
 /* 全ての初期化
  */
 void init_all(void)
@@ -1632,8 +1578,17 @@ static void __define_user_function_begin(const char* iden,
          */
         inc_cur_scope_depth();
         varlist_scope_push();
-        inc_scope();
 
+        /* ローカル変数として @stack_prev_frame を作成し、
+         * その後、それのオフセットに 0 をセットする（コンパイル時）
+         */
+        const char stack_prev_frame_iden[] = "@stack_prev_frame";
+        varlist_add_local(stack_prev_frame_iden, 1, 1);
+        varlist_set_scope_head();
+
+        /* スタック上に格納された引数順序と対応した順序となるように、ローカル変数を作成していく。
+         * （作成したローカル変数へ値を代入する手間が省ける）
+         */
         int32_t i;
         for (i = 0; i < arglen; i++) {
                 char iden[0x1000];
@@ -1645,13 +1600,21 @@ static void __define_user_function_begin(const char* iden,
                 struct Var* var = varlist_search_local(iden);
                 if (var == NULL)
                         yyerror("system err: functionによる関数定義において、ローカル変数の作成に失敗しました");
-
-                /* 現状ではアタッチは未サポートで、変数自身のbase_ptrをheap_baseにセットする。（コンパイル時） */
-                pA("heap_base = %d + stack_frame;", var->base_ptr);
-
-                pop_stack("stack_socket");
-                write_mem("stack_socket", "heap_base");
         }
+
+        /* 現在の stack_frame に stack_head - (arglen + 1) をセットする。
+         * この位置はローカル変数 @stack_prev_frame が参照する位置であり、また
+         * 関数の関数終了後には、この位置にリターン値がセットされた状態となる。
+         */
+        pA("stack_frame = stack_head - %d;", arglen + 1);
+
+#ifdef DEBUG_SCOPE
+        pA("junkApi_putConstString('inc_scope(),stack_head=');");
+        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
+        pA("junkApi_putConstString(', stack_frame=');");
+        pA("junkApi_putStringDec('\\1', stack_frame, 10, 1);");
+        pA("junkApi_putConstString('\\n');");
+#endif /* DEBUG_SCOPE */
 }
 
 /* 現在の関数からのリターン
@@ -1659,9 +1622,26 @@ static void __define_user_function_begin(const char* iden,
  */
 static void __define_user_function_return(void)
 {
-        push_stack("fixA");
+        /* スコープを1段戻す場合の定形処理
+         */
+        /* stack_head 位置を stack_frame にする */
+        pA("stack_head = stack_frame;");
 
-        dec_scope();
+        /* ローカル変数 @stack_prev_frame の値を stack_frame へセットする。
+         * その後、stack_head を stack_frame
+         */
+        read_mem("fixA1", "stack_frame");
+        pA("stack_frame = fixA1;");
+
+#ifdef DEBUG_SCOPE
+        pA("junkApi_putConstString('dec_scope(),stack_head=');");
+        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
+        pA("junkApi_putConstString(', stack_frame=');");
+        pA("junkApi_putStringDec('\\1', stack_frame, 10, 1);");
+        pA("junkApi_putConstString('\\n');");
+#endif /* DEBUG_SCOPE */
+
+        push_stack("fixA");
 
         /* 関数呼び出し元の位置まで戻る */
         pop_labelstack();
@@ -3964,7 +3944,12 @@ read_variable
         | var_identifier __ARRAY_LB expression_list __ARRAY_RB {
                 __read_variable_array($1, $3);
         }
-        | var_identifier __LB expression_list __RB {
+        | var_identifier __LB {
+                /* 現在の stack_frame をプッシュする。
+                 * そして、ここには関数終了後にはリターン値が入った状態となる。
+                 */
+                push_stack("stack_frame");
+        } expression_list __RB {
                 __call_user_function($1);
         }
         ;
@@ -4109,9 +4094,9 @@ identifier_list
                 idenlist_push($1);
                 $$ = 1;
         }
-        | identifier_list __OPE_COMMA __IDENTIFIER {
-                idenlist_push($3);
-                $$ = 1 + $1;
+        | __IDENTIFIER __OPE_COMMA identifier_list {
+                idenlist_push($1);
+                $$ = 1 + $3;
         }
         ;
 
