@@ -1383,8 +1383,11 @@ static void __read_variable_ptr_scaler(const char* iden)
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
          */
         pop_attachstack("attachstack_socket");
-        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-           "else {heap_base = %d;}", var->base_ptr);
+        pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
+        if (var->is_local)
+                pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
+        else
+                pA("else {heap_base = %d;}", var->base_ptr);
 
         /* heap_base自体を（アドレス自体を）スタックにプッシュする */
         push_stack("heap_base");
@@ -1418,22 +1421,27 @@ static void __read_variable_ptr_array(const char* iden, const int32_t dim)
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                  */
                 pop_attachstack("attachstack_socket");
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                   "else {heap_base = %d;}", var->base_ptr);
+                pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
+                if (var->is_local)
+                        pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
+                else
+                        pA("else {heap_base = %d;}", var->base_ptr);
 
                 /* heap_base へオフセットを足す
                  */
                 pop_stack("heap_offset");
-                pA("heap_offset >>= 16;");
-                pA("heap_base += heap_offset;");
+                pA("heap_base += heap_offset >> 16;");
 
         /* 2次元配列の場合 */
         } else if (var->row_len >= 2) {
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                  */
                 pop_attachstack("attachstack_socket");
-                pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} "
-                   "else {heap_base = %d;}", var->base_ptr);
+                pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
+                if (var->is_local)
+                        pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
+                else
+                        pA("else {heap_base = %d;}", var->base_ptr);
 
                 /* heap_base へオフセットを足す
                  */
