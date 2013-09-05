@@ -1,4 +1,4 @@
-## OsecpuBasic version 0.0.5
+## OsecpuBasic version 0.0.6
 
 OsecpuBasic は文法がC言語よりなBASIC言語のコンパイラーです。
 
@@ -448,4 +448,31 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
         "junkApi_putConstString('hello ');"
         "junkApi_putConstString('world\n');"
     );
+
+***
+
+別ファイルの入れ子
+
+・#include "ファイル名" とすることで、そこの、そのファイルの内容を埋め込むことができます。
+
+・入れ子したファイル内で、さらに #include することも可能です。この入れ子は 16 段までサポートしてます。
+それ以上の入れ子の場合はエラーとなります。
+
+・使い方の具体的な例は以下のようになります:
+
+    #include "test.bas"
+
+・お互いを入れ子にしてるような場合を、特に検出するようなコードはありませんが、実際は 16 段を越えてしまうのでエラーとなります:
+
+    /* ファイル testA.bas */
+    #include "testB.bas"
+
+    /* ファイル testB.bas */
+    #include "testA.bas"
+
+    /* ファイル testC.bas */
+    #include "testA.bas"
+
+上記の例で testC.bas をコンパイルすると、入れ子制限の16段を越えた為のエラーとなります。
+（循環参照を検出してのエラーとはなりません） 
 
