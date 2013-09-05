@@ -30,13 +30,65 @@ char* linelist[0x10000];
 FILE* yyaskA;
 FILE* yyaskB;
 
+#define INCLUDE_DEPTH_MAX 0x10
+static YY_BUFFER_STATE include_stack[INCLUDE_DEPTH_MAX];
+static int32_t cur_include_stack = 0;
+
+/* 前後をダブルクオートで囲まれた文字列から、それを取り除く。
+ * dst には十分な長さのバッファーを渡すこと。
+ */
+static void trim_const_string(char* dst, char* src)
+{
+        const int32_t trimlen = strlen(src) - 2;
+        src += 1;
+        strncpy(dst, src, trimlen);
+        dst[trimlen] = '\0';
+}
+
+/* includeブロックの開始
+ */
+static void begin_include(const char* filepath)
+{
+        if (cur_include_stack >= INCLUDE_DEPTH_MAX) {
+                printf("syntax err: #include が可能なネストは %d 段までです\n", INCLUDE_DEPTH_MAX);
+                exit(EXIT_FAILURE);
+        }
+
+        include_stack[cur_include_stack] = YY_CURRENT_BUFFER;
+        cur_include_stack++;
+
+        yyin = fopen(filepath, "rt");
+        if (yyin == NULL) {
+                printf("syntax err: #include で指定されたファイル %s のオープンに失敗しました\n", filepath);
+                exit(EXIT_FAILURE);
+        }
+
+        yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE));
+ }
+
+/* includeブロックKの終了
+ */
+static void end_include(void)
+{
+        cur_include_stack--;
+        if (cur_include_stack < 0) {
+                cur_include_stack = 0;
+                yyterminate();
+        } else {
+                yy_delete_buffer(YY_CURRENT_BUFFER);
+                yy_switch_to_buffer(include_stack[cur_include_stack]);
+        }
+}
+
 %}
 
 %x linelist_process
 %x pre_process
-%x pre_process_def
+%x pre_process_function
+%x pre_process_include
 %x main_process
 %x main_process_comment
+%x main_process_include
 %x tune_process
 
 %%
@@ -47,13 +99,21 @@ FILE* yyaskB;
         linenumber++;
 }
 
-<pre_process>"function"         BEGIN(pre_process_def);
-<pre_process>"def"              BEGIN(pre_process_def);
-<pre_process_def>[_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext); BEGIN(pre_process);}
+<pre_process>"function" BEGIN(pre_process_function);
+<pre_process_function>[_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext); BEGIN(pre_process);}
 
 <pre_process>^[*][_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext);}
-<pre_process>"end"[ ]*"function" {}
-<pre_process>.                  {}
+<pre_process>. {}
+
+<pre_process>"#include" BEGIN(pre_process_include);
+<pre_process_include>["][^"]+["] {
+        char filepath[0x1000];
+        trim_const_string(filepath, yytext);
+        begin_include(filepath);
+        BEGIN(pre_process);
+}
+
+<pre_process><<EOF>> {end_include();}
 
 <main_process>"//".*[\n]        {linenumber++;}
 
@@ -62,13 +122,7 @@ FILE* yyaskB;
 <main_process_comment>.         {}
 <main_process_comment>"*/"      BEGIN(main_process);
 
-<main_process>["][^"]*["] {
-        const char *s = yytext + 1;
-        const size_t len = strlen(s) - 1;
-        strncpy(yylval.sval, s, len);
-        yylval.sval[len] = '\0';
-        return(__CONST_STRING);
-}
+<main_process>["][^"]*["]       {trim_const_string(yylval.sval, yytext); return(__CONST_STRING);}
 
 <main_process>[0][0-9]+[.]?[0-9]* {printf("%s\n構文エラー : 数値の先頭に不適切な 0 があります\n", yytext); exit(EXIT_FAILURE);}
 <main_process>[0-9]* {yylval.ival = atoi(yytext); return(__CONST_INTEGER);}
@@ -174,8 +228,21 @@ FILE* yyaskB;
 <main_process>^[*][_a-zA-Z][_0-9a-zA-Z]* {strcpy(yylval.sval, yytext); return(__DEFINE_LABEL);}
 <main_process>[*][_a-zA-Z][_0-9a-zA-Z]* {strcpy(yylval.sval, yytext); return(__LABEL);}
 
-<main_process>.         {}
-<main_process><<EOF>>   return(__EOF);
+<main_process>. {}
+
+<main_process>"#include" BEGIN(main_process_include);
+<main_process_include>["][^"]+["] {
+        char filepath[0x1000];
+        trim_const_string(filepath, yytext);
+        begin_include(filepath);
+        BEGIN(main_process);
+}
+
+<main_process><<EOF>> {
+        end_include();
+        if (cur_include_stack <= 0)
+                return(__EOF);
+}
 
 <tune_process>"stack_socket++;"[ \n]*"stack_socket--;" {}
 <tune_process>"attachstack_socket++;"[ \n]*"attachstack_socket--;" {}
