@@ -45,41 +45,6 @@ static void trim_const_string(char* dst, char* src)
         dst[trimlen] = '\0';
 }
 
-/* includeブロックの開始
- */
-static void begin_include(const char* filepath)
-{
-        if (cur_include_stack >= INCLUDE_DEPTH_MAX) {
-                printf("syntax err: #include が可能なネストは %d 段までです\n", INCLUDE_DEPTH_MAX);
-                exit(EXIT_FAILURE);
-        }
-
-        include_stack[cur_include_stack] = YY_CURRENT_BUFFER;
-        cur_include_stack++;
-
-        yyin = fopen(filepath, "rt");
-        if (yyin == NULL) {
-                printf("syntax err: #include で指定されたファイル %s のオープンに失敗しました\n", filepath);
-                exit(EXIT_FAILURE);
-        }
-
-        yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE));
- }
-
-/* includeブロックKの終了
- */
-static void end_include(void)
-{
-        cur_include_stack--;
-        if (cur_include_stack < 0) {
-                cur_include_stack = 0;
-                yyterminate();
-        } else {
-                yy_delete_buffer(YY_CURRENT_BUFFER);
-                yy_switch_to_buffer(include_stack[cur_include_stack]);
-        }
-}
-
 %}
 
 %x linelist_process
@@ -109,11 +74,36 @@ static void end_include(void)
 <pre_process_include>["][^"]+["] {
         char filepath[0x1000];
         trim_const_string(filepath, yytext);
-        begin_include(filepath);
+
+        if (cur_include_stack >= INCLUDE_DEPTH_MAX) {
+                printf("syntax err: #include が可能なネストは %d 段までです\n", INCLUDE_DEPTH_MAX);
+                exit(EXIT_FAILURE);
+        }
+
+        include_stack[cur_include_stack] = YY_CURRENT_BUFFER;
+        cur_include_stack++;
+
+        yyin = fopen(filepath, "rt");
+        if (yyin == NULL) {
+                printf("syntax err: #include で指定されたファイル %s のオープンに失敗しました\n", filepath);
+                exit(EXIT_FAILURE);
+        }
+
+        yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE));
+
         BEGIN(pre_process);
 }
 
-<pre_process><<EOF>> {end_include();}
+<pre_process><<EOF>> {
+        cur_include_stack--;
+        if (cur_include_stack < 0) {
+                cur_include_stack = 0;
+                yyterminate();
+        } else {
+                yy_delete_buffer(YY_CURRENT_BUFFER);
+                yy_switch_to_buffer(include_stack[cur_include_stack]);
+        }
+}
 
 <main_process>"//".*[\n]        {linenumber++;}
 
@@ -234,12 +224,36 @@ static void end_include(void)
 <main_process_include>["][^"]+["] {
         char filepath[0x1000];
         trim_const_string(filepath, yytext);
-        begin_include(filepath);
+
+        if (cur_include_stack >= INCLUDE_DEPTH_MAX) {
+                printf("syntax err: #include が可能なネストは %d 段までです\n", INCLUDE_DEPTH_MAX);
+                exit(EXIT_FAILURE);
+        }
+
+        include_stack[cur_include_stack] = YY_CURRENT_BUFFER;
+        cur_include_stack++;
+
+        yyin = fopen(filepath, "rt");
+        if (yyin == NULL) {
+                printf("syntax err: #include で指定されたファイル %s のオープンに失敗しました\n", filepath);
+                exit(EXIT_FAILURE);
+        }
+
+        yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE));
+
         BEGIN(main_process);
 }
 
 <main_process><<EOF>> {
-        end_include();
+        cur_include_stack--;
+        if (cur_include_stack < 0) {
+                cur_include_stack = 0;
+                yyterminate();
+        } else {
+                yy_delete_buffer(YY_CURRENT_BUFFER);
+                yy_switch_to_buffer(include_stack[cur_include_stack]);
+        }
+
         if (cur_include_stack <= 0)
                 return(__EOF);
 }
