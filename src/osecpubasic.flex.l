@@ -105,6 +105,23 @@ static void add_macro_define_table(char* iden, char* replace)
         cur_define_iden++;
 }
 
+/* define_table から対象識別子の要素を全て削除する
+ * 実際には該当要素の iden に '\0' をセットするだけ。（メモリーの free() などは行わない）
+ *
+ * 引数の iden が [0] == \0 または NULL の場合は何もしない
+ */
+static void remove_macro_define_table(char* iden)
+{
+        if (iden[0] == '\0' || iden == NULL)
+                return;
+
+        int i = cur_define_iden;
+        while (i-->0) {
+                if (strcmp(iden, define_table[i].iden) == 0)
+                        define_table[i].iden[0] = '\0';
+        }
+}
+
 %}
 
 %x linelist_process
@@ -116,6 +133,7 @@ static void add_macro_define_table(char* iden, char* replace)
 %x main_process_include
 %x main_process_define_iden
 %x main_process_define_replace
+%x main_process_undef_iden
 %x tune_process
 
 %%
@@ -306,6 +324,12 @@ static void add_macro_define_table(char* iden, char* replace)
 <main_process_define_replace>[ ] {}
 <main_process_define_replace>[^ ].*[^\n] {
         add_macro_define_table(define_iden_tmp, yytext);
+        BEGIN(main_process);
+}
+
+<main_process>"#undef" BEGIN(main_process_undef_iden);
+<main_process_undef_iden>[_a-zA-Z][_0-9a-zA-Z]* {
+        remove_macro_define_table(yytext);
         BEGIN(main_process);
 }
 
