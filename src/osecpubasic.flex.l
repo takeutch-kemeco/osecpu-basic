@@ -45,6 +45,66 @@ static void trim_const_string(char* dst, char* src)
         dst[trimlen] = '\0';
 }
 
+/* #define 関連
+ */
+
+/* #define 識別子と、その置換コードのペア
+ */
+struct DefineMacro {
+        char* iden;
+        char* replace;
+};
+
+/* 識別子と、その置換コードのペアのテーブル
+ */
+static struct DefineMacro define_table[0x10000];
+static int32_t cur_define_iden = 0;
+
+/* "define の字句解析時に、最新の識別子を保持しておくバッファー。
+ * これは、#define の解析を構文解析側へ持っていかずに、字句解析段階で済ましてしまう為のハック。
+ *
+ * 今得た最新の #define 識別子を保持しておくためのバッファー
+ */
+static char define_iden_tmp[0x10000];
+
+/* define_table に対象識別子が存在しているかを調べて、もし存在すれば、対応する置換コードのアドレスを返す。
+ * 存在しなければ NULL を返す。
+ *
+ * 識別子検索は新しく登録された側から検索してくる。
+ * その為、同名の識別子が複数あった場合は、もっとも新しく登録された識別子が該当となる。
+ */
+static char* search_iden_define_table(char* iden)
+{
+        int i = cur_define_iden;
+        while (i-->0) {
+                if (strcmp(iden, define_table[i].iden) == 0)
+                        return define_table[i].replace;
+        }
+
+        return NULL;
+}
+
+/* define_table にマクロ（識別子と、その置換コードのペア）を追加する
+ * replace が NULL の場合は '\0' がセットされる
+ */
+static void add_macro_define_table(char* iden, char* replace)
+{
+        struct DefineMacro* p = define_table + cur_define_iden;
+
+        p->iden = malloc(strlen(iden) + 1);
+        strcpy(p->iden, iden);
+
+        if (replace != NULL) {
+                p->replace = malloc(strlen(replace) + 1);
+                strcpy(p->replace, replace);
+        } else {
+                p->replace = malloc(sizeof(char));
+                p->replace[0] = '\0';
+        }
+
+        cur_define_iden++;
+}
+
 %}
 
 %x linelist_process
@@ -54,6 +114,8 @@ static void trim_const_string(char* dst, char* src)
 %x main_process
 %x main_process_comment
 %x main_process_include
+%x main_process_define_iden
+%x main_process_define_replace
 %x tune_process
 
 %%
@@ -213,12 +275,39 @@ static void trim_const_string(char* dst, char* src)
 <main_process>"fillrect"        return(__FUNC_FILLRECT);
 <main_process>"sleep"           return(__FUNC_SLEEP);
 
-<main_process>[_a-zA-Z][_0-9a-zA-Z]* {strcpy(yylval.sval, yytext); return(__IDENTIFIER);}
+<main_process>[_a-zA-Z][_0-9a-zA-Z]* {
+        char* replace = search_iden_define_table(yytext);
+
+        if (replace == NULL) {
+                strcpy(yylval.sval, yytext);
+                return(__IDENTIFIER);
+        } else {
+                int32_t i = strlen(replace);
+                while (i-->0)
+                        yyunput(replace[i], yytext);
+
+        }
+}
 
 <main_process>^[*][_a-zA-Z][_0-9a-zA-Z]* {strcpy(yylval.sval, yytext); return(__DEFINE_LABEL);}
 <main_process>[*][_a-zA-Z][_0-9a-zA-Z]* {strcpy(yylval.sval, yytext); return(__LABEL);}
 
 <main_process>. {}
+
+<main_process>"#define" BEGIN(main_process_define_iden);
+<main_process_define_iden>[_a-zA-Z][_0-9a-zA-Z]* {
+        strcpy(define_iden_tmp, yytext);
+        BEGIN(main_process_define_replace);
+}
+<main_process_define_iden>[^ ]*$ {
+        printf("syntax err: #define マクロの識別子が不正です\n");
+        exit(EXIT_FAILURE);
+}
+<main_process_define_replace>[ ] {}
+<main_process_define_replace>[^ ].*[^\n] {
+        add_macro_define_table(define_iden_tmp, yytext);
+        BEGIN(main_process);
+}
 
 <main_process>"#include" BEGIN(main_process_include);
 <main_process_include>["][^"]+["] {
