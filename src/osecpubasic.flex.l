@@ -247,15 +247,11 @@ static void trim_const_string(char* dst, char* src)
 <main_process><<EOF>> {
         cur_include_stack--;
         if (cur_include_stack < 0) {
-                cur_include_stack = 0;
-                yyterminate();
+                return(__EOF);
         } else {
                 yy_delete_buffer(YY_CURRENT_BUFFER);
                 yy_switch_to_buffer(include_stack[cur_include_stack]);
         }
-
-        if (cur_include_stack <= 0)
-                return(__EOF);
 }
 
 <tune_process>"stack_socket++;"[ \n]*"stack_socket--;" {}
