@@ -3518,6 +3518,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
 %token __OPE_SUBST
 %token __STATE_LET __STATE_DIM
+%token __STATE_STRUCT
 %token __STATE_ASM
 %token __STATE_FUNCTION
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
@@ -3561,6 +3562,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> ope_matrix
 %type <sval> syntax_tree declaration_list declaration declaration_block
 %type <sval> define_function
+%type <sval> define_struct initializer_struct_member
 %type <sval> var_identifier
 %type <ival> expression_list identifier_list attach_base
 
@@ -3609,6 +3611,7 @@ declaration
         | jump __DECL_END
         | define_label __DECL_END
         | define_function
+        | define_struct
         | inline_assembler
         | __DECL_END
         ;
@@ -4238,6 +4241,28 @@ define_function
         } __BLOCK_LB declaration_list __BLOCK_RB {
                 __define_user_function_end($<ival>6);
         }
+        ;
+
+initializer_struct_member
+        : __STATE_DIM __IDENTIFIER initializer_param {
+                strcpy($$, $2);
+        }
+        | initializer __OPE_COMMA __IDENTIFIER initializer_param {
+                strcpy($$, $3);
+        }
+        ;
+
+initializer_struct_member_list
+        :
+        | initializer_struct_member __DECL_END {
+        }
+        | initializer_struct_member __DECL_END initializer_struct_member_list {
+        }
+        ;
+
+define_struct
+        : __STATE_STRUCT __IDENTIFIER __BLOCK_LB {
+        } initializer_struct_member_list __BLOCK_RB __DECL_END
         ;
 
 const_strings

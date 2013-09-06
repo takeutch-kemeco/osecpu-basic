@@ -260,6 +260,8 @@ static void remove_macro_define_table(char* iden)
 <main_process>"idn"     return(__STATE_MAT_IDN);
 <main_process>"trn"     return(__STATE_MAT_TRN);
 
+<main_process>"struct"  return(__STATE_STRUCT);
+
 <main_process>"function" {return(__STATE_FUNCTION);}
 
 <main_process>","       return(__OPE_COMMA);
