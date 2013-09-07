@@ -2216,8 +2216,7 @@ static void __func_print(void)
  */
 static void __func_peek(void)
 {
-        pA("fixA1 = heap_base + fixL;");
-        pA("PALMEM0(fixA, T_SINT32, heap_ptr, fixA1);");
+        pA("PALMEM0(fixA, T_SINT32, heap_ptr, fixL);");
 }
 
 /* ヒープメモリー上の任意アドレスへ１ワード書き込む
@@ -2230,8 +2229,7 @@ static void __func_peek(void)
  */
 static void __func_poke(void)
 {
-        pA("fixA1 = heap_base + fixL;");
-        pA("PASMEM0(fixA, T_SINT32, heap_ptr, fixA1);");
+        pA("PASMEM0(fixA, T_SINT32, heap_ptr, fixL);");
 }
 
 /* sin命令を出力する
