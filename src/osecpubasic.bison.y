@@ -2229,7 +2229,7 @@ static void __func_peek(void)
  */
 static void __func_poke(void)
 {
-        pA("PASMEM0(fixA, T_SINT32, heap_ptr, fixL);");
+        pA("PASMEM0(fixR, T_SINT32, heap_ptr, fixL);");
 }
 
 /* sin命令を出力する
