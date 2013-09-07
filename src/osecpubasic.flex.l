@@ -286,6 +286,12 @@ static void remove_macro_define_table(char* iden)
 <main_process>"const"   return(__TYPE_CONST);
 <main_process>"volatile" return(__TYPE_VOLATILE);
 
+<main_process>"auto"    return(__TYPE_AUTO);
+<main_process>"register" return(__TYPE_REGISTER);
+<main_process>"static"  return(__TYPE_STATIC);
+<main_process>"extern"  return(__TYPE_EXTERN);
+<main_process>"typedef" return(__TYPE_TYPEDEF);
+
 <main_process>"mat"     return(__STATE_MAT);
 <main_process>"zer"     return(__STATE_MAT_ZER);
 <main_process>"con"     return(__STATE_MAT_CON);

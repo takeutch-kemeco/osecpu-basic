@@ -76,6 +76,36 @@ static void pA_nl(const char* fmt, ...)
         va_end(ap);
 }
 
+/* 変数型の識別フラグのルール関連
+ */
+
+/* 型指定子
+ */
+#define TYPE_VOID       (1 << 0)
+#define TYPE_CHAR       (1 << 1)
+#define TYPE_INT        (1 << 2)
+#define TYPE_SHORT      (1 << 3)
+#define TYPE_LONG       (1 << 4)
+#define TYPE_FLOAT      (1 << 5)
+#define TYPE_DOUBLE     (1 << 6)
+#define TYPE_SIGNED     (1 << 7)
+#define TYPE_UNSIGNED   (1 << 8)
+#define TYPE_STRUCT     (1 << 9)
+#define TYPE_ENUM       (1 << 10)
+
+/* 型ルール
+ */
+#define TYPE_CONST      (1 << 20)
+#define TYPE_VOLATILE   (1 << 21)
+
+/* 記憶領域クラス
+ */
+#define TYPE_AUTO       (1 << 24)
+#define TYPE_REGISTER   (1 << 25)
+#define TYPE_STATIC     (1 << 26)
+#define TYPE_EXTERN     (1 << 27)
+#define TYPE_TYPEDEF    (1 << 28)
+
 /* IDENTIFIER 文字列用のスタック */
 #define IDENLIST_STR_LEN 0x100
 #define IDENLIST_LEN 0x1000
@@ -3761,6 +3791,10 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __TYPE_FLOAT __TYPE_DOUBLE
 %token __TYPE_SIGNED __TYPE_UNSIGNED
 
+%token __TYPE_AUTO __TYPE_REGISTER
+%token __TYPE_STATIC __TYPE_EXTERN
+%token __TYPE_TYPEDEF
+
 %token __TYPE_CONST
 %token __TYPE_VOLATILE
 
@@ -3815,6 +3849,9 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 
 %type <sval> var_identifier
 %type <ival> expression_list identifier_list attach_base
+
+%type <ival> declaration_specifiers
+%type <ival> storage_class_specifier type_specifier type_qualifier
 
 %start syntax_tree
 
@@ -4055,25 +4092,43 @@ func_sleep
         ;
 
 declaration_specifiers
-        : type_specifier declaration_specifiers
-        | type_qualifier declaration_specifiers
+        : storage_class_specifier
+        | type_specifier
+        | type_qualifier
+        | storage_class_specifier declaration_specifiers {
+                return($1 | $2);
+        }
+        | type_specifier declaration_specifiers {
+                return($1 | $2);
+        }
+        | type_qualifier declaration_specifiers {
+                return($1 | $2);
+        }
+        ;
+
+storage_class_specifier
+        : __TYPE_AUTO           {return(TYPE_AUTO);}
+        | __TYPE_REGISTER       {return(TYPE_REGISTER);}
+        | __TYPE_STATIC         {return(TYPE_STATIC);}
+        | __TYPE_EXTERN         {return(TYPE_EXTERN);}
+        | __TYPE_TYPEDEF        {return(TYPE_TYPEDEF);}
         ;
 
 type_specifier
-        : __TYPE_VOID
-        | __TYPE_CHAR
-        | __TYPE_SHORT
-        | __TYPE_INT
-        | __TYPE_LONG
-        | __TYPE_FLOAT
-        | __TYPE_DOUBLE
-        | __TYPE_SIGNED
-        | __TYPE_UNSIGNED
+        : __TYPE_VOID           {return(TYPE_VOID);}
+        | __TYPE_CHAR           {return(TYPE_CHAR);}
+        | __TYPE_SHORT          {return(TYPE_SHORT);}
+        | __TYPE_INT            {return(TYPE_INT);}
+        | __TYPE_LONG           {return(TYPE_LONG);}
+        | __TYPE_FLOAT          {return(TYPE_FLOAT);}
+        | __TYPE_DOUBLE         {return(TYPE_DOUBLE);}
+        | __TYPE_SIGNED         {return(TYPE_SIGNED);}
+        | __TYPE_UNSIGNED       {return(TYPE_UNSIGNED);}
         ;
 
 type_qualifier
-        : __TYPE_CONST
-        | __TYPE_VOLATILE
+        : __TYPE_CONST          {return(TYPE_CONST);}
+        | __TYPE_VOLATILE       {return(TYPE_VOLATILE);}
         ;
 
 initializer_param
