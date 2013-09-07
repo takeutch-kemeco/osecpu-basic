@@ -194,9 +194,29 @@ static void remove_macro_define_table(char* iden)
 
 <main_process>["][^"]*["]       {trim_const_string(yylval.sval, yytext); return(__CONST_STRING);}
 
-<main_process>[0][0-9]+[.]?[0-9]* {printf("%s\n構文エラー : 数値の先頭に不適切な 0 があります\n", yytext); exit(EXIT_FAILURE);}
-<main_process>[0-9]* {yylval.ival = atoi(yytext); return(__CONST_INTEGER);}
-<main_process>[0-9]+[.][0-9]+ {yylval.fval = atof(yytext); return(__CONST_FLOAT);}
+<main_process>[0][1-7][0-7]* {
+        /* 8進数の場合 */
+        yylval.ival = strtol(yytext, NULL, 8);
+        return(__CONST_INTEGER);
+}
+
+<main_process>[0][xX][1-9a-fA-F]?[0-9a-fA-F]* {
+        /* 16進数の場合 */
+        yylval.ival = strtol(yytext, NULL, 16);
+        return(__CONST_INTEGER);
+}
+
+<main_process>([0]|[1-9][0-9]*) {
+        /* 10進数の場合 */
+        yylval.ival = strtol(yytext, NULL, 10);
+        return(__CONST_INTEGER);
+}
+
+<main_process>[0-9]+[.][0-9]+ {
+        /* 実数の場合 */
+        yylval.fval = atof(yytext);
+        return(__CONST_FLOAT);
+}
 
 <main_process>"+"       return(__OPE_ADD);
 <main_process>"-"       return(__OPE_SUB);
