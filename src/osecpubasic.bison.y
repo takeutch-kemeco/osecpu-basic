@@ -2030,7 +2030,7 @@ static void __call_user_function(const char* iden)
 {
         /* ラベルリストに名前が存在しなければエラー */
         if (labellist_search_unsafe(iden) == -1)
-                yyerror("syntac err: 未定義の関数を実行しようとしました");
+                yyerror("syntax err: 未定義の関数を実行しようとしました");
 
         /* gosub とほぼ同じ */
         pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
@@ -4791,6 +4791,19 @@ const_strings
 inline_assembler
         : __STATE_ASM __LB const_strings __RB {
                 pA($3);
+        }
+        | __STATE_ASM __LB const_strings __OPE_SUBST expression __RB {
+                pop_stack($3);
+        }
+        | __STATE_ASM __LB var_identifier __OPE_SUBST const_strings __RB {
+                push_stack($5);
+                __assignment_scaler($3);
+        }
+        | __STATE_ASM __LB
+          var_identifier __ARRAY_LB expression_list __ARRAY_RB
+          __OPE_SUBST const_strings __RB {
+                push_stack($8);
+                __assignment_array($3, $5);
         }
         ;
 
