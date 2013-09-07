@@ -271,8 +271,20 @@ static void remove_macro_define_table(char* iden)
 <main_process>"read"    return(__STATE_READ);
 <main_process>"data"    return(__STATE_DATA);
 
-<main_process>"let"     return(__STATE_LET);
 <main_process>"dim"     return(__STATE_DIM);
+
+<main_process>"void"    return(__TYPE_VOID);
+<main_process>"char"    return(__TYPE_CHAR);
+<main_process>"short"   return(__TYPE_SHORT);
+<main_process>"int"     return(__TYPE_INT);
+<main_process>"long"    return(__TYPE_LONG);
+<main_process>"float"   return(__TYPE_FLOAT);
+<main_process>"double"  return(__TYPE_DOUBLE);
+<main_process>"signed"  return(__TYPE_SIGNED);
+<main_process>"unsigned" return(__TYPE_UNSIGNED);
+
+<main_process>"const"   return(__TYPE_CONST);
+<main_process>"volatile" return(__TYPE_VOLATILE);
 
 <main_process>"mat"     return(__STATE_MAT);
 <main_process>"zer"     return(__STATE_MAT_ZER);

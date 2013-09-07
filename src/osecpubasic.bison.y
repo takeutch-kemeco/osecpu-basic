@@ -3754,7 +3754,16 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __STATE_READ __STATE_DATA __OPE_GOTO __OPE_RETURN
 %token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
 %token __OPE_SUBST
-%token __STATE_LET __STATE_DIM
+
+%token __STATE_DIM
+%token __TYPE_VOID
+%token __TYPE_CHAR __TYPE_SHORT __TYPE_INT __TYPE_LONG
+%token __TYPE_FLOAT __TYPE_DOUBLE
+%token __TYPE_SIGNED __TYPE_UNSIGNED
+
+%token __TYPE_CONST
+%token __TYPE_VOLATILE
+
 %token __STATE_STRUCT
 %token __STATE_ASM
 %token __STATE_FUNCTION
@@ -4043,6 +4052,28 @@ func_sleep
                 __func_sleep();
                 push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
+        ;
+
+declaration_specifiers
+        : type_specifier declaration_specifiers
+        | type_qualifier declaration_specifiers
+        ;
+
+type_specifier
+        : __TYPE_VOID
+        | __TYPE_CHAR
+        | __TYPE_SHORT
+        | __TYPE_INT
+        | __TYPE_LONG
+        | __TYPE_FLOAT
+        | __TYPE_DOUBLE
+        | __TYPE_SIGNED
+        | __TYPE_UNSIGNED
+        ;
+
+type_qualifier
+        : __TYPE_CONST
+        | __TYPE_VOLATILE
         ;
 
 initializer_param
