@@ -192,7 +192,18 @@ static void remove_macro_define_table(char* iden)
 <main_process_comment>.         {}
 <main_process_comment>"*/"      BEGIN(main_process);
 
-<main_process>["][^"]*["]       {trim_const_string(yylval.sval, yytext); return(__CONST_STRING);}
+<main_process>["][^"]*["] {
+        /* const string */
+        trim_const_string(yylval.sval, yytext);
+        return(__CONST_STRING);
+}
+
+<main_process>['][^']['] {
+        /* const char */
+        yylval.sval[0] = yytext[0];
+        yylval.sval[1] = '\0';
+        return(__CONST_CHAR);
+}
 
 <main_process>[0][1-7][0-7]* {
         /* 8進数の場合 */
@@ -229,16 +240,33 @@ static void remove_macro_define_table(char* iden)
 <main_process>"|"       return(__OPE_OR);
 <main_process>"and"     return(__OPE_AND);
 <main_process>"^"       return(__OPE_XOR);
-<main_process>"~"       return(__OPE_NOT);
+<main_process>"~"       return(__OPE_INVERT);
+<main_process>"!"       return(__OPE_NOT);
+
+<main_process>"||"      return(__OPE_LOGICAL_OR);
+<main_process>"&&"      return(__OPE_LOGICAL_AND);
 
 <main_process>"<<"      return(__OPE_LSHIFT);
-<main_process>">>"      return(__OPE_LOGICAL_RSHIFT);
+<main_process>">>"      return(__OPE_RSHIFT);
 <main_process>">>>"     return(__OPE_ARITHMETIC_RSHIFT);
 
 <main_process>"@"       return(__OPE_ATTACH);
 <main_process>"&"       return(__OPE_ADDRESS);
 
 <main_process>"="       return(__OPE_SUBST);
+<main_process>"&="      return(__OPE_AND_SUBST);
+<main_process>"|="      return(__OPE_OR_SUBST);
+<main_process>"^="      return(__OPE_XOR_SUBST);
+<main_process>"<<="     return(__OPE_LSHIFT_SUBST);
+<main_process>">>="     return(__OPE_RSHIFT_SUBST);
+<main_process>"+="      return(__OPE_ADD_SUBST);
+<main_process>"-="      return(__OPE_SUB_SUBST);
+<main_process>"*="      return(__OPE_MUL_SUBST);
+<main_process>"/="      return(__OPE_DIV_SUBST);
+<main_process>"%="      return(__OPE_MOD_SUBST);
+
+<main_process>"++"      return(__OPE_INC);
+<main_process>"--"      return(__OPE_DEC);
 
 <main_process>"=="      return(__OPE_COMPARISON);
 <main_process>"!="      return(__OPE_NOT_COMPARISON);
@@ -264,7 +292,14 @@ static void remove_macro_define_table(char* iden)
 <main_process>"if"      return(__STATE_IF);
 <main_process>"else"    return(__STATE_ELSE);
 
+<main_process>"switch"  return(__STATE_SWITCH);
+<main_process>"case"    return(__STATE_CASE);
+<main_process>"default" return(__STATE_DEFAULT);
+
+<main_process>"?"       return(__OPE_SELECTION);
+
 <main_process>"while"   return(__STATE_WHILE);
+<main_process>"do"      return(__STATE_DO);
 
 <main_process>"for"     return(__STATE_FOR);
 
@@ -292,6 +327,8 @@ static void remove_macro_define_table(char* iden)
 <main_process>"extern"  return(__TYPE_EXTERN);
 <main_process>"typedef" return(__TYPE_TYPEDEF);
 
+<main_process>"sizeof"  return(__OPE_SIZEOF);
+
 <main_process>"mat"     return(__STATE_MAT);
 <main_process>"zer"     return(__STATE_MAT_ZER);
 <main_process>"con"     return(__STATE_MAT_CON);
@@ -299,14 +336,20 @@ static void remove_macro_define_table(char* iden)
 <main_process>"trn"     return(__STATE_MAT_TRN);
 
 <main_process>"struct"  return(__STATE_STRUCT);
+<main_process>"enum"  return(__STATE_ENUM);
 
 <main_process>"function" {return(__STATE_FUNCTION);}
 
 <main_process>","       return(__OPE_COMMA);
 <main_process>":"       return(__OPE_COLON);
+<main_process>"..."     return(__OPE_VALEN);
+<main_process>"->"      return(__OPE_ARROW);
+<main_process>"."       return(__OPE_DOT);
 
-<main_process>"goto"    return(__OPE_GOTO);
-<main_process>"return"  return(__OPE_RETURN);
+<main_process>"goto"    return(__STATE_GOTO);
+<main_process>"return"  return(__STATE_RETURN);
+<main_process>"continue" return(__STATE_CONTINUE);
+<main_process>"break"   return(__STATE_BREAK);
 
 <main_process>"asm"     return(__STATE_ASM);
 

@@ -1412,13 +1412,24 @@ static void __func_xor(void)
         pA("fixA = fixL ^ fixR;");
 }
 
-/* not命令を出力する
+/* ビット反転命令を出力する
  * fixL -> fixA
  * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_not(void)
+static void __func_invert(void)
 {
         pA("fixA = fixL ^ (-1);");
+}
+
+/* not命令を出力する
+ * fixL -> fixA
+ * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
+ *
+ * 真（非0）ならば 0 を返し、偽(0)ならば 1 を返す。
+ */
+static void __func_not(void)
+{
+        pA("if (fixL == 0) {fixA = 1 << 16;} else {fixA = 0;}");
 }
 
 /* 左シフト命令を出力する
@@ -3779,11 +3790,24 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 }
 
 %token __STATE_IF __STATE_ELSE
-%token __STATE_WHILE
+%token __STATE_SWITCH __STATE_CASE __STATE_DEFAULT
+%token __OPE_SELECTION
+%token __STATE_WHILE __STATE_DO
 %token __STATE_FOR
-%token __STATE_READ __STATE_DATA __OPE_GOTO __OPE_RETURN
+%token __STATE_READ __STATE_DATA
+%token __STATE_GOTO __STATE_RETURN __STATE_CONTINUE __STATE_BREAK
 %token __STATE_MAT __STATE_MAT_ZER __STATE_MAT_CON __STATE_MAT_IDN __STATE_MAT_TRN
+
 %token __OPE_SUBST
+%token __OPE_AND_SUBST __OPE_OR_SUBST __OPE_XOR_SUBST
+%token __OPE_LSHIFT_SUBST __OPE_RSHIFT_SUBST
+%token __OPE_ADD_SUBST __OPE_SUB_SUBST
+%token __OPE_MUL_SUBST __OPE_DIV_SUBST __OPE_MOD_SUBST
+%token __OPE_INC __OPE_DEC
+
+%token __OPE_SIZEOF
+
+%token __OPE_LOGICAL_OR __OPE_LOGICAL_AND
 
 %token __STATE_DIM
 %token __TYPE_VOID
@@ -3798,7 +3822,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %token __TYPE_CONST
 %token __TYPE_VOLATILE
 
-%token __STATE_STRUCT
+%token __STATE_STRUCT __STATE_ENUM
 %token __STATE_ASM
 %token __STATE_FUNCTION
 %token __FUNC_PRINT __FUNC_INPUT __FUNC_PEEK __FUNC_POKE __FUNC_CHR_S __FUNC_VAL __FUNC_MID_S __FUNC_RND __FUNC_INPUT_S
@@ -3811,20 +3835,21 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
-%left  __OPE_OR __OPE_AND __OPE_XOR __OPE_NOT
-%left  __OPE_LSHIFT __OPE_LOGICAL_RSHIFT __OPE_ARITHMETIC_RSHIFT
-%left  __OPE_COMMA __OPE_COLON
+%left  __OPE_OR __OPE_AND __OPE_XOR __OPE_INVERT __OPE_NOT
+%left  __OPE_LSHIFT __OPE_RSHIFT __OPE_ARITHMETIC_RSHIFT
+%left  __OPE_COMMA __OPE_COLON __OPE_DOT __OPE_ARROW __OPE_VALEN
 %token __OPE_PLUS __OPE_MINUS
-%token __OPE_ATTACH __OPE_ADDRESS
+%token __OPE_ATTACH __OPE_ADDRESS __OPE_POINTER
 %token __LB __RB __DECL_END __IDENTIFIER __LABEL __DEFINE_LABEL __EOF
 %token __ARRAY_LB __ARRAY_RB
 %token __BLOCK_LB __BLOCK_RB
-%token __CONST_STRING __CONST_FLOAT __CONST_INTEGER
+%token __CONST_STRING __CONST_FLOAT __CONST_INTEGER __CONST_CHAR
 
 %type <ival> __CONST_INTEGER
 %type <fval> __CONST_FLOAT
-%type <sval> __CONST_STRING __IDENTIFIER __LABEL __DEFINE_LABEL
-%type <sval> const_strings
+%type <sval> __CONST_CHAR
+%type <sval> __CONST_STRING const_strings
+%type <sval> __IDENTIFIER __LABEL __DEFINE_LABEL
 
 %type <sval> func_print func_peek func_poke
 
@@ -3850,8 +3875,8 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> var_identifier
 %type <ival> expression_list identifier_list attach_base
 
-%type <ival> declaration_specifiers
-%type <ival> storage_class_specifier type_specifier type_qualifier
+%type <ival> __declaration_specifiers
+%type <ival> __storage_class_specifier __type_specifier __type_qualifier
 
 %start syntax_tree
 
@@ -3860,13 +3885,14 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 syntax_tree
         : declaration_list __EOF {
                 YYACCEPT;
-                start_tune_process();
+                /* start_tune_process(); */
         }
         ;
 
 declaration_list
         : declaration
         | declaration declaration_list
+        | __translation_unit
         ;
 
 declaration_block
@@ -4091,46 +4117,6 @@ func_sleep
         }
         ;
 
-declaration_specifiers
-        : storage_class_specifier
-        | type_specifier
-        | type_qualifier
-        | storage_class_specifier declaration_specifiers {
-                return($1 | $2);
-        }
-        | type_specifier declaration_specifiers {
-                return($1 | $2);
-        }
-        | type_qualifier declaration_specifiers {
-                return($1 | $2);
-        }
-        ;
-
-storage_class_specifier
-        : __TYPE_AUTO           {return(TYPE_AUTO);}
-        | __TYPE_REGISTER       {return(TYPE_REGISTER);}
-        | __TYPE_STATIC         {return(TYPE_STATIC);}
-        | __TYPE_EXTERN         {return(TYPE_EXTERN);}
-        | __TYPE_TYPEDEF        {return(TYPE_TYPEDEF);}
-        ;
-
-type_specifier
-        : __TYPE_VOID           {return(TYPE_VOID);}
-        | __TYPE_CHAR           {return(TYPE_CHAR);}
-        | __TYPE_SHORT          {return(TYPE_SHORT);}
-        | __TYPE_INT            {return(TYPE_INT);}
-        | __TYPE_LONG           {return(TYPE_LONG);}
-        | __TYPE_FLOAT          {return(TYPE_FLOAT);}
-        | __TYPE_DOUBLE         {return(TYPE_DOUBLE);}
-        | __TYPE_SIGNED         {return(TYPE_SIGNED);}
-        | __TYPE_UNSIGNED       {return(TYPE_UNSIGNED);}
-        ;
-
-type_qualifier
-        : __TYPE_CONST          {return(TYPE_CONST);}
-        | __TYPE_VOLATILE       {return(TYPE_VOLATILE);}
-        ;
-
 initializer_param
         : {
                 $$[0] = 1;
@@ -4316,6 +4302,11 @@ operation
                 __func_xor();
                 push_stack("fixA");
         }
+        | __OPE_INVERT expression {
+                pop_stack("fixL");
+                __func_invert();
+                push_stack("fixA");
+        }
         | __OPE_NOT expression {
                 pop_stack("fixL");
                 __func_not();
@@ -4326,7 +4317,7 @@ operation
                 __func_lshift();
                 push_stack("fixA");
         }
-        | expression __OPE_LOGICAL_RSHIFT expression {
+        | expression __OPE_RSHIFT expression {
                 read_eoe_arg();
                 __func_logical_rshift();
                 push_stack("fixA");
@@ -4526,14 +4517,14 @@ define_label
         ;
 
 jump
-        : __OPE_GOTO __LABEL {
+        : __STATE_GOTO __LABEL {
                 pA("PLIMM(P3F, %d);\n", labellist_search($2));
         }
-        | __OPE_RETURN expression {
+        | __STATE_RETURN expression {
                 pop_stack("fixA");
                 __define_user_function_return();
         }
-        | __OPE_RETURN {
+        | __STATE_RETURN {
                 /* 空の return の場合は return 0 として動作させる。
                  * これは、ユーザー定義関数は expression なので、
                  * 終了後に必ずスタックが +1 状態である必要があるため。
@@ -4615,6 +4606,413 @@ inline_assembler
         : __STATE_ASM __LB const_strings __RB {
                 pA($3);
         }
+        ;
+
+__translation_unit
+        : __external_declaration
+        | __translation_unit __external_declaration
+        ;
+
+__external_declaration
+        : __function_declaration
+        | __declaration
+        ;
+
+__function_declaration
+        :
+        ;
+
+__declaration
+        : __declaration_specifiers __DECL_END
+        | __declaration_specifiers __init_declarator_list __DECL_END
+
+__declaration_list
+        : __declaration
+        | __declaration_list __declaration
+
+__declaration_specifiers
+        : __storage_class_specifier
+        | __type_specifier
+        | __type_qualifier
+        | __storage_class_specifier __declaration_specifiers {
+                return($1 | $2);
+        }
+        | __type_specifier __declaration_specifiers {
+                return($1 | $2);
+        }
+        | __type_qualifier __declaration_specifiers {
+                return($1 | $2);
+        }
+        ;
+
+__storage_class_specifier
+        : __TYPE_AUTO           {return(TYPE_AUTO);}
+        | __TYPE_REGISTER       {return(TYPE_REGISTER);}
+        | __TYPE_STATIC         {return(TYPE_STATIC);}
+        | __TYPE_EXTERN         {return(TYPE_EXTERN);}
+        | __TYPE_TYPEDEF        {return(TYPE_TYPEDEF);}
+        ;
+
+__type_specifier
+        : __TYPE_VOID           {return(TYPE_VOID);}
+        | __TYPE_CHAR           {return(TYPE_CHAR);}
+        | __TYPE_SHORT          {return(TYPE_SHORT);}
+        | __TYPE_INT            {return(TYPE_INT);}
+        | __TYPE_LONG           {return(TYPE_LONG);}
+        | __TYPE_FLOAT          {return(TYPE_FLOAT);}
+        | __TYPE_DOUBLE         {return(TYPE_DOUBLE);}
+        | __TYPE_SIGNED         {return(TYPE_SIGNED);}
+        | __TYPE_UNSIGNED       {return(TYPE_UNSIGNED);}
+        ;
+
+__type_qualifier
+        : __TYPE_CONST          {return(TYPE_CONST);}
+        | __TYPE_VOLATILE       {return(TYPE_VOLATILE);}
+        ;
+
+__struct_or_union_specifier
+        :
+        ;
+
+__struct_or_union
+        :
+        ;
+
+__struct_declaration_list
+        :
+        ;
+
+__init_declarator_list
+        : __init_declarator
+        | __init_declarator_list __OPE_COMMA __init_declarator
+        ;
+
+__init_declarator
+        : __declarator
+        | __declarator __OPE_SUBST __initializer
+        ;
+
+__struct_declaration
+        : __specifier_qualifier_list __struct_declaration_list __DECL_END
+        ;
+
+__specifier_qualifier_list
+        : __struct_declarator
+        | __struct_declarator_list __OPE_COMMA __struct_declarator
+        ;
+
+__struct_declarator_list
+        : __struct_declarator
+        | __struct_declarator_list __OPE_COMMA __struct_declarator
+        ;
+
+__struct_declarator
+        : __declarator
+        | __declarator __OPE_COLON __constant_expression
+        | __OPE_COLON __constant_expression
+        ;
+
+__enum_specifier
+        : __STATE_ENUM __IDENTIFIER __BLOCK_LB __enumerator_list __BLOCK_RB
+        | __STATE_ENUM __BLOCK_LB __enumerator_list __BLOCK_RB
+        | __STATE_ENUM __IDENTIFIER
+        ;
+
+__enumerator_list
+        : __enumerator
+        | __enumerator_list __OPE_COMMA __enumerator
+        ;
+
+__enumerator
+        : __IDENTIFIER
+        | __IDENTIFIER __OPE_SUBST __constant_expression
+        ;
+
+__declarator
+        : __OPE_MUL __direct_declarator %prec __OPE_POINTER
+        | __direct_declarator
+        ;
+
+__direct_declarator
+        : __IDENTIFIER
+        | __LB __declarator __RB
+        | __direct_declarator __ARRAY_LB __constant_expression __ARRAY_RB
+        | __direct_declarator __ARRAY_LB __ARRAY_RB
+        | __direct_declarator __LB __parameter_type_list __RB
+        | __direct_declarator __LB __identifier_list __RB
+        | __direct_declarator __LB __RB
+        ;
+
+__pointer
+        : __OPE_MUL %prec __OPE_POINTER
+        | __OPE_MUL __type_qualifier_list %prec __OPE_POINTER
+        | __OPE_MUL __pointer %prec __OPE_POINTER
+        | __OPE_MUL __type_qualifier_list __pointer %prec __OPE_POINTER
+        ;
+
+__type_qualifier_list
+        : __type_qualifier
+        | __type_qualifier_list __type_qualifier
+        ;
+
+__parameter_type_list
+        : __parameter_list
+        | __parameter_list __OPE_COMMA __OPE_VALEN
+        ;
+
+__parameter_list
+        : __parameter_declaration
+        | __parameter_list __OPE_COMMA __parameter_declaration
+        ;
+
+__parameter_declaration
+        : __declaration_specifiers __declaration
+        | __declaration_specifiers __abstract_declarator
+        | __declaration_specifiers
+        ;
+
+__identifier_list
+        : __IDENTIFIER
+        | __identifier_list __OPE_COMMA __IDENTIFIER
+        ;
+
+__initializer
+        : __assignment_expression
+        | __BLOCK_LB __initializer_list __BLOCK_RB
+        | __BLOCK_LB __initializer_list __OPE_COMMA __BLOCK_RB
+        ;
+
+__initializer_list
+        : __initializer
+        | __initializer_list __OPE_COMMA __initializer
+        ;
+
+__type_name
+        : __specifier_qualifier_list __abstract_declarator
+        | __specifier_qualifier_list
+        ;
+
+__abstract_declarator
+        : __OPE_MUL %prec __OPE_POINTER
+        | __OPE_MUL __direct_abstract_declarator %prec __OPE_POINTER
+        | __direct_abstract_declarator
+        ;
+
+__direct_abstract_declarator
+        : __LB __abstract_declarator __RB
+
+        | __direct_abstract_declarator __ARRAY_LB __constant_expression __ARRAY_RB
+        | __ARRAY_LB __constant_expression __ARRAY_RB
+        | __direct_abstract_declarator __ARRAY_LB __ARRAY_RB
+        | __ARRAY_LB __ARRAY_RB
+
+        | __direct_abstract_declarator __LB __parameter_type_list __RB
+        | __LB __parameter_type_list __RB
+        | __direct_abstract_declarator __LB __RB
+        | __LB __RB
+        ;
+
+__typedef_name
+        : /* __IDENTIFIER */
+        ;
+
+__statement
+        : __labeled_statement
+        | __expression_statement
+        | __compound_statement
+        | __selection_statement
+        | __iteration_statement
+        | __jump_statement
+        ;
+
+__labeled_statement
+        : __IDENTIFIER __OPE_COLON __statement
+        | __STATE_CASE __constant_expression __OPE_COLON __statement
+        | __STATE_DEFAULT __OPE_COLON __statement
+        ;
+
+__expression_statement
+        : __expression __DECL_END
+        | __DECL_END
+        ;
+
+__compound_statement
+        : __BLOCK_LB __declaration_list __statement_list __BLOCK_RB
+        | __BLOCK_LB __statement_list __BLOCK_RB
+        | __BLOCK_LB __declaration_list __BLOCK_RB
+        | __BLOCK_LB __BLOCK_RB
+        ;
+
+__statement_list
+        : __statement
+        | __statement_list __statement
+        ;
+
+__selection_statement
+        : __STATE_IF __LB __expression __RB __statement
+        | __STATE_IF __LB __expression __RB __statement __STATE_ELSE __statement
+        | __STATE_SWITCH __LB expression __RB __statement
+        ;
+
+__iteration_statement
+        : __STATE_WHILE __LB __expression __RB __statement
+        | __STATE_DO __statement __STATE_WHILE __LB __expression __RB __DECL_END
+        | __STATE_FOR __LB __expression __DECL_END __expression __DECL_END __expression __RB __statement
+        ;
+
+__jump_statement
+        : __STATE_GOTO __IDENTIFIER __DECL_END
+        | __STATE_CONTINUE __DECL_END
+        | __STATE_BREAK __DECL_END
+        | __STATE_RETURN __expression __DECL_END
+        ;
+
+__expression
+        : __assignment_expression
+        | __expression __OPE_COMMA __assignment_expression
+        ;
+
+__assignment_expression
+        : __conditional_expression
+        | __unary_expression __assignment_operator __assignment_expression
+        ;
+
+__assignment_operator
+        : __OPE_SUBST
+        | __OPE_MUL_SUBST
+        | __OPE_DIV_SUBST
+        | __OPE_MOD_SUBST
+        | __OPE_ADD_SUBST
+        | __OPE_SUB_SUBST
+        | __OPE_LSHIFT_SUBST
+        | __OPE_RSHIFT_SUBST
+        | __OPE_AND_SUBST
+        | __OPE_XOR_SUBST
+        | __OPE_OR_SUBST
+        ;
+
+__conditional_expression
+        : __logical_OR_expression
+        | __logical_OR_expression __OPE_SELECTION __expression __OPE_COLON __conditional_expression
+        ;
+
+__constant_expression
+        : __conditional_expression
+        ;
+
+__logical_OR_expression
+        : __logical_AND_expression
+        | __logical_OR_expression __OPE_LOGICAL_OR __logical_AND_expression
+        ;
+
+__logical_AND_expression
+        : __inclusive_OR_expression
+        | __logical_AND_expression __OPE_LOGICAL_AND __inclusive_OR_expression
+        ;
+
+__inclusive_OR_expression
+        : __exclusive_OR_expression
+        | __inclusive_OR_expression __OPE_OR __exclusive_OR_expression
+        ;
+
+__exclusive_OR_expression
+        : __AND_expression
+        | __exclusive_OR_expression __OPE_XOR __AND_expression
+        ;
+
+__AND_expression
+        : __equality_expression
+        | __AND_expression __OPE_AND __equality_expression
+        ;
+
+__equality_expression
+        : __relational_expression
+        | __equality_expression __OPE_COMPARISON __relational_expression
+        | __equality_expression __OPE_NOT_COMPARISON __relational_expression
+        ;
+
+__relational_expression
+        : __shift_expression
+        | __relational_expression __OPE_ISSMALL __shift_expression
+        | __relational_expression __OPE_ISLARGE __shift_expression
+        | __relational_expression __OPE_ISSMALL_COMP __shift_expression
+        | __relational_expression __OPE_ISLARGE_COMP __shift_expression
+        ;
+
+__shift_expression
+        : __additive_expression
+        | __shift_expression __OPE_LSHIFT __additive_expression
+        | __shift_expression __OPE_RSHIFT __additive_expression
+        ;
+
+__additive_expression
+        : __multiplicative_expression
+        | __additive_expression __OPE_ADD __multiplicative_expression
+        | __additive_expression __OPE_SUB __multiplicative_expression
+        ;
+
+__multiplicative_expression
+        : __cast_expression
+        | __multiplicative_expression __OPE_MUL __cast_expression
+        | __multiplicative_expression __OPE_DIV __cast_expression
+        | __multiplicative_expression __OPE_MOD __cast_expression
+        ;
+
+__cast_expression
+        : __unary_expression
+        | __LB __IDENTIFIER __RB __cast_expression
+        ;
+
+__unary_expression
+        : __postfix_expression
+        | __OPE_INC __unary_expression
+        | __OPE_DEC __unary_expression
+        | __unary_operator __cast_expression
+        | __OPE_SIZEOF __unary_expression
+        | __OPE_SIZEOF __LB __IDENTIFIER __RB
+        ;
+
+__unary_operator
+        : __OPE_AND
+        | __OPE_MUL
+        | __OPE_ADD
+        | __OPE_SUB
+        | __OPE_INVERT
+        | __OPE_NOT
+        ;
+
+__postfix_expression
+        : __primary_expression
+        | __postfix_expression __ARRAY_LB __expression __ARRAY_RB
+        | __postfix_expression __LB __argument_expression_list __RB
+        | __postfix_expression __OPE_DOT __IDENTIFIER
+        | __postfix_expression __OPE_ARROW __IDENTIFIER
+        | __postfix_expression __OPE_INC
+        | __postfix_expression __OPE_DEC
+        ;
+
+__primary_expression
+        : __IDENTIFIER
+        | __constant
+        | __CONST_STRING
+        | __LB __expression __RB
+        ;
+
+__argument_expression_list
+        :
+        | __assignment_expression
+        | __argument_expression_list __OPE_COMMA __assignment_expression
+        ;
+
+__constant
+        : __CONST_INTEGER
+        | __CONST_CHAR
+        | __CONST_FLOAT
+        | __enumeration_constant
+        ;
+
+__enumeration_constant
+        :
         ;
 
 %%
