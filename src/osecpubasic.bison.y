@@ -4447,9 +4447,6 @@ initializer
                 pA("attachstack_socket = -1;");
                 push_attachstack("attachstack_socket");
                 __assignment_scaler($1);
-
-                /* __assignment_scaler() でスタックが +1 状態なのを掃除 */
-                pop_stack_dummy();
         }
         ;
 
