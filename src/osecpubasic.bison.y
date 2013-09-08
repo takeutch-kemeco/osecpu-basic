@@ -648,6 +648,20 @@ static void init_stack(void)
         pA("stack_frame = 0;");
 }
 
+/* スタック関連の各種レジスターの値を、実行時に画面に印字する
+ * 主にデバッグ用
+ */
+static void debug_stack(void)
+{
+        pA("junkApi_putConstString('stack_socket[');");
+        pA("junkApi_putStringDec('\\1', stack_socket, 6, 1);");
+        pA("junkApi_putConstString('], stack_head[');");
+        pA("junkApi_putStringDec('\\1', stack_head, 6, 1);");
+        pA("junkApi_putConstString('], stack_frame[');");
+        pA("junkApi_putStringDec('\\1', stack_frame, 6, 1);");
+        pA("junkApi_putConstString(']\\n');");
+}
+
 /* 現在の使用可能なラベルインデックスのヘッド
  * この値から LABEL_INDEX_LEN 未満までの間が、まだ未使用なユニークラベルのサフィックス番号。
  * ユニークラベルをどこかに設定する度に、この値をインクリメントすること。
@@ -790,6 +804,18 @@ static char init_attachstack[] = {
         "attachstack_head = 0;\n"
 };
 
+/* アタッチスタック関連の各種レジスターの値を、実行時に画面に印字する
+ * 主にデバッグ用
+ */
+static void debug_attachstack(void)
+{
+        pA("junkApi_putConstString('attachstack_socket[');");
+        pA("junkApi_putStringDec('\\1', attachstack_socket, 6, 1);");
+        pA("junkApi_putConstString('], attachstack_head[');");
+        pA("junkApi_putStringDec('\\1', attachstack_head, 6, 1);");
+        pA("junkApi_putConstString(']\\n');");
+}
+
 /* プリセット関数やアキュムレーターを呼び出し命令に対して、追加でさらに共通の定型命令を出力する。
  * すなわち、関数呼び出しのラッパ。
  * （ラベルスタックへの戻りラベルのプッシュ、関数実行、関数後位置への戻りラベル設定）
@@ -868,6 +894,20 @@ void init_heap(void)
         pA("SInt32 heap_offset:R05;");
         pA("heap_base = 0;");
 };
+
+/* ヒープメモリー関連の各種レジスターの値を、実行時に画面に印字する
+ * 主にデバッグ用
+ */
+static void debug_heap(void)
+{
+        pA("junkApi_putConstString('heap_socket[');");
+        pA("junkApi_putStringDec('\\1', heap_socket, 6, 1);");
+        pA("junkApi_putConstString('], heap_base[');");
+        pA("junkApi_putStringDec('\\1', heap_base, 6, 1);");
+        pA("junkApi_putConstString('], heap_offset[');");
+        pA("junkApi_putStringDec('\\1', heap_offset, 6, 1);");
+        pA("junkApi_putConstString(']\\n');");
+}
 
 /* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
  */
@@ -1853,6 +1893,13 @@ static void __read_variable_ptr_scaler(const char* iden)
 
         /* heap_base自体を（アドレス自体を）スタックにプッシュする */
         push_stack("heap_base");
+
+#ifdef DEBUG_READ_VARIABLE
+        pA("junkApi_putConstString('read_variable_ptr_scaler(), ');");
+        debug_stack();
+        debug_attachstack();
+        debug_heap();
+#endif /* DEBUG_READ_VARIABLE */
 }
 
 static void __read_variable_ptr_array(const char* iden, const int32_t dim)
@@ -1926,6 +1973,13 @@ static void __read_variable_ptr_array(const char* iden, const int32_t dim)
 
         /* heap_base自体を（アドレス自体を）スタックにプッシュする */
         push_stack("heap_base");
+
+#ifdef DEBUG_READ_VARIABLE
+        pA("junkApi_putConstString('read_variable_ptr_array(), ');");
+        debug_stack();
+        debug_attachstack();
+        debug_heap();
+#endif /* DEBUG_READ_VARIABLE */
 }
 
 static void __read_variable_scaler(const char* iden)
@@ -1951,6 +2005,13 @@ static void __read_variable_scaler(const char* iden)
 
         /* 結果をスタックにプッシュする */
         push_stack("stack_socket");
+
+#ifdef DEBUG_READ_VARIABLE
+        pA("junkApi_putConstString('read_variable_scaler(), ');");
+        debug_stack();
+        debug_attachstack();
+        debug_heap();
+#endif /* DEBUG_READ_VARIABLE */
 }
 
 static void __read_variable_array(const char* iden, const int32_t dim)
@@ -2020,6 +2081,13 @@ static void __read_variable_array(const char* iden, const int32_t dim)
 
         /* 結果をスタックにプッシュする */
         push_stack("stack_socket");
+
+#ifdef DEBUG_READ_VARIABLE
+        pA("junkApi_putConstString('read_variable_array(), ');");
+        debug_stack();
+        debug_attachstack();
+        debug_heap();
+#endif /* DEBUG_READ_VARIABLE */
 }
 
 /* 以下、ユーザー定義関数関連 */
