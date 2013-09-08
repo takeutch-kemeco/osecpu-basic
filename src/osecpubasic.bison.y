@@ -1780,6 +1780,12 @@ static void __assignment_scaler(const char* iden)
 
 #ifdef DEBUG_ASSIGNMENT
         pA("junkApi_putConstString('\\nassignment_scaler(), ');");
+
+        if (var->is_local)
+                pA("junkApi_putConstString('is_local ');");
+        else
+                pA("junkApi_putConstString('is_global ');");
+
         debug_stack();
         debug_attachstack();
         debug_heap();
@@ -1881,6 +1887,12 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
 
 #ifdef DEBUG_ASSIGNMENT
         pA("junkApi_putConstString('\\nassignment_array(), ');");
+
+        if (var->is_local)
+                pA("junkApi_putConstString('is_local ');");
+        else
+                pA("junkApi_putConstString('is_global ');");
+
         debug_stack();
         debug_attachstack();
         debug_heap();
@@ -1910,6 +1922,12 @@ static void __read_variable_ptr_scaler(const char* iden)
 
 #ifdef DEBUG_READ_VARIABLE
         pA("junkApi_putConstString('\\nread_variable_ptr_scaler(), ');");
+
+        if (var->is_local)
+                pA("junkApi_putConstString('is_local ');");
+        else
+                pA("junkApi_putConstString('is_global ');");
+
         debug_stack();
         debug_attachstack();
         debug_heap();
@@ -1990,6 +2008,12 @@ static void __read_variable_ptr_array(const char* iden, const int32_t dim)
 
 #ifdef DEBUG_READ_VARIABLE
         pA("junkApi_putConstString('\\nread_variable_ptr_array(), ');");
+
+        if (var->is_local)
+                pA("junkApi_putConstString('is_local ');");
+        else
+                pA("junkApi_putConstString('is_global ');");
+
         debug_stack();
         debug_attachstack();
         debug_heap();
@@ -2022,6 +2046,12 @@ static void __read_variable_scaler(const char* iden)
 
 #ifdef DEBUG_READ_VARIABLE
         pA("junkApi_putConstString('\\nread_variable_scaler(), ');");
+
+        if (var->is_local)
+                pA("junkApi_putConstString('is_local ');");
+        else
+                pA("junkApi_putConstString('is_global ');");
+
         debug_stack();
         debug_attachstack();
         debug_heap();
@@ -2098,6 +2128,12 @@ static void __read_variable_array(const char* iden, const int32_t dim)
 
 #ifdef DEBUG_READ_VARIABLE
         pA("junkApi_putConstString('\\nread_variable_array(), ');");
+
+        if (var->is_local)
+                pA("junkApi_putConstString('is_local ');");
+        else
+                pA("junkApi_putConstString('is_global ');");
+
         debug_stack();
         debug_attachstack();
         debug_heap();
