@@ -598,7 +598,7 @@ static void push_stack(const char* regname_data)
 
 #ifdef DEBUG_STACK
         pA("junkApi_putConstString('push_stack(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
+        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
         pA("junkApi_putConstString('\\n');");
 #endif /* DEBUG_STACK */
 }
@@ -613,7 +613,7 @@ static void pop_stack(const char* regname_data)
 
 #ifdef DEBUG_STACK
         pA("junkApi_putConstString('pop_stack(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
+        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
         pA("junkApi_putConstString('\\n');");
 #endif /* DEBUG_STACK */
 }
@@ -654,11 +654,11 @@ static void init_stack(void)
 static void debug_stack(void)
 {
         pA("junkApi_putConstString('stack_socket[');");
-        pA("junkApi_putStringDec('\\1', stack_socket, 6, 1);");
+        pA("junkApi_putStringDec('\\1', stack_socket, 11, 1);");
         pA("junkApi_putConstString('], stack_head[');");
-        pA("junkApi_putStringDec('\\1', stack_head, 6, 1);");
+        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
         pA("junkApi_putConstString('], stack_frame[');");
-        pA("junkApi_putStringDec('\\1', stack_frame, 6, 1);");
+        pA("junkApi_putStringDec('\\1', stack_frame, 11, 1);");
         pA("junkApi_putConstString(']\\n');");
 }
 
@@ -810,9 +810,9 @@ static char init_attachstack[] = {
 static void debug_attachstack(void)
 {
         pA("junkApi_putConstString('attachstack_socket[');");
-        pA("junkApi_putStringDec('\\1', attachstack_socket, 6, 1);");
+        pA("junkApi_putStringDec('\\1', attachstack_socket, 11, 1);");
         pA("junkApi_putConstString('], attachstack_head[');");
-        pA("junkApi_putStringDec('\\1', attachstack_head, 6, 1);");
+        pA("junkApi_putStringDec('\\1', attachstack_head, 11, 1);");
         pA("junkApi_putConstString(']\\n');");
 }
 
@@ -901,11 +901,11 @@ void init_heap(void)
 static void debug_heap(void)
 {
         pA("junkApi_putConstString('heap_socket[');");
-        pA("junkApi_putStringDec('\\1', heap_socket, 6, 1);");
+        pA("junkApi_putStringDec('\\1', heap_socket, 11, 1);");
         pA("junkApi_putConstString('], heap_base[');");
-        pA("junkApi_putStringDec('\\1', heap_base, 6, 1);");
+        pA("junkApi_putStringDec('\\1', heap_base, 11, 1);");
         pA("junkApi_putConstString('], heap_offset[');");
-        pA("junkApi_putStringDec('\\1', heap_offset, 6, 1);");
+        pA("junkApi_putStringDec('\\1', heap_offset, 11, 1);");
         pA("junkApi_putConstString(']\\n');");
 }
 
@@ -959,33 +959,33 @@ static void pop_eoe(void)
 
 static char debug_eoe[] = {
         "junkApi_putConstString('\\nfixL:');"
-        "junkApi_putStringDec('\\1', fixL, 10, 1);"
+        "junkApi_putStringDec('\\1', fixL, 11, 1);"
         "junkApi_putConstString(' fixR:');"
-        "junkApi_putStringDec('\\1', fixR, 10, 1);"
+        "junkApi_putStringDec('\\1', fixR, 11, 1);"
         "junkApi_putConstString(' fixLx:');"
-        "junkApi_putStringDec('\\1', fixLx, 10, 1);"
+        "junkApi_putStringDec('\\1', fixLx, 11, 1);"
         "junkApi_putConstString(' fixRx:');"
-        "junkApi_putStringDec('\\1', fixRx, 10, 1);"
+        "junkApi_putStringDec('\\1', fixRx, 11, 1);"
         "junkApi_putConstString(' fixT:');"
-        "junkApi_putStringDec('\\1', fixT, 10, 1);"
+        "junkApi_putStringDec('\\1', fixT, 11, 1);"
         "junkApi_putConstString(' fixT1:');"
-        "junkApi_putStringDec('\\1', fixT1, 10, 1);"
+        "junkApi_putStringDec('\\1', fixT1, 11, 1);"
         "junkApi_putConstString(' fixT2:');"
-        "junkApi_putStringDec('\\1', fixT2, 10, 1);"
+        "junkApi_putStringDec('\\1', fixT2, 11, 1);"
         "junkApi_putConstString(' fixT3:');"
-        "junkApi_putStringDec('\\1', fixT3, 10, 1);"
+        "junkApi_putStringDec('\\1', fixT3, 11, 1);"
         "junkApi_putConstString(' fixT4:');"
-        "junkApi_putStringDec('\\1', fixT4, 10, 1);"
+        "junkApi_putStringDec('\\1', fixT4, 11, 1);"
         "junkApi_putConstString(' fixS:');"
-        "junkApi_putStringDec('\\1', fixS, 10, 1);"
+        "junkApi_putStringDec('\\1', fixS, 11, 1);"
         "junkApi_putConstString(' fixA:');"
-        "junkApi_putStringDec('\\1', fixA, 10, 1);"
+        "junkApi_putStringDec('\\1', fixA, 11, 1);"
         "junkApi_putConstString(' fixA1:');"
-        "junkApi_putStringDec('\\1', fixA1, 10, 1);"
+        "junkApi_putStringDec('\\1', fixA1, 11, 1);"
         "junkApi_putConstString(' fixA2:');"
-        "junkApi_putStringDec('\\1', fixA2, 10, 1);"
+        "junkApi_putStringDec('\\1', fixA2, 11, 1);"
         "junkApi_putConstString(' fixA3:');"
-        "junkApi_putStringDec('\\1', fixA3, 10, 1);"
+        "junkApi_putStringDec('\\1', fixA3, 11, 1);"
         "junkApi_putConstString('\\n');"
 };
 
@@ -2177,9 +2177,9 @@ static void __define_user_function_begin(const char* iden,
 
 #ifdef DEBUG_SCOPE
         pA("junkApi_putConstString('inc_scope(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
+        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
         pA("junkApi_putConstString(', stack_frame=');");
-        pA("junkApi_putStringDec('\\1', stack_frame, 10, 1);");
+        pA("junkApi_putStringDec('\\1', stack_frame, 11, 1);");
         pA("junkApi_putConstString('\\n');");
 #endif /* DEBUG_SCOPE */
 }
@@ -2202,9 +2202,9 @@ static void __define_user_function_return(void)
 
 #ifdef DEBUG_SCOPE
         pA("junkApi_putConstString('dec_scope(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 10, 1);");
+        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
         pA("junkApi_putConstString(', stack_frame=');");
-        pA("junkApi_putStringDec('\\1', stack_frame, 10, 1);");
+        pA("junkApi_putStringDec('\\1', stack_frame, 11, 1);");
         pA("junkApi_putConstString('\\n');");
 #endif /* DEBUG_SCOPE */
 
@@ -3693,13 +3693,13 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
 
 #ifdef DEBUG_OPE_MATRIX_MUL_MM
                                 pA("junkApi_putConstString('\\n fixL : ');");
-                                pA("junkApi_putStringDec('\\1', fixL, 6, 0);");
+                                pA("junkApi_putStringDec('\\1', fixL, 11, 0);");
 
                                 pA("junkApi_putConstString(' fixR : ');");
-                                pA("junkApi_putStringDec('\\1', fixR, 6, 0);");
+                                pA("junkApi_putStringDec('\\1', fixR, 11, 0);");
 
                                 pA("junkApi_putConstString(' nmatfixA : ');");
-                                pA("junkApi_putStringDec('\\1', matfixA, 6, 0);");
+                                pA("junkApi_putStringDec('\\1', matfixA, 11, 0);");
 #endif /* DEBUG_OPE_MATRIX_MUL_MM */
 
                                 /* 内側forループの復帰
@@ -3715,7 +3715,7 @@ static void ope_matrix_mul_mm(const char* strA, const char* strL, const char* st
 
 #ifdef DEBUG_OPE_MATRIX_MUL_MM
                         pA("junkApi_putConstString('\\nstrA : ');");
-                        pA("junkApi_putStringDec('\\1', heap_socket, 6, 0);");
+                        pA("junkApi_putStringDec('\\1', heap_socket, 11, 0);");
 #endif /* DEBUG_OPE_MATRIX_MUL_MM */
 
                         pA("heap_base = matbpA + heap_offset;");
