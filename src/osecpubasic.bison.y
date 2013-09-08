@@ -1777,6 +1777,13 @@ static void __assignment_scaler(const char* iden)
          * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
          */
         push_stack("stack_socket");
+
+#ifdef DEBUG_ASSIGNMENT
+        pA("junkApi_putConstString('\\nassignment_scaler(), ');");
+        debug_stack();
+        debug_attachstack();
+        debug_heap();
+#endif /* DEBUG_ASSIGNMENT */
 }
 
 /* 名前がidenの配列変数中の、任意インデックス番目の要素へ、値を代入する。
@@ -1871,6 +1878,13 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
          * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
          */
         push_stack("heap_socket");
+
+#ifdef DEBUG_ASSIGNMENT
+        pA("junkApi_putConstString('\\nassignment_array(), ');");
+        debug_stack();
+        debug_attachstack();
+        debug_heap();
+#endif /* DEBUG_ASSIGNMENT */
 }
 
 /* 以下、各種リード関数 */
@@ -1895,7 +1909,7 @@ static void __read_variable_ptr_scaler(const char* iden)
         push_stack("heap_base");
 
 #ifdef DEBUG_READ_VARIABLE
-        pA("junkApi_putConstString('read_variable_ptr_scaler(), ');");
+        pA("junkApi_putConstString('\\nread_variable_ptr_scaler(), ');");
         debug_stack();
         debug_attachstack();
         debug_heap();
@@ -1975,7 +1989,7 @@ static void __read_variable_ptr_array(const char* iden, const int32_t dim)
         push_stack("heap_base");
 
 #ifdef DEBUG_READ_VARIABLE
-        pA("junkApi_putConstString('read_variable_ptr_array(), ');");
+        pA("junkApi_putConstString('\\nread_variable_ptr_array(), ');");
         debug_stack();
         debug_attachstack();
         debug_heap();
@@ -2007,7 +2021,7 @@ static void __read_variable_scaler(const char* iden)
         push_stack("stack_socket");
 
 #ifdef DEBUG_READ_VARIABLE
-        pA("junkApi_putConstString('read_variable_scaler(), ');");
+        pA("junkApi_putConstString('\\nread_variable_scaler(), ');");
         debug_stack();
         debug_attachstack();
         debug_heap();
@@ -2083,7 +2097,7 @@ static void __read_variable_array(const char* iden, const int32_t dim)
         push_stack("stack_socket");
 
 #ifdef DEBUG_READ_VARIABLE
-        pA("junkApi_putConstString('read_variable_array(), ');");
+        pA("junkApi_putConstString('\\nread_variable_array(), ');");
         debug_stack();
         debug_attachstack();
         debug_heap();
