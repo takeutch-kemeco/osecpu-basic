@@ -32,12 +32,67 @@ extern char filepath[0x1000];
 extern int32_t linenumber;
 extern char* linelist[0x10000];
 
+/* 現在の filepath のファイル中から、line行目を文字列として dst へ読み出す。
+ * dst には十分な長さのバッファーを渡すこと。
+ *
+ * line が 1 未満、または EOF 以降の場合は -1 を返す。
+ *
+ * これは主にエラー表示時に、補助的な情報として表示する文字列用。
+ * メインの字句解析や構文解析に用いるような用途には使ってない。
+ */
+static int32_t read_line_file(char* dst, const int32_t line)
+{
+        if (line < 1)
+                return -1;
+
+        FILE* fp = fopen(filepath, "rt");
+
+        /* 目的行までシーク
+         */
+        int i = line - 1;
+        while (i-->0) {
+                while (1) {
+                        int c = fgetc(fp);
+                        if (c == '\n')
+                                break;
+
+                        if (c == EOF)
+                                return -1;
+                }
+        }
+
+        /* 改行、または EOF までを dst へ読み出す
+         */
+        while (1) {
+                int c = fgetc(fp);
+                if (c == '\n' || c == EOF)
+                        break;
+
+                *dst++ = c;
+        }
+
+        *dst = '\0';
+
+        fclose(fp);
+        return 0;
+}
+
 /* 警告表示 */
 static void yywarning(const char *error_message)
 {
         printf("filepath: %s\n", filepath);
         printf("line: %d\n", linenumber);
-        printf("%s\n", error_message);
+
+        /* エラー行と、その前後 3 行を表示する
+         */
+        char tmp[0x1000];
+        int i;
+        for (i = -3; i <= +3; i++) {
+                if (read_line_file(tmp, linenumber + i) != -1)
+                        printf("%6d: %s\n", linenumber + i, tmp);
+        }
+
+        printf("%s\n\n", error_message);
 }
 
 /* エラー表示 */
