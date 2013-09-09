@@ -138,14 +138,7 @@ int main(int argc, char** argv)
         yyout = open_null_out_file();
         yyaskA = open_out_file("osecpubasic.tmp.0");
 
-        start_linelist_process();
-        while (yylex() != 0) {
-        }
-
-        fseek(yyin, 0, SEEK_SET);
-        yyrestart(yyin);
-
-        start_pre_process();
+        start_pre_process(in_path);
         while (yylex() != 0) {
         }
 
@@ -153,7 +146,7 @@ int main(int argc, char** argv)
         yyrestart(yyin);
 
         init_all();
-        start_main_process();
+        start_main_process(in_path);
         yyparse();
 
         fclose(yyaskA);

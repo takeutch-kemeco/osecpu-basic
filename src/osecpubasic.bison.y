@@ -28,20 +28,22 @@
 
 #define YYMAXDEPTH 0x10000000
 
+extern char filepath[0x1000];
 extern int32_t linenumber;
 extern char* linelist[0x10000];
 
 /* 警告表示 */
-static void yywarning(const char *s)
+static void yywarning(const char *error_message)
 {
-        printf("line %05d: %s\n", linenumber, s);
-        printf("            %s\n", linelist[linenumber]);
+        printf("filepath: %s\n", filepath);
+        printf("line: %d\n", linenumber);
+        printf("%s\n", error_message);
 }
 
 /* エラー表示 */
-void yyerror(const char *s)
+void yyerror(const char *error_message)
 {
-        yywarning(s);
+        yywarning(error_message);
         exit(EXIT_FAILURE);
 }
 

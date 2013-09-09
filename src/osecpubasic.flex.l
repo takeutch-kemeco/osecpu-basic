@@ -24,14 +24,16 @@
 #include <stdint.h>
 #include "osecpubasic.bison.h"
 
+char filepath[0x1000];
 int32_t linenumber;
-char* linelist[0x10000];
 
 FILE* yyaskA;
 FILE* yyaskB;
 
 #define INCLUDE_DEPTH_MAX 0x10
 static YY_BUFFER_STATE include_stack[INCLUDE_DEPTH_MAX];
+static int32_t linenumber_stack[INCLUDE_DEPTH_MAX];
+static char filepath_stack[INCLUDE_DEPTH_MAX][0x1000];
 static int32_t cur_include_stack = 0;
 
 /* 前後をダブルクオートで囲まれた文字列から、それを取り除く。
@@ -124,25 +126,20 @@ static void remove_macro_define_table(char* iden)
 
 %}
 
-%x linelist_process
 %x pre_process
 %x pre_process_function
 %x pre_process_include
+
 %x main_process
 %x main_process_comment
 %x main_process_include
 %x main_process_define_iden
 %x main_process_define_replace
 %x main_process_undef_iden
+
 %x tune_process
 
 %%
-
-<linelist_process>^.*[\n] {
-        linelist[linenumber] = malloc(yyleng + 1);
-        strcpy(linelist[linenumber], yytext);
-        linenumber++;
-}
 
 <pre_process>"function" BEGIN(pre_process_function);
 <pre_process_function>[_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext); BEGIN(pre_process);}
@@ -152,13 +149,16 @@ static void remove_macro_define_table(char* iden)
 
 <pre_process>"#include" BEGIN(pre_process_include);
 <pre_process_include>["][^"]+["] {
-        char filepath[0x1000];
-        trim_const_string(filepath, yytext);
-
         if (cur_include_stack >= INCLUDE_DEPTH_MAX) {
                 printf("syntax err: #include が可能なネストは %d 段までです\n", INCLUDE_DEPTH_MAX);
                 exit(EXIT_FAILURE);
         }
+
+        strcpy(filepath_stack[cur_include_stack], filepath);
+        trim_const_string(filepath, yytext);
+
+        linenumber_stack[cur_include_stack] = linenumber;
+        linenumber = 1;
 
         include_stack[cur_include_stack] = YY_CURRENT_BUFFER;
         cur_include_stack++;
@@ -182,6 +182,8 @@ static void remove_macro_define_table(char* iden)
         } else {
                 yy_delete_buffer(YY_CURRENT_BUFFER);
                 yy_switch_to_buffer(include_stack[cur_include_stack]);
+                strcpy(filepath, filepath_stack[cur_include_stack]);
+                linenumber = linenumber_stack[cur_include_stack];
         }
 }
 
@@ -418,13 +420,16 @@ static void remove_macro_define_table(char* iden)
 
 <main_process>"#include" BEGIN(main_process_include);
 <main_process_include>["][^"]+["] {
-        char filepath[0x1000];
-        trim_const_string(filepath, yytext);
-
         if (cur_include_stack >= INCLUDE_DEPTH_MAX) {
                 printf("syntax err: #include が可能なネストは %d 段までです\n", INCLUDE_DEPTH_MAX);
                 exit(EXIT_FAILURE);
         }
+
+        strcpy(filepath_stack[cur_include_stack], filepath);
+        trim_const_string(filepath, yytext);
+
+        linenumber_stack[cur_include_stack] = linenumber;
+        linenumber = 1;
 
         include_stack[cur_include_stack] = YY_CURRENT_BUFFER;
         cur_include_stack++;
@@ -447,6 +452,8 @@ static void remove_macro_define_table(char* iden)
         } else {
                 yy_delete_buffer(YY_CURRENT_BUFFER);
                 yy_switch_to_buffer(include_stack[cur_include_stack]);
+                strcpy(filepath, filepath_stack[cur_include_stack]);
+                linenumber = linenumber_stack[cur_include_stack];
         }
 }
 
@@ -509,7 +516,22 @@ static void remove_macro_define_table(char* iden)
 
 %%
 
-void start_linelist_process(void) {linenumber = 1; BEGIN(linelist_process);}
-void start_pre_process(void) {linenumber = 1; BEGIN(pre_process);}
-void start_main_process(void) {linenumber = 1; BEGIN(main_process);}
-void start_tune_process(void) {YY_NEW_FILE; BEGIN(tune_process);}
+void start_pre_process(const char* __filepath)
+{
+        strcpy(filepath, __filepath);
+        linenumber = 1;
+        BEGIN(pre_process);
+}
+
+void start_main_process(const char* __filepath)
+{
+        strcpy(filepath, __filepath);
+        linenumber = 1;
+        BEGIN(main_process);
+}
+
+void start_tune_process(void)
+{
+        YY_NEW_FILE;
+        BEGIN(tune_process);
+}
