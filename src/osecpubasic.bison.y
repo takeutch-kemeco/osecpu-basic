@@ -623,7 +623,7 @@ static void varlist_set_scope_head(void)
 static void init_mem(void)
 {
         pA("VPtr mem_ptr:P04;");
-        pA("junkApi_malloc(mem_ptr, T_SINT32, %d);", MEM_SIZE);
+        pA("R38=0x06; R39=%d; DB(0x32, mem_ptr&0x3f,0x38,0x39);", MEM_SIZE);
 }
 
 static void write_mem(const char* regname_data,
@@ -824,7 +824,7 @@ static void pop_labelstack(void)
  */
 static char init_labelstack[] = {
         "VPtr labelstack_ptr:P01;\n"
-        "junkApi_malloc(labelstack_ptr, T_VPTR, " LABEL_INDEX_LEN_STR ");\n"
+        "R38=0x01; R39=" LABEL_INDEX_LEN_STR "; DB(0x32, labelstack_ptr&0x3f,0x38,0x39);\n"
         "VPtr labelstack_socket:" CUR_RETURN_LABEL ";\n"
         "SInt32 labelstack_head:R01;\n"
         "labelstack_head = 0;\n"
@@ -855,7 +855,7 @@ static void pop_attachstack(const char* register_name)
  */
 static char init_attachstack[] = {
         "VPtr attachstack_ptr:P05;\n"
-        "junkApi_malloc(attachstack_ptr, T_SINT32, 0x100000);\n"
+        "R38=0x06; R39=0x1000; DB(0x32, attachstack_ptr&0x3f,0x38,0x39);\n"
         "SInt32 attachstack_socket:R20;\n"
         "SInt32 attachstack_head:R21;\n"
         "attachstack_head = 0;\n"
