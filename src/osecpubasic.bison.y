@@ -620,32 +620,22 @@ static void varlist_set_scope_head(void)
 
 #define MEM_SIZE (0x100000)
 
-const char mem_ptr[] = "P04";
-const char mem_ptr_tmp[] = "P06";
-
 static void init_mem(void)
 {
-        pA("LIMM(R38, T_SINT32);");
-        pA("LIMM(R39, %d);", MEM_SIZE);
-        pA("DB(0x32, %s & 0x3f, 0x38, 0x39);", mem_ptr);
+        pA("VPtr mem_ptr:P04;");
+        pA("junkApi_malloc(mem_ptr, T_SINT32, %d);", MEM_SIZE);
 }
 
 static void write_mem(const char* regname_data,
                       const char* regname_address)
 {
-        pA("PCP(%s, %s);", mem_ptr_tmp, mem_ptr);
-        pA("PADD(%s, T_SINT32, %s, %s);", mem_ptr, mem_ptr, regname_address);
-        pA("SMEM(%s, T_SINT32, %s, 0);", regname_data, mem_ptr);
-        pA("PCP(%s, %s);", mem_ptr, mem_ptr_tmp);
+        pA("PASMEM0(%s, T_SINT32, mem_ptr, %s);", regname_data, regname_address);
 }
 
 static void read_mem(const char* regname_data,
                      const char* regname_address)
 {
-        pA("PCP(%s, %s);", mem_ptr_tmp, mem_ptr);
-        pA("PADD(%s, T_SINT32, %s, %s);", mem_ptr, mem_ptr, regname_address);
-        pA("LMEM(%s, T_SINT32, %s, 0);", regname_data, mem_ptr);
-        pA("PCP(%s, %s);", mem_ptr, mem_ptr_tmp);
+        pA("PALMEM0(%s, T_SINT32, mem_ptr, %s);", regname_data, regname_address);
 }
 
 /* スタック構造関連
@@ -655,17 +645,13 @@ static void read_mem(const char* regname_data,
 
 #define STACK_BEGIN_ADDRESS (MEM_SIZE - 0x10000)
 
-const char stack_socket[] = "R02";
-const char stack_head[] = "R03";
-const char stack_frame[] = "R12";
-
 /* 任意のレジスターの値をスタックにプッシュする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  */
 static void push_stack(const char* regname_data)
 {
-        write_mem(regname_data, stack_head);
-        pA("ADD(%s, %s, 1);", stack_head, stack_head);
+        write_mem(regname_data, "stack_head");
+        pA("stack_head++;");
 
 #ifdef DEBUG_STACK
         pA("junkApi_putConstString('push_stack(),stack_head=');");
@@ -679,8 +665,8 @@ static void push_stack(const char* regname_data)
  */
 static void pop_stack(const char* regname_data)
 {
-        pA("SUB(%s, %s, 1);", stack_head, stack_head);
-        read_mem(regname_data, stack_head);
+        pA("stack_head--;");
+        read_mem(regname_data, "stack_head");
 
 #ifdef DEBUG_STACK
         pA("junkApi_putConstString('pop_stack(),stack_head=');");
@@ -695,7 +681,7 @@ static void pop_stack(const char* regname_data)
  */
 static void push_stack_dummy(void)
 {
-        pA("ADD(%s, %s, 1);", stack_head, stack_head);
+        pA("stack_head++;");
 }
 
 /* スタックからのダミーポップ
@@ -704,15 +690,19 @@ static void push_stack_dummy(void)
  */
 static void pop_stack_dummy(void)
 {
-        pA("SUB(%s, %s, 1);", stack_head, stack_head);
+        pA("stack_head--;");
 }
 
 /* スタックの初期化
  */
 static void init_stack(void)
 {
-        pA("LIMM(%s, %d);", stack_head, STACK_BEGIN_ADDRESS);
-        pA("LIMM(%s, 0);", stack_frame, 0);
+        pA("SInt32 stack_socket:R02;");
+        pA("SInt32 stack_head:R03;");
+        pA("SInt32 stack_frame:R12;");
+
+        pA("stack_head = %d;", STACK_BEGIN_ADDRESS);
+        pA("stack_frame = 0;");
 }
 
 /* スタック関連の各種レジスターの値を、実行時に画面に印字する
@@ -720,7 +710,6 @@ static void init_stack(void)
  */
 static void debug_stack(void)
 {
-#ifdef DEBUG_STACK
         pA("junkApi_putConstString('stack_socket[');");
         pA("junkApi_putStringDec('\\1', stack_socket, 11, 1);");
         pA("junkApi_putConstString('], stack_head[');");
@@ -728,11 +717,7 @@ static void debug_stack(void)
         pA("junkApi_putConstString('], stack_frame[');");
         pA("junkApi_putStringDec('\\1', stack_frame, 11, 1);");
         pA("junkApi_putConstString(']\\n');");
-#endif /* DEBUG_STACK */
 }
-
-/* ラベルリスト関連
- */
 
 /* 現在の使用可能なラベルインデックスのヘッド
  * この値から LABEL_INDEX_LEN 未満までの間が、まだ未使用なユニークラベルのサフィックス番号。
@@ -740,16 +725,9 @@ static void debug_stack(void)
  */
 static int32_t cur_label_index_head = 0;
 
-/* gosub での return 先ラベルの保存用に使うポインターレジスター */
-#define CUR_RETURN_LABEL "P02"
-
-const char labelstack_ptr[] = "P01";
-const char labelstack_ptr_tmp[] = "P03";
-const char labelstack_socket[] = CUR_RETURN_LABEL;
-const char labelstack_head[] = "R01";
-
 /* ラベルの使用可能最大数 */
 #define LABEL_INDEX_LEN 2048
+#define LABEL_INDEX_LEN_STR "2048"
 
 #define LABEL_STR_LEN 0x100
 struct Label {
@@ -810,18 +788,17 @@ void labellist_add(const char* str)
         }
 }
 
+/* gosub での return 先ラベルの保存用に使うポインターレジスター */
+#define CUR_RETURN_LABEL "P02"
+
 /* ラベルスタックにラベル型（VPtr型）をプッシュする
  * 事前に以下のレジスタをセットしておくこと:
  * labelstack_socket : プッシュしたい値。（VPtr型）
  */
 static void push_labelstack(void)
 {
-        pA("PCP(%s, %s);", labelstack_ptr_tmp, labelstack_ptr);
-        pA("PADD(%s, T_VPTR, %s, %s);", labelstack_ptr, labelstack_ptr, labelstack_head);
-        pA("SMEM(%s, T_VPTR, %s, 0);", labelstack_socket, labelstack_ptr);
-        pA("PCP(%s, %s);", labelstack_ptr, labelstack_ptr_tmp);
-
-        pA("ADD(%s, %s, 1);", labelstack_head, labelstack_head);
+        pA("PAPSMEM0(labelstack_socket, T_VPTR, labelstack_ptr, labelstack_head);");
+        pA("labelstack_head++;");
 }
 
 /* ラベルスタックからラベル型（VPtr型）をポップする
@@ -829,98 +806,72 @@ static void push_labelstack(void)
  */
 static void pop_labelstack(void)
 {
-        pA("SUB(%s, %s, 1);", labelstack_head, labelstack_head);
-
-        pA("PCP(%s, %s);", labelstack_ptr_tmp, labelstack_ptr);
-        pA("PADD(%s, T_VPTR, %s, %s);", labelstack_ptr, labelstack_ptr, labelstack_head);
-        pA("LMEM(%s, T_VPTR, %s, 0);", labelstack_socket, labelstack_ptr);
-        pA("PCP(%s, %s);", labelstack_ptr, labelstack_ptr_tmp);
+        pA("labelstack_head--;");
+        pA("PAPLMEM0(labelstack_socket, T_VPTR, labelstack_ptr, labelstack_head);");
 }
 
 /* ラベルスタックの初期化
- * 関数呼び出しを再帰的に行った場合でも return での戻りラベルを正しく扱えるように、
+ * gosub, return の実装において、呼び出しを再帰的に行った場合でも return での戻りラベルを正しく扱えるように、
  * ラベルをスタックに積むためのもの。
  *
- * labelstack_socket は CUR_RETURN_LABELが指すレジスターと同一。
- * これら２つの名前は union の関係。
+ * labelstack_socket は CUR_RETURN_LABELが指すレジスターと同一なので、
+ * （命令次元におけるVPtr型と、コンパイル次元における文字列型との、次元の違いこそあるが）
+ * 感覚としてはこれら２つの名前は union の関係。
  *
  * ラベルは、一般的なプログラムにおけるジャンプ先アドレスと考えて問題ない。
  * （ただしこのジャンプ先は、予め明示的に指定する必要が有り、それ以外へのジャンプ方法が存在しないという制限がかかる。
  * また特殊なレジスタでしか扱えない）
  */
-static void init_labelstack(void)
-{
-        pA("LIMM(R38, T_VPTR);");
-        pA("LIMM(R39, %d);", LABEL_INDEX_LEN);
-        pA("DB(0x32, %s & 0x3f, 0x38, 0x39);", labelstack_ptr);
-
-        pA("LIMM(%s, 0);", labelstack_head);
-}
-
-/* アタッチスタック関連
- */
-
-const char attachstack_ptr[] = "P05";
-const char attachstack_ptr_tmp[] = "P07";
-const char attachstack_socket[] = "R20";
-const char attachstack_head[] = "R21";
+static char init_labelstack[] = {
+        "VPtr labelstack_ptr:P01;\n"
+        "junkApi_malloc(labelstack_ptr, T_VPTR, " LABEL_INDEX_LEN_STR ");\n"
+        "VPtr labelstack_socket:" CUR_RETURN_LABEL ";\n"
+        "SInt32 labelstack_head:R01;\n"
+        "labelstack_head = 0;\n"
+};
 
 /* 任意のレジスターの値(SInt32型)を、アタッチスタックにプッシュする
  * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  * また、代入プロセスが省略できるので高速化する
  */
-static void push_attachstack(const char* regname_data)
+static void push_attachstack(const char* register_name)
 {
-        pA("PCP(%s, %s);", attachstack_ptr_tmp, attachstack_ptr);
-        pA("PADD(%s, T_SINT32, %s, %s);", attachstack_ptr, attachstack_ptr, attachstack_head);
-        pA("SMEM(%s, T_SINT32, %s, 0);", regname_data, attachstack_ptr);
-        pA("PCP(%s, %s);", attachstack_ptr, attachstack_ptr_tmp);
-
-        pA("ADD(%s, %s, 1);", attachstack_head, attachstack_head, 1);
+        pA("PASMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
+        pA("attachstack_head++;");
 }
 
 /* アタッチスタックからアドレス(SInt32型)を、任意のレジスターへプッシュする
  * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
  * また、代入プロセスが省略できるので高速化する
  */
-static void pop_attachstack(const char* regname_data)
+static void pop_attachstack(const char* register_name)
 {
-        pA("SUB(%s, %s, 1);", attachstack_head, attachstack_head, 1);
-
-        pA("PCP(%s, %s);", attachstack_ptr_tmp, attachstack_ptr);
-        pA("PADD(%s, T_SINT32, %s, %s);", attachstack_ptr, attachstack_ptr, attachstack_head);
-        pA("LMEM(%s, T_SINT32, %s, 0);", regname_data, attachstack_ptr);
-        pA("PCP(%s, %s);", attachstack_ptr, attachstack_ptr_tmp);
+        pA("attachstack_head--;");
+        pA("PALMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
 }
 
 /* アタッチスタックの初期化
  * アタッチスタックは、アタッチに用いるためのアドレスをスタックで管理するためのもの。
  */
-static void init_attachstack(void)
-{
-        pA("LIMM(R38, T_SINT32);");
-        pA("LIMM(R39, %d);", 0x100000);
-        pA("DB(0x32, %s & 0x3f, 0x38, 0x39);", attachstack_ptr);
-
-        pA("LIMM(%s, 0);", attachstack_head);
-}
+static char init_attachstack[] = {
+        "VPtr attachstack_ptr:P05;\n"
+        "junkApi_malloc(attachstack_ptr, T_SINT32, 0x100000);\n"
+        "SInt32 attachstack_socket:R20;\n"
+        "SInt32 attachstack_head:R21;\n"
+        "attachstack_head = 0;\n"
+};
 
 /* アタッチスタック関連の各種レジスターの値を、実行時に画面に印字する
  * 主にデバッグ用
  */
 static void debug_attachstack(void)
 {
-#ifdef DEBUG_ATTACHSTACK
         pA("junkApi_putConstString('attachstack_socket[');");
         pA("junkApi_putStringDec('\\1', attachstack_socket, 11, 1);");
         pA("junkApi_putConstString('], attachstack_head[');");
         pA("junkApi_putStringDec('\\1', attachstack_head, 11, 1);");
         pA("junkApi_putConstString(']\\n');");
-#endif /* DEBUG_ATTACHSTACK */
 }
-
-/* beginF(), endF() 関連
- */
 
 /* プリセット関数やアキュムレーターを呼び出し命令に対して、追加でさらに共通の定型命令を出力する。
  * すなわち、関数呼び出しのラッパ。
@@ -990,24 +941,22 @@ static void retF(void)
 /* ヒープメモリー関連
  */
 
-const char heap_ptr[] = "P04";
-const char heap_socket[] = "R04";
-const char heap_base[] = "R06";
-const char heap_offset[] = "R05";
-
 /* ヒープメモリーの初期化
  */
 void init_heap(void)
 {
-        pA("LIMM(%s, 0);", heap_base);
-}
+        pA("VPtr heap_ptr:P04;");
+        pA("SInt32 heap_socket:R04;");
+        pA("SInt32 heap_base:R06;");
+        pA("SInt32 heap_offset:R05;");
+        pA("heap_base = 0;");
+};
 
 /* ヒープメモリー関連の各種レジスターの値を、実行時に画面に印字する
  * 主にデバッグ用
  */
 static void debug_heap(void)
 {
-#ifdef DEBUG_HEAP
         pA("junkApi_putConstString('heap_socket[');");
         pA("junkApi_putStringDec('\\1', heap_socket, 11, 1);");
         pA("junkApi_putConstString('], heap_base[');");
@@ -1015,41 +964,14 @@ static void debug_heap(void)
         pA("junkApi_putConstString('], heap_offset[');");
         pA("junkApi_putStringDec('\\1', heap_offset, 11, 1);");
         pA("junkApi_putConstString(']\\n');");
-#endif /* DEBUG_HEAP */
 }
-
-/* eoe 関連
- */
-
-/* read_eoe_arg 用変数の初期化
- *
- * push_eoe(), pop_eoe() ともに、 fixA, fixA1, fixA2, fixA3 はスタックへ退避しない。
- * この fixA? は eoe 間で値を受け渡しする為に用いるので、push_eoe(), pop_eoe() に影響されないようにしてある。
- * （push後に行った演算の結果を fixA? に入れておくことで、その後にpop_eoe()した後でも演算結果を引き継げるように）
- *
- * fixA1 ～ fixA3 も、 fixA 同様に戻り値の受け渡しに使える。
- */
-const char fixA[] = "R07";
-const char fixL[] = "R08";
-const char fixR[] = "R09";
-const char fixLx[] = "R0A";
-const char fixRx[] = "R0B";
-const char fixS[] = "R0C";
-const char fixT[] = "R0D";
-const char fixT1[] = "R0E";
-const char fixT2[] = "R0F";
-const char fixT3[] = "R10";
-const char fixT4[] = "R25";
-const char fixA1[] = "R22";
-const char fixA2[] = "R23";
-const char fixA3[] = "R24";
 
 /* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
  */
 static void read_eoe_arg(void)
 {
-        pop_stack(fixR);
-        pop_stack(fixL);
+        pop_stack("fixR");
+        pop_stack("fixL");
 }
 
 /* eoe用レジスタをスタックへプッシュする
@@ -1058,16 +980,16 @@ static void push_eoe(void)
 {
         beginF();
 
-        push_stack(fixL);
-        push_stack(fixR);
-        push_stack(fixLx);
-        push_stack(fixRx);
-        push_stack(fixS);
-        push_stack(fixT);
-        push_stack(fixT1);
-        push_stack(fixT2);
-        push_stack(fixT3);
-        push_stack(fixT4);
+        push_stack("fixL");
+        push_stack("fixR");
+        push_stack("fixLx");
+        push_stack("fixRx");
+        push_stack("fixS");
+        push_stack("fixT");
+        push_stack("fixT1");
+        push_stack("fixT2");
+        push_stack("fixT3");
+        push_stack("fixT4");
 
         endF();
 }
@@ -1078,23 +1000,21 @@ static void pop_eoe(void)
 {
         beginF();
 
-        pop_stack(fixT4);
-        pop_stack(fixT3);
-        pop_stack(fixT2);
-        pop_stack(fixT1);
-        pop_stack(fixT);
-        pop_stack(fixS);
-        pop_stack(fixRx);
-        pop_stack(fixLx);
-        pop_stack(fixR);
-        pop_stack(fixL);
+        pop_stack("fixT4");
+        pop_stack("fixT3");
+        pop_stack("fixT2");
+        pop_stack("fixT1");
+        pop_stack("fixT");
+        pop_stack("fixS");
+        pop_stack("fixRx");
+        pop_stack("fixLx");
+        pop_stack("fixR");
+        pop_stack("fixL");
 
         endF();
-}
+};
 
-static void debug_eoe(void)
-{
-#ifdef DEBUG_EOE
+static char debug_eoe[] = {
         "junkApi_putConstString('\\nfixL:');"
         "junkApi_putStringDec('\\1', fixL, 11, 1);"
         "junkApi_putConstString(' fixR:');"
@@ -1124,59 +1044,84 @@ static void debug_eoe(void)
         "junkApi_putConstString(' fixA3:');"
         "junkApi_putStringDec('\\1', fixA3, 11, 1);"
         "junkApi_putConstString('\\n');"
-#endif /* DEBUG_EOE */
-}
+};
 
-/* 行列演算関連
+/* read_eoe_arg 用変数の初期化
+ *
+ * push_eoe(), pop_eoe() ともに、例外として fixA スタックへ退避しない。
+ * この fixA は eoe 間で値を受け渡しする為に用いるので、push_eoe(), pop_eoe() に影響されないようにしてある。
+ * （push後に行った演算の結果をfixAに入れておくことで、その後にpopした後でも演算結果を引き継げるように）
+ *
+ * fixA1 ～ fixA3 も、 fixA 同様に戻り値の受け渡しに使える。
  */
+static char init_eoe_arg[] = {
+        "SInt32 fixA:R07;\n"
+        "SInt32 fixL:R08;\n"
+        "SInt32 fixR:R09;\n"
+        "SInt32 fixLx:R0A;\n"
+        "SInt32 fixRx:R0B;\n"
+        "SInt32 fixS:R0C;\n"
+        "SInt32 fixT:R0D;\n"
+        "SInt32 fixT1:R0E;\n"
+        "SInt32 fixT2:R0F;\n"
+        "SInt32 fixT3:R10;\n"
+        "SInt32 fixT4:R25;\n"
+        "SInt32 fixA1:R22;\n"
+        "SInt32 fixA2:R23;\n"
+        "SInt32 fixA3:R24;\n"
+};
 
 /* ope_matrix 用変数の初期化
  *
  * 3 * 3 行列以下の小さな行列演算の高速化を書きやすいように、一部の変数はunionの関係となっている。
  */
+static char init_matrix[] = {
+        /* 主にループ処理の必要な大きな行列処理時に用いる想定
+         */
+        "SInt32 matfixL: R14;\n"
+        "SInt32 matfixR: R15;\n"
+        "SInt32 matfixA: R16;\n"
+        "SInt32 matfixtmp: R17;\n"
+        "SInt32 matcountcol: R18;\n"
+        "SInt32 matcountrow: R19;\n"
+        "SInt32 matcol: R1A;\n"
+        "SInt32 matrow: R1B;\n"
 
-/* 主にループ処理の必要な大きな行列処理時に用いる想定
- */
-const char matfixL[] = "R14";
-const char matfixR[] = "R15";
-const char matfixA[] = "R16";
-const char matfixtmp[] = "R17";
-const char matcountcol[] = "R18";
-const char matcountrow[] = "R19";
-const char matcol[] = "R1A";
-const char matrow[] = "R1B";
+        /* 主に3*3以下の小さな行列処理時に用いる想定
+         * （ループ目的の場合の名前とは、一部のレジスターがunion関係となっている）
+         */
+        "SInt32 matfixE0: R14;\n"
+        "SInt32 matfixE1: R15;\n"
+        "SInt32 matfixE2: R16;\n"
+        "SInt32 matfixE3: R17;\n"
+        "SInt32 matfixE4: R18;\n"
+        "SInt32 matfixE5: R19;\n"
+        "SInt32 matfixE6: R1A;\n"
+        "SInt32 matfixE7: R1B;\n"
+        "SInt32 matfixE8: R1C;\n"
 
-/* 主に3*3以下の小さな行列処理時に用いる想定
- * （ループ目的の場合の名前とは、一部のレジスターがunion関係となっている）
- */
-const char matfixE0[] = "R14";
-const char matfixE1[] = "R15";
-const char matfixE2[] = "R16";
-const char matfixE3[] = "R17";
-const char matfixE4[] = "R18";
-const char matfixE5[] = "R19";
-const char matfixE6[] = "R1A";
-const char matfixE7[] = "R1B";
-const char matfixE8[] = "R1C";
-
-/* 3項それぞれのベースアドレス保存用。（アタッチへの対応用）
- */
-const char matbpL[] = "R26";
-const char matbpR[] = "R27";
-const char matbpA[] = "R28";
+        /* 3項それぞれのベースアドレス保存用。（アタッチへの対応用）
+         */
+        "SInt32 matbpL: R26;\n"
+        "SInt32 matbpR: R27;\n"
+        "SInt32 matbpA: R28;\n"
+};
 
 /* 全ての初期化
  */
 void init_all(void)
 {
         pA("#include \"osecpu_ask.h\"\n");
-//      pA("LOCALLABELS(1024);");
+
+        pA("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
 
         init_mem();
         init_heap();
         init_stack();
-        init_labelstack();
-        init_attachstack();
+        pA(init_labelstack);
+        pA(init_attachstack);
+        pA(init_eoe_arg);
+        pA(init_matrix);
 }
 
 /* 各種アキュムレーター
@@ -1194,7 +1139,7 @@ void init_all(void)
  */
 static void __func_add_int(void)
 {
-        pA("ADD(%s, %s, &s);", fixA, fixL, fixR);
+        pA("fixA = fixL + fixR;");
 }
 
 /* int同士での減算命令を出力する
@@ -1203,7 +1148,7 @@ static void __func_add_int(void)
  */
 static void __func_sub_int(void)
 {
-        pA("SUB(%s, %s, &s);", fixA, fixL, fixR);
+        pA("fixA = fixL - fixR;");
 }
 
 /* int同士での乗算命令を出力する
@@ -1212,7 +1157,7 @@ static void __func_sub_int(void)
  */
 static void __func_mul_int(void)
 {
-        pA("MUL(%s, %s, &s);", fixA, fixL, fixR);
+        pA("fixA = fixL * fixR;");
 }
 
 /* int同士での除算命令を出力する
@@ -1221,7 +1166,7 @@ static void __func_mul_int(void)
  */
 static void __func_div_int(void)
 {
-        pA("DIV(%s, %s, &s);", fixA, fixL, fixR);
+        pA("fixA = fixL / fixR;");
 }
 
 /* int同士での余り算命令を出力する
@@ -1230,7 +1175,7 @@ static void __func_div_int(void)
  */
 static void __func_mod_int(void)
 {
-        pA("MOD(%s, %s, &s);", fixA, fixL, fixR);
+        pA("fixA = fixL % fixR;");
 }
 
 /* intの符号反転命令を出力する
@@ -1239,7 +1184,7 @@ static void __func_mod_int(void)
  */
 static void __func_minus_int(void)
 {
-        pA("MUL(%s, %s, &s);", fixA, fixL, -1);
+        pA("fixA = -fixL;");
 }
 
 /* int同士でのAND命令を出力する
@@ -1248,7 +1193,7 @@ static void __func_minus_int(void)
  */
 static void __func_and_int(void)
 {
-        pA("AND(%s, %s, &s);", fixA, fixL, fixR);
+        pA("fixA = fixL & fixR;");
 }
 
 /* int同士でのOR命令を出力する
@@ -1257,7 +1202,7 @@ static void __func_and_int(void)
  */
 static void __func_or_int(void)
 {
-        pA("OR(%s, %s, &s);", fixA, fixL, fixR);
+        pA("fixA = fixL | fixR;");
 }
 
 /* int同士でのXOR命令を出力する
@@ -1266,7 +1211,7 @@ static void __func_or_int(void)
  */
 static void __func_xor_int(void)
 {
-        pA("XOR(%s, %s, &s);", fixA, fixL, fixR);
+        pA("fixA = fixL ^ fixR;");
 }
 
 /* intのビット反転命令を出力する
@@ -1275,7 +1220,7 @@ static void __func_xor_int(void)
  */
 static void __func_invert_int(void)
 {
-        pA("XOR(%s, %s, &s);", fixA, fixL, -1);
+        pA("fixA = fixL ^ (-1);");
 }
 
 /* intのNOT命令を出力する
@@ -1284,10 +1229,7 @@ static void __func_invert_int(void)
  */
 static void __func_not_int(void)
 {
-        pA("LIMM(%s, 1);", fixA);
-        pA("CMPNE(%s, %s, 0);", fixA1, fixL);
-        pA("CND(%s);", fixA1);
-        pA("LIMM(%s, 0);", fixA);
+        pA("if (fixL != 0) {fixA = 0;} else {fixA = 1;}");
 }
 
 /* intの左シフト命令を出力する
@@ -1296,7 +1238,7 @@ static void __func_not_int(void)
  */
 static void __func_lshift_int(void)
 {
-        pA("SHL(%s, %s, %s);", fixA, fixL, fixR);
+        pA("fixA = fixL << fixR;");
 }
 
 /* intの右シフト命令を出力する（算術シフト）
@@ -1307,36 +1249,20 @@ static void __func_lshift_int(void)
  */
 static void __func_arithmetic_rshift_int(void)
 {
-        static int32_t ll[3] = {[0] = -1};
-        if (ll[0] == -1) {
-                ll[0] = cur_label_index_head++;
-                ll[1] = cur_label_index_head++;
-                ll[2] = cur_label_index_head++;
-        }
-
-        pA("CMPGE(%s, %s, 32);", fixA1, fixR);
-        pA("CND(%s);", fixA1);
-        pA("PCP(P3F, %d);", ll[0]);
-
-        pA("CMPL(%s, %s, 0);", fixA1, fixL);
-        pA("CND(%s);", fixA1);
-        pA("PCP(P3F, %d);", ll[1]);
-
-        pA("SAR(%s, %s, %s);", fixA, fixL, fixR);
-        pA("PCP(P3F, %d);", ll[2]);
-
-        pA("LB(0, %d);", ll[1]);
-        pA("XOR(%s, %s, -1);" , fixL, fixL);
-        pA("ADD(%s, %s, 1);", fixL, fixL);
-        pA("SAR(%s, %s, %s);", fixL, fixL, fixR);
-        pA("XOR(%s, %s, -1);" , fixL, fixL);
-        pA("ADD(%s, %s, 1);", fixA, fixL);
-        pA("PCP(P3F, %d);", ll[2]);
-
-        pA("LB(0, %d);", ll[0]);
-        pA("LIMM(%s, 0);", fixA);
-
-        pA("LB(0, %d);", ll[2]);
+        pA("if (fixR >= 32) {");
+                pA("fixA = 0;");
+        pA("} else {");
+                pA("if (fixL < 0) {");
+                        pA("fixL = ~fixL;");
+                        pA("fixL++;");
+                        pA("fixL >>= fixR;");
+                        pA("fixL = ~fixL;");
+                        pA("fixL++;");
+                        pA("fixA = fixL;");
+                pA("} else {");
+                        pA("fixA = fixL >> fixR;");
+                pA("}");
+        pA("}");
 }
 
 /* intの右シフト命令を出力する（論理シフト）
@@ -1347,38 +1273,19 @@ static void __func_arithmetic_rshift_int(void)
  */
 static void __func_logical_rshift_int(void)
 {
-        static int32_t ll[3] = {[0] = -1};
-        if (ll[0] == -1) {
-                ll[0] = cur_label_index_head++;
-                ll[1] = cur_label_index_head++;
-                ll[2] = cur_label_index_head++;
-        }
-
-        pA("CMPGE(%s, %s, 32);", fixA1, fixR);
-        pA("CND(%s);", fixA1);
-        pA("PCP(P3F, %d);", ll[0]);
-
-        pA("CMPL(%s, %s, 0);", fixA1, fixL);
-        pA("CMPGE(%s, %s, 0);", fixA2, fixR);
-        pA("AND(%s, %s, %s);", fixA1, fixA1, fixA2);
-        pA("CND(%s);", fixA1);
-        pA("PCP(P3F, %d);", ll[1]);
-
-        pA("SAR(%s, %s, %s);", fixA, fixL, fixR);
-        pA("PCP(P3F, %d);", ll[2]);
-
-        pA("LB(0, %d);", ll[1]);
-        pA("LIMM(%s, 0x7fffffff);", fixL);
-        pA("SAR(%s, %s, %s);", fixL, fixL, fixR);
-        pA("SUB(%s, %s, 1);", fixR, fixR);
-        pA("SAR(%s, 0x40000000, %s);", fixA, fixR);
-        pA("OR(%s, %s, %s);", fixA, fixA, fixL);
-        pA("PCP(P3F, %d);", ll[2]);
-
-        pA("LB(0, %d);", ll[0]);
-        pA("LIMM(%s, 0);", fixA);
-
-        pA("LB(0, %d);", ll[2]);
+        pA("if (fixR >= 32) {");
+                pA("fixA = 0;");
+        pA("} else {");
+                pA("if ((fixL < 0) & (fixR >= 1)) {");
+                        pA("fixL &= 0x7fffffff;");
+                        pA("fixL >>= fixR;");
+                        pA("fixR--;");
+                        pA("fixA = 0x40000000 >> fixR;");
+                        pA("fixA |= fixL;");
+                pA("} else {");
+                        pA("fixA = fixL >> fixR;");
+                pA("}");
+        pA("}");
 }
 
 /* float 型用アキュムレーター
@@ -1393,7 +1300,7 @@ static void __func_logical_rshift_int(void)
  */
 static void __func_add_float(void)
 {
-        pA("ADD(%s, %s, %s);", fixA, fixL, fixR);
+        pA("fixA = fixL + fixR;");
 }
 
 /* float同士での減算命令を出力する
@@ -1402,7 +1309,7 @@ static void __func_add_float(void)
  */
 static void __func_sub_float(void)
 {
-        pA("SUB(%s, %s, %s);", fixA, fixL, fixR);
+        pA("fixA = fixL - fixR;");
 }
 
 /* float同士での乗算命令を出力する
@@ -1411,68 +1318,27 @@ static void __func_sub_float(void)
  */
 static void __func_mul_inline_float(void)
 {
-        static int32_t ll[3] = {[0] = -1};
-        if (ll[0] == -1) {
-                ll[0] = cur_label_index_head++;
-                ll[1] = cur_label_index_head++;
-                ll[2] = cur_label_index_head++;
-        }
+        /* 符号を保存しておき、+へ変換する*/
+        pA("fixS = 0;");
+        pA("if (fixL < 0) {fixL = -fixL; fixS |= 1;}");
+        pA("if (fixR < 0) {fixR = -fixR; fixS |= 2;}");
 
-        /* 符号を保存しておき、+へ変換する
+        pA("fixRx = (fixR & 0xffff0000) >> 16;");
+        pA("fixLx = (fixL & 0xffff0000);");
+
+        pA("fixR = fixR & 0x0000ffff;");
+        pA("fixL = fixL & 0x0000ffff;");
+
+        pA("fixA = "
+           "(((fixL >> 1) * fixR) >> 15) + "
+           "((fixLx >> 16) * fixR) + "
+           "(fixLx * fixRx) + "
+           "(fixL * fixRx);");
+
+        /* 符号を元に戻す
+         * fixS の値は、 & 0x00000003 した状態と同様の値のみである前提
          */
-        pA("LIMM(%s, 0);", fixS);
-
-        pA("CMPGE(%s, %s, 0);", fixA1, fixL);
-        pA("CND(%s);", fixA1);
-        pA("PCP(P3F, %d);", ll[0]);
-
-        pA("MUL(%s, %s, -1);", fixL, fixL);
-        pA("OR(%s, %s, 1);", fixS, fixS);
-        pA("LB(0, %d);", ll[0]);
-
-        pA("CMPGE(%s, %s, 0);", fixA1, fixR);
-        pA("CND(%s);", fixA1);
-        pA("PCP(P3F, %d);", ll[1]);
-
-        pA("MUL(%s, %s, -1);", fixR, fixR);
-        pA("OR(%s, %s, 2);", fixS, fixS);
-        pA("LB(0, %d);", ll[1]);
-
-        /* 共通項を先に計算しておく
-         */
-        pA("AND(%s, %s, 0xffff0000);", fixRx, fixR);
-        pA("SAR(%s, %s, 16);", fixRx, fixRx);
-
-        pA("AND(%s, %s, 0xffff0000);", fixLx, fixL);
-
-        pA("AND(%s, %s, 0x0000ffff);", fixR, fixR);
-
-        pA("AND(%s, %s, 0x0000ffff);", fixL, fixL);
-
-        /* それらを用いて乗算
-         */
-        pA("SAR(%s, %s, 1);", fixA, fixL);
-        pA("MUL(%s, %s, %s);", fixA, fixA, fixR);
-        pA("SAR(%s, %s, 15);", fixA, fixA);
-
-        pA("SAR(%s, %s, 16);", fixA1, fixLx);
-        pA("MUL(%s, %s, %s);", fixA1, fixA1, fixR);
-
-        pA("MUL(%s, %s, %s);", fixA2, fixLx, fixRx);
-
-        pA("MUL(%s, %s, %s);", fixA3, fixL, fixRx);
-
-        pA("Add(%s, %s, %s);", fixA, fixA, fixA1);
-        pA("Add(%s, %s, %s);", fixA, fixA, fixA2);
-        pA("Add(%s, %s, %s);", fixA, fixA, fixA3);
-
-        pA("AND(%s, %s, 3);", fixA1, fixS);
-        pA("CMPNE(%s, %s, 0);", fixA1, fixA1);
-        pA("CND(%s);", fixA1);
-        pA("PCP(P3F, %d);", ll[2]);
-
-        pA("MUL(%s, %s, -1);", fixA, fixA);
-        pA("LB(0, %d);", ll[2]);
+        pA("if ((fixS == 0x00000001) | (fixS == 0x00000002)) {fixA = -fixA;}");
 }
 
 static void __func_mul_float(void)
@@ -1501,14 +1367,11 @@ static void __func_div_float(void)
          * したがって結果を << 2 すれば（16 - 14 = 2だから） 0x00010000 を 1 とした場合での値となるはず。
          */
 
-        /* 絶対に0除算が起きないように、0ならば最小数に置き換えてから除算
-         */
-        pA("CMPE(%s, %s, 0);", fixA1, fixR);
-        pA("CND(%s);", fixA1);
-        pA("LIMM(%s, 1);", fixR);
+        /* 絶対に0除算が起きないように、0ならば最小数に置き換えてから除算 */
+        pA("if (fixR == 0) {fixR = 1;}");
+        pA("fixRx = 0x40000000 / fixR;");
 
-        pA("DIV(%s, 0x40000000, %s);", fixRx, fixR);
-        pA("SHL(%s, %s, 2);", fixR, fixRx);
+        pA("fixR = fixRx << 2;");
 
         /* 逆数を乗算することで除算とする */
         __func_mul_inline_float();
@@ -1524,95 +1387,42 @@ static void __func_mod_float(void)
 {
         beginF();
 
-        static int32_t ll[10] = {[0] = -1};
-        if (ll[0] == -1) {
-                ll[0] = cur_label_index_head++;
-                ll[1] = cur_label_index_head++;
-                ll[2] = cur_label_index_head++;
-                ll[3] = cur_label_index_head++;
-                ll[4] = cur_label_index_head++;
-                ll[5] = cur_label_index_head++;
-                ll[6] = cur_label_index_head++;
-        }
-
         /* 符号付き剰余
          */
 
         /* fixL, fixR それぞれの絶対値
          */
-        pA("CMPGE(%s, %s, 0);", fixA1, fixL);
-        pA("CND(%s);", fixA1);
-        pA("PCP(P3F, %d);", ll[0]);
+        pA("if (fixL >= 0) {fixLx = fixL;} else {fixLx = -fixL;}");
+        pA("if (fixR >= 0) {fixRx = fixR;} else {fixRx = -fixR;}");
 
-        pA("MUL(%s, %s, -1);", fixLx, fixL);
-        pA("PCP(P3F, %d);", ll[1]);
-
-        pA("LB(0, %d);", ll[0]);
-        pA("LIMM(%s, %s);", fixLx, fixL); /* CP */
-
-        pA("LB(0, %d);", ll[1]);
-
-        pA("CMPGE(%s, %s, 0);", fixA1, fixR);
-        pA("CND(%s);", fixA1);
-        pA("PCP(P3F, %d);", ll[2]);
-
-        pA("MUL(%s, %s, -1);", fixRx, fixR);
-        pA("PCP(P3F, %d);", ll[3]);
-
-        pA("LB(0, %d);", ll[2]);
-        pA("LIMM(%s, %s);", fixRx, fixR); /* CP */
-
-        pA("LB(0, %d);", ll[3]);
+        pA("fixS = 0;");
 
         /* fixL, fixR の符号が異なる場合の検出
          */
-        pA("LIMM(%s, 0);", fixS);
-
-        pA("CMPG(%s, %s, 0);", fixA1, fixL);
-        pA("CMPL(%s, %s, 0);", fixA2, fixR);
-        pA("AND(%s, %s, %s);", fixA1, fixA1, fixA2);
-        pA("CND(%s);", fixA1);
-        pA("LIMM(%s, 1);", fixS);
-
-        pA("CMPL(%s, %s, 0);", fixA1, fixL);
-        pA("CMPG(%s, %s, 0);", fixA2, fixR);
-        pA("AND(%s, %s, %s);", fixA1, fixA1, fixA2);
-        pA("CND(%s);", fixA1);
-        pA("LIMM(%s, 2);", fixS);
+        pA("if (fixL > 0) {if (fixR < 0) {fixS = 1;}}");
+        pA("if (fixL < 0) {if (fixR > 0) {fixS = 2;}}");
 
         /* 符号が異なり、かつ、絶対値比較で fixL の方が小さい場合
          */
-        pA("CMPL(%s, %s, %s);", fixA1, fixLx, fixRx);
-        pA("CMPNE(%s, %s, 0);", fixA2, fixS);
-        pA("AND(%s, %s, %s);", fixA1, fixA1, fixA2);
-        pA("CND(%s);", fixA1);
-        pA("PCP(P3F, %d);", ll[4]);
-        pA("PCP(P3F, %d);", ll[5]);
-
-        pA("LB(0, %d);", ll[4]);
-        pA("ADD(%s, %s, %s);", fixA, fixL, fixR);
-        pA("PCP(P3F, %d);", ll[6]);
-
-        pA("LB(0, %d);", ll[5]);
+        pA("if (fixLx < fixRx) {");
+                pA("if (fixS == 1) {fixS = 3; fixA = fixL + fixR;}");
+                pA("if (fixS == 2) {fixS = 3; fixA = fixL + fixR;}");
+        pA("}");
 
         /* それ以外の場合
          */
-        /* 絶対に0除算が起きないように、0ならば最小数に置き換えてから除算
-         */
-        pA("CMPE(%s, %s, 0);", fixA1, fixR);
-        pA("CND(%s);", fixA1);
-        pA("LIMM(%s, 1);", fixR);
-        pA("DIV(%s, %s, %s);", fixT, fixL, fixR);
+        pA("if (fixS != 3) {");
+                /* 絶対に0除算が起きないように、0ならば最小数に置き換えてから除算
+                 */
+                pA("if (fixR == 0) {fixR = 1;}");
+                pA("fixT = fixL / fixR;");
 
-        /* floor
-         */
-        pA("CMPL(%s, %s, 0);", fixA1, fixT);
-        pA("CND(%s);", fixA1);
-        pA("SUB(%s, %s, 1);", fixT, fixT);
-        pA("MUL(%s, %s, %s);", fixRx, fixT, fixR);
-        pA("SUB(%s, %s, %s)", fixA, fixL, fixRx);
-
-        pA("LB(0, %d);", ll[6]);
+                /* floor
+                 */
+                pA("if (fixT < 0) {fixT -= 1;}");
+                pA("fixRx = fixT * fixR;");
+                pA("fixA = fixL - fixRx;");
+        pA("}");
 
         endF();
 }
@@ -1623,7 +1433,7 @@ static void __func_mod_float(void)
  */
 static void __func_minus_float(void)
 {
-        pA("MUL(%s, %s, -1);", fixA, fixL);
+        pA("fixA = -fixL;");
 }
 
 /* レガシーアキュムレーター
@@ -1900,7 +1710,7 @@ static void __func_pow(void)
  */
 static void __func_and(void)
 {
-        pA("AND(%s, %s, %s);", fixA, fixL, fixR);
+        pA("fixA = fixL & fixR;");
 }
 
 /* or命令を出力する
@@ -1909,7 +1719,7 @@ static void __func_and(void)
  */
 static void __func_or(void)
 {
-        pA("OR(%s, %s, %s);", fixA, fixL, fixR);
+        pA("fixA = fixL | fixR;");
 }
 
 /* xor命令を出力する
@@ -1918,7 +1728,7 @@ static void __func_or(void)
  */
 static void __func_xor(void)
 {
-        pA("XOR(%s, %s, %s);", fixA, fixL, fixR);
+        pA("fixA = fixL ^ fixR;");
 }
 
 /* ビット反転命令を出力する
@@ -1927,7 +1737,7 @@ static void __func_xor(void)
  */
 static void __func_invert(void)
 {
-        pA("XOR(%s, %s, -1);", fixA, fixL);
+        pA("fixA = fixL ^ (-1);");
 }
 
 /* not命令を出力する
@@ -1938,10 +1748,7 @@ static void __func_invert(void)
  */
 static void __func_not(void)
 {
-        pA("LIMM(%s, 0);", fixA);
-        pA("CMPE(%s, %s, 0);", fixA1, fixL);
-        pA("CND(%s);", fixA1);
-        pA("LIMM(%s, %d);", fixA, 1 << 16);
+        pA("if (fixL == 0) {fixA = 1 << 16;} else {fixA = 0;}");
 }
 
 /* 左シフト命令を出力する
@@ -1950,8 +1757,8 @@ static void __func_not(void)
  */
 static void __func_lshift(void)
 {
-        pA("SAR(%s, %s, 16);", fixR, fixR);
-        pA("SHL(%s, %s, %s);", fixA, fixL, fixR);
+        pA("fixR >>= 16;");
+        pA("fixA = fixL << fixR;");
 }
 
 /* 右シフト命令を出力する（算術シフト）
@@ -1964,7 +1771,7 @@ static void __func_arithmetic_rshift(void)
 {
         beginF();
 
-        pA("SAR(%s, %s, 16);", fixR, fixR);
+        pA("fixR >>= 16;");
         __func_arithmetic_rshift_int();
 
         endF();
@@ -1980,7 +1787,7 @@ static void __func_logical_rshift(void)
 {
         beginF();
 
-        pA("SAR(%s, %s, 16);", fixR, fixR);
+        pA("fixR >>= 16;");
         __func_logical_rshift_int();
 
         endF();
@@ -2008,27 +1815,25 @@ static void __assignment_scaler(const char* iden)
 
         /* ヒープ書き込み位置のデフォルト値をセットする命令を出力する（コンパイル時） */
         if (var->is_local)
-                pA("ADD(%s, %s, %d);", heap_base, stack_frame, var->base_ptr);
+                pA("heap_base = %d + stack_frame;", var->base_ptr);
         else
-                pA("LIMM(%s, %d);", heap_base, var->base_ptr);
+                pA("heap_base = %d;", var->base_ptr);
 
         /* 書き込む値を読んでおく */
-        pop_stack(stack_socket);
+        pop_stack("stack_socket");
 
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
          * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
          */
-        pop_attachstack(attachstack_socket);
-        pA("CMPGE(%s, %s, 0);", fixA1, attachstack_socket);
-        pA("CND(%s);", fixA1);
-        pA("LIMM(%s, %s);", heap_base, attachstack_socket); /* CP */
+        pop_attachstack("attachstack_socket");
+        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
-        write_mem(stack_socket, heap_base);
+        write_mem("stack_socket", "heap_base");
 
         /* 変数へ書き込んだ値をスタックへもプッシュしておく
          * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
          */
-        push_stack(stack_socket);
+        push_stack("stack_socket");
 
 #ifdef DEBUG_ASSIGNMENT
         pA("junkApi_putConstString('\\nassignment_scaler(), ');");
@@ -2095,29 +1900,28 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
 
         /* ヒープ書き込み位置のデフォルト値をセットする命令を出力する（コンパイル時） */
         if (var->is_local)
-                pA("ADD(%s, %s, %d);", heap_base, stack_frame, var->base_ptr);
+                pA("heap_base = %d + stack_frame;", var->base_ptr);
         else
-                pA("LIMM(%s, %d);", heap_base, var->base_ptr);
+                pA("heap_base = %d;", var->base_ptr);
 
         /* 書き込む値をスタックから読み込む命令を出力（コンパイル時） */
-        pop_stack(heap_socket);
+        pop_stack("heap_socket");
 
         /* ヒープ書き込みオフセット位置をセットする命令を出力する（コンパイル時）
          * これは配列の次元によって分岐する
          */
         /* １次元配列の場合 */
         if (var->row_len == 1) {
-                pop_stack(heap_offset);
+                pop_stack("heap_offset");
 
         /* 2次元配列の場合 */
         } else if (var->row_len >= 2) {
                 /* これは[行, 列]の列 */
-                pop_stack(heap_offset);
+                pop_stack("heap_offset");
 
                 /* これは[行, 列]の行 */
-                pop_stack(stack_socket);
-                pA("MUL(%s, %s, %d);", fixA1, stack_socket, var->col_len);
-                pA("ADD(%s, %s, %d);", heap_offset, heap_offset, fixA1);
+                pop_stack("stack_socket");
+                pA("heap_offset += stack_socket * %d;", var->col_len);
 
         /* 1,2次元以外の場合はシステムエラー */
         } else {
@@ -2127,19 +1931,16 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
          * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
          */
-        pop_attachstack(attachstack_socket);
-        pA("CMPGE(%s, %s, 0);", fixA1, attachstack_socket);
-        pA("CND(%s);", fixA1);
-        pA("LIMM(%s, %s);", heap_base, attachstack_socket); /* CP */
+        pop_attachstack("attachstack_socket");
+        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
 
-        pA("SAR(%s, %s, 16);", fixA1, heap_offset);
-        pA("ADD(%s, &s, %s);", heap_base, heap_base, fixA1);
-        write_mem(heap_socket, heap_base);
+        pA("heap_base += heap_offset >> 16;");
+        write_mem("heap_socket", "heap_base");
 
         /* 変数へ書き込んだ値をスタックへもプッシュしておく
          * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
          */
-        push_stack(heap_socket);
+        push_stack("heap_socket");
 
 #ifdef DEBUG_ASSIGNMENT
         pA("junkApi_putConstString('\\nassignment_array(), ');");
@@ -2166,22 +1967,15 @@ static void __read_variable_ptr_scaler(const char* iden)
 
         /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
          */
-        pop_attachstack(attachstack_socket);
-        pA("CMPGE(%s, %s, 0);", fixA1, attachstack_socket);
-        pA("CND(%s);", fixA1);
-        pA("LIMM(%s, %s);", heap_base, attachstack_socket); /* CP */
-        if (var->is_local) {
-                pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                pA("CND(%s);", fixA1);
-                pA("ADD(%s, %s, %d);", heap_base, stack_frame, var->base_ptr);
-        } else {
-                pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                pA("CND(%s);", fixA1);
-                pA("LIMM(%s, %d);", heap_base, var->base_ptr);
-        }
+        pop_attachstack("attachstack_socket");
+        pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
+        if (var->is_local)
+                pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
+        else
+                pA("else {heap_base = %d;}", var->base_ptr);
 
         /* heap_base自体を（アドレス自体を）スタックにプッシュする */
-        push_stack(heap_base);
+        push_stack("heap_base");
 
 #ifdef DEBUG_READ_VARIABLE
         pA("junkApi_putConstString('\\nread_variable_ptr_scaler(), ');");
@@ -2224,58 +2018,42 @@ static void __read_variable_ptr_array(const char* iden, const int32_t dim)
         if (var->row_len == 1) {
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                  */
-                pop_attachstack(attachstack_socket);
-                pA("CMPGE(%s, %s, 0);", fixA1, attachstack_socket);
-                pA("CND(%s);", fixA1);
-                pA("LIMM(%s, %s);", heap_base, attachstack_socket); /* CP */
-                if (var->is_local) {
-                        pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                        pA("CND(%s);", fixA1);
-                        pA("ADD(%s, %s, %d);", heap_base, stack_frame, var->base_ptr);
-                } else {
-                        pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                        pA("CND(%s);", fixA1);
-                        pA("LIMM(%s, %d);", heap_base, var->base_ptr);
-                }
+                pop_attachstack("attachstack_socket");
+                pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
+                if (var->is_local)
+                        pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
+                else
+                        pA("else {heap_base = %d;}", var->base_ptr);
 
                 /* heap_base へオフセットを足す
                  */
-                pop_stack(heap_offset);
-                pA("SAR(%s, %s, 16);", fixA1, heap_offset);
-                pA("ADD(%s, %s, %s);", heap_base, heap_base, fixA1);
+                pop_stack("heap_offset");
+                pA("heap_base += heap_offset >> 16;");
 
         /* 2次元配列の場合 */
         } else if (var->row_len >= 2) {
                 /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
                  */
-                pop_attachstack(attachstack_socket);
-                pA("CMPGE(%s, %s, 0);", fixA1, attachstack_socket);
-                pA("CND(%s);", fixA1);
-                pA("LIMM(%s, %s);", heap_base, attachstack_socket); /* CP */
-                if (var->is_local) {
-                        pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                        pA("CND(%s);", fixA1);
-                        pA("ADD(%s, %s, %d);", heap_base, stack_frame, var->base_ptr);
-                } else {
-                        pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                        pA("CND(%s);", fixA1);
-                        pA("LIMM(%s, %d);", heap_base, var->base_ptr);
-                }
+                pop_attachstack("attachstack_socket");
+                pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
+                if (var->is_local)
+                        pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
+                else
+                        pA("else {heap_base = %d;}", var->base_ptr);
 
                 /* heap_base へオフセットを足す
                  */
                 /* これは[行, 列]の列 */
-                pop_stack(heap_offset);
+                pop_stack("heap_offset");
 
                 /* これは[行, 列]の行。
                  * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
                  */
-                pop_stack(stack_socket);
-                pA("MUL(%s, %s, %d);", fixA1, stack_socket, var->col_len);
-                pA("ADD(%s, %s, %s);", heap_offset, heap_offset, fixA1);
+                pop_stack("stack_socket");
+                pA("heap_offset += stack_socket * %d;", var->col_len);
 
-                pA("SAR(%s, %s, 16);", heap_offset, heap_offset);
-                pA("ADD(%s, %s, %s);", heap_base, heap_base, heap_offset);
+                pA("heap_offset >>= 16;");
+                pA("heap_base += heap_offset;");
 
         /* 1,2次元以外の場合はシステムエラー */
         } else {
@@ -2283,7 +2061,7 @@ static void __read_variable_ptr_array(const char* iden, const int32_t dim)
         }
 
         /* heap_base自体を（アドレス自体を）スタックにプッシュする */
-        push_stack(heap_base);
+        push_stack("heap_base");
 
 #ifdef DEBUG_READ_VARIABLE
         pA("junkApi_putConstString('\\nread_variable_ptr_array(), ');");
@@ -2310,26 +2088,18 @@ static void __read_variable_scaler(const char* iden)
         if (var->row_len != 1 || var->col_len != 1)
                 yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
 
-        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-         */
-        pop_attachstack(attachstack_socket);
-        pA("CMPGE(%s, %s, 0);", fixA1, attachstack_socket);
-        pA("CND(%s);", fixA1);
-        pA("LIMM(%s, %s);", heap_base, attachstack_socket); /* CP */
-        if (var->is_local) {
-                pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                pA("CND(%s);", fixA1);
-                pA("ADD(%s, %s, %d);", heap_base, stack_frame, var->base_ptr);
-        } else {
-                pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                pA("CND(%s);", fixA1);
-                pA("LIMM(%s, %d);", heap_base, var->base_ptr);
-        }
+        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+        pop_attachstack("attachstack_socket");
+        pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
+        if (var->is_local)
+                pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
+        else
+                pA("else {heap_base = %d;}", var->base_ptr);
 
-        read_mem(stack_socket, heap_base);
+        read_mem("stack_socket", "heap_base");
 
         /* 結果をスタックにプッシュする */
-        push_stack(stack_socket);
+        push_stack("stack_socket");
 
 #ifdef DEBUG_READ_VARIABLE
         pA("junkApi_putConstString('\\nread_variable_scaler(), ');");
@@ -2370,59 +2140,40 @@ static void __read_variable_array(const char* iden, const int32_t dim)
          */
         /* １次元配列の場合 */
         if (var->row_len == 1) {
-                pop_stack(heap_offset);
+                pop_stack("heap_offset");
 
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                 */
-                pop_attachstack(attachstack_socket);
-                pA("CMPGE(%s, %s, 0);", fixA1, attachstack_socket);
-                pA("CND(%s);", fixA1);
-                pA("LIMM(%s, %s);", heap_base, attachstack_socket); /* CP */
-                if (var->is_local) {
-                        pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                        pA("CND(%s);", fixA1);
-                        pA("ADD(%s, %s, %d);", heap_base, stack_frame, var->base_ptr);
-                } else {
-                        pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                        pA("CND(%s);", fixA1);
-                        pA("LIMM(%s, %d);", heap_base, var->base_ptr);
-                }
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                pop_attachstack("attachstack_socket");
+                pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
+                if (var->is_local)
+                        pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
+                else
+                        pA("else {heap_base = %d;}", var->base_ptr);
 
-                pA("SAR(%s, %s, 16);", fixA1, heap_offset);
-                pA("ADD(%s, %s, %s);", heap_base, heap_base, fixA1);
-                read_mem(stack_socket, heap_base);
+                pA("heap_base += heap_offset >> 16;");
+                read_mem("stack_socket", "heap_base");
 
         /* 2次元配列の場合 */
         } else if (var->row_len >= 2) {
                 /* これは[行, 列]の列 */
-                pop_stack(heap_offset);
+                pop_stack("heap_offset");
 
                 /* これは[行, 列]の行。
                  * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
                  */
-                pop_stack(stack_socket);
-                pA("MUL(%s, %s, %s);", fixA1, stack_socket, var->col_len);
-                pA("ADD(%s, %s, %s);", heap_offset, heap_offset, fixA1);
+                pop_stack("stack_socket");
+                pA("heap_offset += stack_socket * %d;", var->col_len);
 
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                 */
-                pop_attachstack(attachstack_socket);
-                pA("CMPGE(%s, %s, 0);", fixA1, attachstack_socket);
-                pA("CND(%s);", fixA1);
-                pA("LIMM(%s, %s);", heap_base, attachstack_socket); /* CP */
-                if (var->is_local) {
-                        pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                        pA("CND(%s);", fixA1);
-                        pA("ADD(%s, %s, %d);", heap_base, stack_frame, var->base_ptr);
-                } else {
-                        pA("CMPL(%s, %s, 0);", fixA1, attachstack_socket);
-                        pA("CND(%s);", fixA1);
-                        pA("LIMM(%s, %d);", heap_base, var->base_ptr);
-                }
+                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
+                pop_attachstack("attachstack_socket");
+                pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
+                if (var->is_local)
+                        pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
+                else
+                        pA("else {heap_base = %d;}", var->base_ptr);
 
-                pA("SAR(%s, %s, 16);", fixA1, heap_offset);
-                pA("ADD(%s, %s, %s);", heap_base, heap_base, fixA1);
-                read_mem(stack_socket, heap_base);
+                pA("heap_base += heap_offset >> 16;");
+                read_mem("stack_socket", "heap_base");
 
         /* 1,2次元以外の場合はシステムエラー */
         } else {
@@ -2430,7 +2181,7 @@ static void __read_variable_array(const char* iden, const int32_t dim)
         }
 
         /* 結果をスタックにプッシュする */
-        push_stack(stack_socket);
+        push_stack("stack_socket");
 
 #ifdef DEBUG_READ_VARIABLE
         pA("junkApi_putConstString('\\nread_variable_array(), ');");
@@ -2456,10 +2207,11 @@ static void __call_user_function(const char* iden)
         if (labellist_search_unsafe(iden) == -1)
                 yyerror("syntax err: 未定義の関数を実行しようとしました");
 
-        pA("PLIMM(%s, %d);", CUR_RETURN_LABEL, cur_label_index_head);
+        /* gosub とほぼ同じ */
+        pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
         push_labelstack();
-        pA("PLIMM(P3F, %d);", labellist_search(iden));
-        pA("LB(1, %d);", cur_label_index_head);
+        pA("PLIMM(P3F, %d);\n", labellist_search(iden));
+        pA("LB(1, %d);\n", cur_label_index_head);
         cur_label_index_head++;
 }
 
@@ -2514,7 +2266,7 @@ static void __define_user_function_begin(const char* iden,
          * この位置はローカル変数 @stack_prev_frame が参照する位置であり、また
          * 関数の関数終了後には、この位置にリターン値がセットされた状態となる。
          */
-        pA("SUB(%s, %s, %d);", stack_frame, stack_head, arglen + 1);
+        pA("stack_frame = stack_head - %d;", arglen + 1);
 
 #ifdef DEBUG_SCOPE
         pA("junkApi_putConstString('inc_scope(),stack_head=');");
@@ -2533,13 +2285,13 @@ static void __define_user_function_return(void)
         /* スコープを1段戻す場合の定形処理
          */
         /* stack_head 位置を stack_frame にする */
-        pA("LIMM(%s, %s);", stack_head, stack_frame); /* CP */
+        pA("stack_head = stack_frame;");
 
         /* ローカル変数 @stack_prev_frame の値を stack_frame へセットする。
          * その後、stack_head を stack_frame
          */
-        read_mem(fixA1, stack_frame);
-        pA("LIMM(%s, %s);", stack_frame, fixA1); /* CP */
+        read_mem("fixA1", "stack_frame");
+        pA("stack_frame = fixA1;");
 
 #ifdef DEBUG_SCOPE
         pA("junkApi_putConstString('dec_scope(),stack_head=');");
@@ -2549,11 +2301,11 @@ static void __define_user_function_return(void)
         pA("junkApi_putConstString('\\n');");
 #endif /* DEBUG_SCOPE */
 
-        push_stack(fixA);
+        push_stack("fixA");
 
         /* 関数呼び出し元の位置まで戻る */
         pop_labelstack();
-        pA("PCP(P3F, %s);", CUR_RETURN_LABEL);
+        pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
 }
 
 /* 関数定義の後半部
@@ -2566,7 +2318,7 @@ static void __define_user_function_end(const int32_t skip_label)
          * しかし、関数は expression なので、終了後に"必ず"スタックが +1 された状態でなければならないので、
          * fixAにデフォルト値として 0 をセットし、 return 0 と同様の処理となる。
          */
-        pA("LIMM(%s, 0);", fixA);
+        pA("fixA = 0;");
         __define_user_function_return();
 
         /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
@@ -2591,58 +2343,37 @@ static void __func_print(void)
 {
         beginF();
 
-        static int32_t ll[3] = {[0] = -1};
-        if (ll[0] == -1) {
-                ll[0] = cur_label_index_head++;
-                ll[1] = cur_label_index_head++;
-                ll[2] = cur_label_index_head++;
-        }
+        /* 符号を保存しておき、正に変換 */
+        pA("if (fixL < 0) {fixS = 1; fixL = -fixL;} else {fixS = 0;}");
 
-        /* 符号を保存しておき、正に変換
-         */
-        pA("CMPL(%s, %s, 0);", fixA1, fixL);
-        pA("PCP(P3F, %d);", ll[0]);
+        /* 負の場合は-符号を表示する */
+        pA("if (fixS == 1) {junkApi_putConstString('-');}");
 
-        pA("LIMM(%s, 0);", fixS);
-        pA("PCP(P3F, %d);", ll[1]);
-
-        pA("LB(0, %d);", ll[0]);
-        pA("LIMM(%s, 1);", fixS);
-        pA("MUL(%s, %s, -1);", fixL, fixL);
-
-        pA("LB(0, %d);", ll[1]);
-
-        /* 負の場合は-符号を表示する
- 　　　　　*/
-        pA("if (%s == 1) {junkApi_putConstString('-');}", fixS);
-
-        /* 整数側の表示
-         */
-        pA("SAR(%s, %s, 16);", fixLx, fixL);
-        pA("junkApi_putStringDec('\\1', %s, 6, 1);", fixLx);
+        /* 整数側の表示 */
+        pA("fixLx = fixL >> 16;");
+        pA("junkApi_putStringDec('\\1', fixLx, 6, 1);");
 
         /* 小数点を表示 */
         pA("junkApi_putConstString('.');");
 
-        /* 小数側の表示
-         */
-        pA("LIMM(%s, 0);", fixR);
-        pA("if ((%s & 0x00008000) != 0) {%s += 5000;}", fixL, fixR);
-        pA("if ((%s & 0x00004000) != 0) {%s += 2500;}", fixL, fixR);
-        pA("if ((%s & 0x00002000) != 0) {%s += 1250;}", fixL, fixR);
-        pA("if ((%s & 0x00001000) != 0) {%s += 625;}", fixL, fixR);
-        pA("if ((%s & 0x00000800) != 0) {%s += 312;}", fixL, fixR);
-        pA("if ((%s & 0x00000400) != 0) {%s += 156;}", fixL, fixR);
-        pA("if ((%s & 0x00000200) != 0) {%s += 78;}", fixL, fixR);
-        pA("if ((%s & 0x00000100) != 0) {%s += 39;}", fixL, fixR);
-        pA("if ((%s & 0x00000080) != 0) {%s += 19;}", fixL, fixR);
-        pA("if ((%s & 0x00000040) != 0) {%s += 10;}", fixL, fixR);
-        pA("if ((%s & 0x00000020) != 0) {%s += 5;}", fixL, fixR);
-        pA("if ((%s & 0x00000010) != 0) {%s += 2;}", fixL, fixR);
-        pA("if ((%s & 0x00000008) != 0) {%s += 1;}", fixL, fixR);
-        pA("if ((%s & 0x00000004) != 0) {%s += 1;}", fixL, fixR);
+        /* 小数側の表示 */
+        pA("fixR = 0;");
+        pA("if ((fixL & 0x00008000) != 0) {fixR += 5000;}");
+        pA("if ((fixL & 0x00004000) != 0) {fixR += 2500;}");
+        pA("if ((fixL & 0x00002000) != 0) {fixR += 1250;}");
+        pA("if ((fixL & 0x00001000) != 0) {fixR += 625;}");
+        pA("if ((fixL & 0x00000800) != 0) {fixR += 312;}");
+        pA("if ((fixL & 0x00000400) != 0) {fixR += 156;}");
+        pA("if ((fixL & 0x00000200) != 0) {fixR += 78;}");
+        pA("if ((fixL & 0x00000100) != 0) {fixR += 39;}");
+        pA("if ((fixL & 0x00000080) != 0) {fixR += 19;}");
+        pA("if ((fixL & 0x00000040) != 0) {fixR += 10;}");
+        pA("if ((fixL & 0x00000020) != 0) {fixR += 5;}");
+        pA("if ((fixL & 0x00000010) != 0) {fixR += 2;}");
+        pA("if ((fixL & 0x00000008) != 0) {fixR += 1;}");
+        pA("if ((fixL & 0x00000004) != 0) {fixR += 1;}");
 
-        pA("junkApi_putStringDec('\\1', %s, 4, 6);", fixR);
+        pA("junkApi_putStringDec('\\1', fixR, 4, 6);\n");
 
         /* 自動改行はさせない （最後にスペースを表示するのみ） */
         pA("junkApi_putConstString(' ');");
@@ -2660,10 +2391,7 @@ static void __func_print(void)
  */
 static void __func_peek(void)
 {
-        pA("PCP(%s, %s);", mem_ptr_tmp, mem_ptr);
-        pA("PADD(%s, T_SINT32, %s, %s);", mem_ptr, mem_ptr, fixL);
-        pA("LMEM(%s, T_SINT32, %s, 0);", fixA, mem_ptr);
-        pA("PCP(%s, %s);", mem_ptr, mem_ptr_tmp);
+        pA("PALMEM0(fixA, T_SINT32, heap_ptr, fixL);");
 }
 
 /* ヒープメモリー上の任意アドレスへ１ワード書き込む
@@ -2676,10 +2404,7 @@ static void __func_peek(void)
  */
 static void __func_poke(void)
 {
-        pA("PCP(%s, %s);", mem_ptr_tmp, mem_ptr);
-        pA("PADD(%s, T_SINT32, %s, %s);", mem_ptr, mem_ptr, fixL);
-        pA("SMEM(%s, T_SINT32, %s, 0);", fixR, mem_ptr);
-        pA("PCP(%s, %s);", mem_ptr, mem_ptr_tmp);
+        pA("PASMEM0(fixR, T_SINT32, heap_ptr, fixL);");
 }
 
 /* sin命令を出力する
@@ -4493,7 +4218,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> func_filltri func_fillrect
 
 %type <sval> operation const_variable read_variable
-%type <sval> selection_if selection_if_then_else selection_if_then
+%type <sval> selection_if selection_if_v selection_if_e
 %type <sval> iterator iterator_while iterator_for
 %type <sval> initializer
 %type <ival_list> initializer_param
@@ -4609,104 +4334,104 @@ function
 
 func_print
         : __FUNC_PRINT expression {
-                pop_stack(fixL);
+                pop_stack("fixL");
                 __func_print();
-                push_stack_dummy();     /* 終了時に push +1 な状態にするため */
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
 func_peek
         : __FUNC_PEEK expression {
-                pop_stack(fixL);
+                pop_stack("fixL");
                 __func_peek();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         ;
 
 func_poke
         : __FUNC_POKE expression expression {
-                pop_stack(fixR);
-                pop_stack(fixL);
+                pop_stack("fixR");
+                pop_stack("fixL");
                 __func_poke();
-                push_stack_dummy();     /* 終了時に push +1 な状態にするため */
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
 func_sin
         : __FUNC_SIN expression {
-                pop_stack(fixL);
+                pop_stack("fixL");
                 __func_sin();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         ;
 
 func_cos
         : __FUNC_COS expression {
-                pop_stack(fixL);
+                pop_stack("fixL");
                 __func_cos();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         ;
 
 func_tan
         : __FUNC_TAN expression {
-                pop_stack(fixL);
+                pop_stack("fixL");
                 __func_tan();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         ;
 
 func_sqrt
         : __FUNC_SQRT expression {
-                pop_stack(fixL);
+                pop_stack("fixL");
                 __func_sqrt();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         ;
 
 func_openwin
         : __FUNC_OPENWIN expression expression {
-                pop_stack(fixR);        /* y */
-                pop_stack(fixL);        /* x */
+                pop_stack("fixR");       /* y */
+                pop_stack("fixL");       /* x */
                 __func_openwin();
-                push_stack_dummy();     /* 終了時に push +1 な状態にするため */
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
 func_torgb
         : __FUNC_TORGB expression expression expression
         {
-                pop_stack(fixS);        /* B */
-                pop_stack(fixR);        /* G */
-                pop_stack(fixL);        /* R */
+                pop_stack("fixS");       /* B */
+                pop_stack("fixR");       /* G */
+                pop_stack("fixL");       /* R */
                 __func_torgb();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         ;
 
 func_drawpoint
         : __FUNC_DRAWPOINT expression expression expression expression
         {
-                pop_stack(fixS);        /* RGB */
-                pop_stack(fixR);        /* y0 */
-                pop_stack(fixL);        /* x0 */
-                pop_stack(fixT);        /* mode */
+                pop_stack("fixS");       /* RGB */
+                pop_stack("fixR");       /* y0 */
+                pop_stack("fixL");       /* x0 */
+                pop_stack("fixT");       /* mode */
                 __func_drawpoint();
-                push_stack_dummy();     /* 終了時に push +1 な状態にするため */
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
 func_drawline
         : __FUNC_DRAWLINE expression expression expression expression expression expression
         {
-                pop_stack(fixS);        /* RGB */
-                pop_stack(fixRx);       /* y1 */
-                pop_stack(fixLx);       /* x1 */
-                pop_stack(fixR);        /* y0 */
-                pop_stack(fixL);        /* x0 */
-                pop_stack(fixT);        /* mode */
+                pop_stack("fixS");       /* RGB */
+                pop_stack("fixRx");      /* y1 */
+                pop_stack("fixLx");      /* x1 */
+                pop_stack("fixR");       /* y0 */
+                pop_stack("fixL");       /* x0 */
+                pop_stack("fixT");       /* mode */
                 __func_drawline();
-                push_stack_dummy();     /* 終了時に push +1 な状態にするため */
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
@@ -4715,39 +4440,39 @@ func_filltri
                          expression expression expression expression expression expression
                          expression
         {
-                pop_stack(fixS);        /* RGB */
-                pop_stack(fixT2);       /* y2 */
-                pop_stack(fixT1);       /* x2 */
-                pop_stack(fixRx);       /* y1 */
-                pop_stack(fixLx);       /* x1 */
-                pop_stack(fixR);        /* y0 */
-                pop_stack(fixL);        /* x0 */
-                pop_stack(fixT);        /* mode */
+                pop_stack("fixS");       /* RGB */
+                pop_stack("fixT2");      /* y2 */
+                pop_stack("fixT1");      /* x2 */
+                pop_stack("fixRx");      /* y1 */
+                pop_stack("fixLx");      /* x1 */
+                pop_stack("fixR");       /* y0 */
+                pop_stack("fixL");       /* x0 */
+                pop_stack("fixT");       /* mode */
                 __func_filltri();
-                push_stack_dummy();     /* 終了時に push +1 な状態にするため */
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
 func_fillrect
         : __FUNC_FILLRECT expression expression expression expression expression expression
         {
-                pop_stack(fixS);        /* RGB */
-                pop_stack(fixRx);       /* y1 */
-                pop_stack(fixLx);       /* x1 */
-                pop_stack(fixR);        /* y0 */
-                pop_stack(fixL);        /* x0 */
-                pop_stack(fixT);        /* mode */
+                pop_stack("fixS");       /* RGB */
+                pop_stack("fixRx");      /* y1 */
+                pop_stack("fixLx");      /* x1 */
+                pop_stack("fixR");       /* y0 */
+                pop_stack("fixL");       /* x0 */
+                pop_stack("fixT");       /* mode */
                 __func_fillrect();
-                push_stack_dummy();     /* 終了時に push +1 な状態にするため */
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
 func_sleep
         : __FUNC_SLEEP expression expression {
-                pop_stack(fixR);        /* msec */
-                pop_stack(fixL);        /* mode */
+                pop_stack("fixR");       /* msec */
+                pop_stack("fixL");       /* mode */
                 __func_sleep();
-                push_stack_dummy();     /* 終了時に push +1 な状態にするため */
+                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 
@@ -4776,20 +4501,20 @@ initializer
                 strcpy($$, $3);
         }
         | initializer __OPE_SUBST expression {
-                pA("LIMM(%s, -1);", attachstack_socket);
-                push_attachstack(attachstack_socket);
+                pA("attachstack_socket = -1;");
+                push_attachstack("attachstack_socket");
                 __assignment_scaler($1);
         }
         ;
 
 attach_base
         : {
-                pA("LIMM(%s, -1);", attachstack_socket);
-                push_attachstack(attachstack_socket);
+                pA("attachstack_socket = -1;");
+                push_attachstack("attachstack_socket");
         }
         | expression __OPE_ATTACH {
-                pop_stack(stack_socket);
-                push_attachstack(stack_socket);
+                pop_stack("stack_socket");
+                push_attachstack("stack_socket");
         }
         ;
 
@@ -4810,59 +4535,59 @@ assignment
 
 ope_matrix
         : __STATE_MAT var_identifier __OPE_SUBST var_identifier {
-                pop_attachstack(matbpL);
-                pop_attachstack(matbpA);
+                pop_attachstack("matbpL");
+                pop_attachstack("matbpA");
 
                 ope_matrix_copy($2, $4);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_ZER {
-                pop_attachstack(matbpA);
+                pop_attachstack("matbpA");
 
-                pA("LIMM(%s, 0);", matfixL);
+                pA("matfixL = 0;");
                 ope_matrix_scalar($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_CON {
-                pop_attachstack(matbpA);
+                pop_attachstack("matbpA");
 
-                pA("LIMM(%s, %d);", matfixL, 1 << 16);
+                pA("matfixL = %d;", 1 << 16);
                 ope_matrix_scalar($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST expression __OPE_MUL __STATE_MAT_CON {
-                pop_stack(matfixL);
+                pop_stack("matfixL");
 
-                pop_attachstack(matbpA);
+                pop_attachstack("matbpA");
 
                 ope_matrix_scalar($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_IDN {
-                pop_attachstack(matbpA);
+                pop_attachstack("matbpA");
 
                 ope_matrix_idn($2);
         }
         | __STATE_MAT var_identifier __OPE_SUBST __STATE_MAT_TRN __LB var_identifier __RB {
-                pop_attachstack(matbpL);
-                pop_attachstack(matbpA);
+                pop_attachstack("matbpL");
+                pop_attachstack("matbpA");
 
                 ope_matrix_trn($2, $6);
         }
         | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_ADD var_identifier {
-                pop_attachstack(matbpR);
-                pop_attachstack(matbpL);
-                pop_attachstack(matbpA);
+                pop_attachstack("matbpR");
+                pop_attachstack("matbpL");
+                pop_attachstack("matbpA");
 
                 ope_matrix_add($2, $4, $6);
         }
         | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_SUB var_identifier {
-                pop_attachstack(matbpR);
-                pop_attachstack(matbpL);
-                pop_attachstack(matbpA);
+                pop_attachstack("matbpR");
+                pop_attachstack("matbpL");
+                pop_attachstack("matbpA");
 
                 ope_matrix_sub($2, $4, $6);
         }
         | __STATE_MAT var_identifier __OPE_SUBST var_identifier __OPE_MUL var_identifier {
-                pop_attachstack(matbpR);
-                pop_attachstack(matbpL);
-                pop_attachstack(matbpA);
+                pop_attachstack("matbpR");
+                pop_attachstack("matbpL");
+                pop_attachstack("matbpA");
 
                 ope_matrix_mul($2, $4, $6);
         }
@@ -4878,12 +4603,12 @@ const_variable
                 int32_t ia = ((int32_t)a) << 16;
                 int32_t ib = ((int32_t)(0x0000ffff * b)) & 0x0000ffff;
 
-                pA("LIMM(%s, %d);", stack_socket, ia | ib);
-                push_stack(stack_socket);
+                pA("stack_socket = %d;", ia | ib);
+                push_stack("stack_socket");
         }
         | __CONST_INTEGER {
-                pA("LIMM(%s, %d);", stack_socket, $1 << 16);
-                push_stack(stack_socket);
+                pA("stack_socket = %d;", $1 << 16);
+                push_stack("stack_socket");
         }
         ;
 
@@ -4891,80 +4616,80 @@ operation
         : expression __OPE_ADD expression {
                 read_eoe_arg();
                 __func_add();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_SUB expression {
                 read_eoe_arg();
                 __func_sub();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_MUL expression {
                 read_eoe_arg();
                 __func_mul();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_DIV expression {
                 read_eoe_arg();
                 __func_div();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_POWER expression {
                 read_eoe_arg();
                 __func_pow();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_MOD expression {
                 read_eoe_arg();
                 __func_mod();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_OR expression {
                 read_eoe_arg();
                 __func_or();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_AND expression {
                 read_eoe_arg();
                 __func_and();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_XOR expression {
                 read_eoe_arg();
                 __func_xor();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | __OPE_INVERT expression {
-                pop_stack(fixL);
+                pop_stack("fixL");
                 __func_invert();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | __OPE_NOT expression {
-                pop_stack(fixL);
+                pop_stack("fixL");
                 __func_not();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_LSHIFT expression {
                 read_eoe_arg();
                 __func_lshift();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_RSHIFT expression {
                 read_eoe_arg();
                 __func_logical_rshift();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | expression __OPE_ARITHMETIC_RSHIFT expression {
                 read_eoe_arg();
                 __func_arithmetic_rshift();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | __OPE_ADD expression %prec __OPE_PLUS {
                 /* 何もしない */
         }
         | __OPE_SUB expression %prec __OPE_MINUS {
-                pop_stack(fixL);
+                pop_stack("fixL");
                 __func_minus();
-                push_stack(fixA);
+                push_stack("fixA");
         }
         | __LB expression __RB {
                 /* 何もしない */
@@ -4974,51 +4699,39 @@ operation
 comparison
         : expression __OPE_COMPARISON expression {
                 read_eoe_arg();
-                pA("LIMM(%s, 0);", stack_socket);
-                pA("CMPE(%s, %s, %s);", fixA, fixL, fixR);
-                pA("CND(%s);", fixA);
-                pA("LIMM(%s, 0x00010000);", stack_socket);
-                push_stack(stack_socket);
+
+                pA("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                push_stack("stack_socket");
         }
         | expression __OPE_NOT_COMPARISON expression {
                 read_eoe_arg();
-                pA("LIMM(%s, 0);", stack_socket);
-                pA("CMPNE(%s, %s, %s);", fixA, fixL, fixR);
-                pA("CND(%s);", fixA);
-                pA("LIMM(%s, 0x00010000);", stack_socket);
-                push_stack(stack_socket);
+
+                pA("if (fixL != fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                push_stack("stack_socket");
         }
         | expression __OPE_ISSMALL expression {
                 read_eoe_arg();
-                pA("LIMM(%s, 0);", stack_socket);
-                pA("CMPL(%s, %s, %s);", fixA, fixL, fixR);
-                pA("CND(%s);", fixA);
-                pA("LIMM(%s, 0x00010000);", stack_socket);
-                push_stack(stack_socket);
+
+                pA("if (fixL < fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                push_stack("stack_socket");
         }
         | expression __OPE_ISSMALL_COMP expression {
                 read_eoe_arg();
-                pA("LIMM(%s, 0);", stack_socket);
-                pA("CMPLE(%s, %s, %s);", fixA, fixL, fixR);
-                pA("CND(%s);", fixA);
-                pA("LIMM(%s, 0x00010000);", stack_socket);
-                push_stack(stack_socket);
+
+                pA("if (fixL <= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                push_stack("stack_socket");
         }
         | expression __OPE_ISLARGE expression {
                 read_eoe_arg();
-                pA("LIMM(%s, 0);", stack_socket);
-                pA("CMPG(%s, %s, %s);", fixA, fixL, fixR);
-                pA("CND(%s);", fixA);
-                pA("LIMM(%s, 0x00010000);", stack_socket);
-                push_stack(stack_socket);
+
+                pA("if (fixL > fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                push_stack("stack_socket");
         }
         | expression __OPE_ISLARGE_COMP expression {
                 read_eoe_arg();
-                pA("LIMM(%s, 0);", stack_socket);
-                pA("CMPGE(%s, %s, %s);", fixA, fixL, fixR);
-                pA("CND(%s);", fixA);
-                pA("LIMM(%s, 0x00010000);", stack_socket);
-                push_stack(stack_socket);
+
+                pA("if (fixL >= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                push_stack("stack_socket");
         }
         ;
 
@@ -5039,55 +4752,32 @@ read_variable
                 /* 現在の stack_frame をプッシュする。
                  * そして、ここには関数終了後にはリターン値が入った状態となる。
                  */
-                push_stack(stack_frame);
+                push_stack("stack_frame");
         } expression_list __RB {
                 __call_user_function($1);
         }
         ;
 
 selection_if
-        : selection_if_then_else
-        | selection_if_then
-        ;
-
-selection_if_then_else
-        : __STATE_IF __LB expression __RB {
-                const int32_t if_else = cur_label_index_head++;
-                $<ival>$ = if_else;
-
-                /* 条件が偽(0)ならelse位置へジャンプ */
-                pop_stack(stack_socket);
-                pA("CMPE(%s, %s, 0);", stack_socket, stack_socket);
-                pA("CND(%s);", stack_socket);
-                pA("PCP(P3F, %d);", if_else);
-
-        } declaration {
-                /* then の場合はここへ至る。
-                 * 終了位置へジャンプ
-                 */
-                const int32_t if_end = cur_label_index_head++;
-                pA("PCP(P3F, %d);", if_end);
-
-                pA("LB(0, %d);", $<ival>5);
-
-        } __STATE_ELSE declaration {
-                pA("LB(0, %d);", $<ival>7);
+        : selection_if_v selection_if_e
+        | selection_if_v {
+                pA(" ");
         }
         ;
 
-selection_if_then
+selection_if_v
         : __STATE_IF __LB expression __RB {
-                const int32_t if_end = cur_label_index_head++;
-                $<ival>$ = if_end;
-
-                /* 条件が偽(0)なら終了位置へジャンプ */
-                pop_stack(stack_socket);
-                pA("CMPE(%s, %s, 0);", stack_socket, stack_socket);
-                pA("CND(%s);", stack_socket);
-                pA("PCP(P3F, %d);", if_end);
-
+                pop_stack("stack_socket");
+                pA("if (stack_socket != 0) {");
         } declaration {
-                pA("LB(0, %d);", $<ival>5);
+                pA_nl("}");
+        }
+
+selection_if_e
+        : __STATE_ELSE {
+                pA(" else {");
+        } declaration {
+                pA("}");
         }
         ;
 
@@ -5099,86 +4789,81 @@ iterator
 iterator_while
         : __STATE_WHILE {
                 /* ループの復帰位置をここに設定 */
-                const int32_t loop_head = cur_label_index_head++;
+                const int32_t loop_head = cur_label_index_head;
+                cur_label_index_head++;
                 $<ival>$ = loop_head;
 
-                pA("LB(0, %d);", loop_head);
+                pA("LB(1, %d);", loop_head);
 
         } __LB expression __RB {
-                const int32_t loop_end = cur_label_index_head++;
-                $<ival>$ = loop_end;
-
-                /* 条件が偽(0)ならループの終了位置へジャンプ */
-                pop_stack(stack_socket);
-                pA("CMPE(%s, %s, 0);", stack_socket, stack_socket);
-                pA("CND(%s);", stack_socket);
-                pA("PCP(P3F, %d);", loop_end);
+                pop_stack("stack_socket");
+                pA("if (stack_socket != 0) {");
 
         } declaration {
                 /* ループの復帰 */
                 pA("PLIMM(P3F, %d);", $<ival>2);
-
-                /* ループの終了位置 */
-                pA("LB(0, %d);", $<ival>6);
+                pA_nl("}");
         }
         ;
 
 iterator_for
         : __STATE_FOR __LB expression {
                 /* スタックを掃除 */
-                pop_stack(stack_socket);
+                pop_stack("stack_socket");
 
                 /* head ラベルID */
-                const int32_t loop_head = cur_label_index_head++;
+                int32_t loop_head = cur_label_index_head;
+                cur_label_index_head++;
                 $<ival>$ = loop_head;
 
                 /* head ラベル */
-                pA("LB(0, %d);", loop_head);
+                pA("LB(1, %d);", loop_head);
 
         } __DECL_END {
                 /* end ラベルID */
-                $<ival>$ = cur_label_index_head++;
+                $<ival>$ = cur_label_index_head;
+                cur_label_index_head++;
 
         } expression {
                 /* main ラベルID */
-                const int32_t loop_main = cur_label_index_head++;
+                int32_t loop_main = cur_label_index_head;
+                cur_label_index_head++;
                 $<ival>$ = loop_main;
 
                 /* スタックから条件判定結果をポップ */
-                pop_stack(stack_socket);
+                pop_stack("stack_socket");
 
                 /* 条件判定結果が真ならば main ラベルへジャンプ */
-                pA("CMPNE(%s, %s, 0);", stack_socket, stack_socket);
-                pA("CND(%s);", stack_socket);
-                pA("PLIMM(P3F, %d);", loop_main);
+                pA("if (stack_socket != 0) {PLIMM(P3F, %d);}", loop_main);
 
                 /* 条件判定結果が真でないならば（偽ならば） end ラベルへジャンプ */
                 pA("PLIMM(P3F, %d);", $<ival>6);
 
         } __DECL_END {
                 /* pre_head ラベルID */
-                const int32_t loop_pre_head = cur_label_index_head++;
+                int32_t loop_pre_head = cur_label_index_head;
+                cur_label_index_head++;
                 $<ival>$ = loop_pre_head;
 
                 /* pre_head ラベル */
-                pA("LB(0, %d);", loop_pre_head);
+                pA("LB(1, %d);", loop_pre_head);
 
         } expression __RB {
                 /* スタックを掃除 */
-                pop_stack(stack_socket);
+                pop_stack("stack_socket");
 
                 /* head ラベルへジャンプ */
                 pA("PLIMM(P3F, %d);", $<ival>4);
 
                 /* main ラベル */
-                pA("LB(0, %d);", $<ival>8);
+                pA("LB(1, %d);", $<ival>8);
 
         } declaration {
                 /* pre_head ラベルへジャンプ */
                 pA("PLIMM(P3F, %d);", $<ival>10);
 
                 /* end ラベル */
-                pA("LB(0, %d);", $<ival>6);
+                pA("LB(1, %d);", $<ival>6);
         }
 
 define_label
@@ -5189,10 +4874,10 @@ define_label
 
 jump
         : __STATE_GOTO __LABEL {
-                pA("PLIMM(P3F, %d);", labellist_search($2));
+                pA("PLIMM(P3F, %d);\n", labellist_search($2));
         }
         | __STATE_RETURN expression {
-                pop_stack(fixA);
+                pop_stack("fixA");
                 __define_user_function_return();
         }
         | __STATE_RETURN {
@@ -5200,7 +4885,7 @@ jump
                  * これは、ユーザー定義関数は expression なので、
                  * 終了後に必ずスタックが +1 状態である必要があるため。
                  */
-                pA("LIMM(%s, 0);", fixA);
+                pA("fixA = 0;");
                 __define_user_function_return();
         }
         ;
