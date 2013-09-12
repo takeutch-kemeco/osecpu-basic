@@ -400,13 +400,13 @@ static int32_t cur_ifdef_skip_depth;
         return(__CONST_CHAR);
 }
 
-<main_process>[0][1-7][0-7]* {
+<main_process>[0][0-7]+ {
         /* 8進数の場合 */
         yylval.ival = strtol(yytext, NULL, 8);
         return(__CONST_INTEGER);
 }
 
-<main_process>[0][xX][1-9a-fA-F]?[0-9a-fA-F]* {
+<main_process>[0][xX][0-9a-fA-F]+ {
         /* 16進数の場合 */
         yylval.ival = strtol(yytext, NULL, 16);
         return(__CONST_INTEGER);
