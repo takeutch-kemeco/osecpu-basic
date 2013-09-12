@@ -16,6 +16,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+#ifndef __STDOSCP_BAS__
+#define __STDOSCP_BAS__
+
 /* 変数の値（数値のみ）を画面へ印字する
  *
  * 引数:
@@ -444,3 +447,5 @@ function __rand(max)
         asm(ret = "fixA");
         return ret;
 }
+
+#endif /* __STDOSCP_BAS__ */

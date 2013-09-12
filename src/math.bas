@@ -16,6 +16,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+#ifndef __MATH_BAS__
+#define __MATH_BAS__
+
 /* sin
  *
  * 引数:
@@ -77,3 +80,5 @@ function __tan(a)
                ((a pow 7) * 17) / 315 +
                ((a pow 9) * 62) / 2835;
 }
+
+#endif /* __MATH_BAS__ */

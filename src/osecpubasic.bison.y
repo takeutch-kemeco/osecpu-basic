@@ -78,10 +78,9 @@ static int32_t read_line_file(char* dst, const int32_t line)
 }
 
 /* 警告表示 */
-static void yywarning(const char *error_message)
+void yywarning(const char *error_message)
 {
         printf("filepath: %s\n", filepath);
-        printf("line: %d\n", linenumber);
 
         /* エラー行と、その前後 3 行を表示する
          */
@@ -92,6 +91,7 @@ static void yywarning(const char *error_message)
                         printf("%6d: %s\n", linenumber + i, tmp);
         }
 
+        printf("line: %d\n", linenumber);
         printf("%s\n\n", error_message);
 }
 

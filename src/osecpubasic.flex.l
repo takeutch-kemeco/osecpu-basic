@@ -24,6 +24,12 @@
 #include <stdint.h>
 #include "osecpubasic.bison.h"
 
+/* 現在のプロセスを示すフラグ
+ */
+#define PRE_PROCESS 0x01
+#define MAIN_PROCESS 0x02
+static int32_t cur_process;
+
 char filepath[0x1000];
 int32_t linenumber;
 
@@ -55,10 +61,8 @@ static int32_t cur_include_stack = 0;
  */
 static void push_include(void)
 {
-        if (cur_include_stack >= INCLUDE_DEPTH_MAX) {
-                printf("syntax err: #include が可能なネストは %d 段までです\n", INCLUDE_DEPTH_MAX);
-                exit(EXIT_FAILURE);
-        }
+        if (cur_include_stack >= INCLUDE_DEPTH_MAX)
+                yyerror("syntax err: #include が可能なネストは 16 段までです");
 
         strcpy(filepath_stack[cur_include_stack], filepath);
         trim_const_string(filepath, yytext);
@@ -70,10 +74,8 @@ static void push_include(void)
         cur_include_stack++;
 
         yyin = fopen(filepath, "rt");
-        if (yyin == NULL) {
-                printf("syntax err: #include で指定されたファイル %s のオープンに失敗しました\n", filepath);
-                exit(EXIT_FAILURE);
-        }
+        if (yyin == NULL)
+                yyerror("syntax err: #include で指定されたファイルのオープンに失敗しました");
 
         yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE));
 }
@@ -174,22 +176,192 @@ static void remove_macro_define_table(char* iden)
         }
 }
 
+/* define_table から全ての識別子を削除する
+ */
+static void init_define_table(void)
+{
+        int i = cur_define_iden;
+        while (i-->0) {
+                if (define_table[i].iden != NULL) {
+                        free(define_table[i].iden);
+                        define_table[i].iden = NULL;
+                }
+
+                if (define_table[i].replace != NULL) {
+                        free(define_table[i].replace);
+                        define_table[i].replace = NULL;
+                }
+        }
+
+        cur_define_iden = 0;
+}
+
+/* #ifdef 関連
+ */
+
+/* #ifdef（または #ifdef）のスキッププロセスを開始する際に 0 をセットする。
+ *
+ * #ifdef（または #ifndef）によるスキップ中に、再び #ifdef（または #ifndef）が登場する度に +=1 する。
+ * そして、スキップ中に #endif が登場する度に -=1 する。
+ *
+ * これによって、 0 の時点で登場した #endif が、スキップの本当の終了ポイントであることを判断できる。
+ */
+static int32_t cur_ifdef_skip_depth;
+
 %}
 
 %x pre_process
 %x pre_process_function
 %x pre_process_include
 
+%x pre_process_define_iden
+%x pre_process_define_replace
+%x pre_process_undef_iden
+%x pre_process_ifndef_iden
+%x pre_process_ifdef_iden
+%x pre_process_ifdef_skip
+
 %x main_process
 %x main_process_comment
 %x main_process_include
-%x main_process_define_iden
-%x main_process_define_replace
-%x main_process_undef_iden
 
 %x tune_process
 
 %%
+
+<main_process>"#define" BEGIN(pre_process_define_iden);
+<pre_process>"#define" BEGIN(pre_process_define_iden);
+<pre_process_define_iden>[_a-zA-Z][_0-9a-zA-Z]* {
+#ifdef DEBUG_DEFINE
+        printf("process[%d], pre_process_define_iden[%s]\n", cur_process, yytext);
+#endif /* DEBUG_DEFINE */
+
+        strcpy(define_iden_tmp, yytext);
+        BEGIN(pre_process_define_replace);
+}
+<pre_process_define_replace>[\n] {
+#ifdef DEBUG_DEFINE
+        printf("process[%d], pre_process_define_replace, \\n [%s]\n", cur_process, "");
+#endif /* DEBUG_DEFINE */
+
+        linenumber++;
+
+        char tmp[2] = "";
+        add_macro_define_table(define_iden_tmp, tmp);
+
+        if (cur_process == PRE_PROCESS)
+                BEGIN(pre_process);
+        else if (cur_process == MAIN_PROCESS)
+                BEGIN(main_process);
+        else
+                yyerror("system err: pre_process_define_replace");
+}
+<pre_process_define_replace>[^ \n].*[^\n] {
+#ifdef DEBUG_DEFINE
+        printf("process[%d], pre_process_define_replace, etc [%s]\n", cur_process, yytext);
+#endif /* DEBUG_DEFINE */
+
+        add_macro_define_table(define_iden_tmp, yytext);
+
+        if (cur_process == PRE_PROCESS)
+                BEGIN(pre_process);
+        else if (cur_process == MAIN_PROCESS)
+                BEGIN(main_process);
+        else
+                yyerror("system err: pre_process_define_replace");
+}
+
+<main_process>"#undef" BEGIN(pre_process_undef_iden);
+<pre_process>"#undef" BEGIN(pre_process_undef_iden);
+<pre_process_undef_iden>[_a-zA-Z][_0-9a-zA-Z]* {
+#ifdef DEBUG_DEFINE
+        printf("process[%d], pre_process_undef_iden[%s]\n", cur_process, yytext);
+#endif /* DEBUG_DEFINE */
+
+        remove_macro_define_table(yytext);
+
+        if (cur_process == PRE_PROCESS)
+                BEGIN(pre_process);
+        else if (cur_process == MAIN_PROCESS)
+                BEGIN(main_process);
+        else
+                yyerror("system err: pre_process_undef_iden");
+}
+
+<main_process>"#ifdef" BEGIN(pre_process_ifdef_iden);
+<pre_process>"#ifdef" BEGIN(pre_process_ifdef_iden);
+<pre_process_ifdef_iden>[_a-zA-Z][_0-9a-zA-Z]* {
+#ifdef DEBUG_DEFINE
+        printf("process[%d], pre_process_ifdef_iden[%s], ", cur_process, yytext);
+#endif /* DEBUG_DEFINE */
+
+        if (search_iden_define_table(yytext) == NULL) {
+#ifdef DEBUG_DEFINE
+                printf("[skip]\n");
+#endif /* DEBUG_DEFINE */
+
+                cur_ifdef_skip_depth = 0;
+                BEGIN(pre_process_ifdef_skip);
+        } else {
+#ifdef DEBUG_DEFINE
+                printf("[no skip]\n");
+#endif /* DEBUG_DEFINE */
+
+                if (cur_process == PRE_PROCESS)
+                        BEGIN(pre_process);
+                else if (cur_process == MAIN_PROCESS)
+                        BEGIN(main_process);
+                else
+                        yyerror("system err: pre_process_ifdef_iden");
+        }
+}
+
+<main_process>"#ifndef" BEGIN(pre_process_ifndef_iden);
+<pre_process>"#ifndef" BEGIN(pre_process_ifndef_iden);
+<pre_process_ifndef_iden>[_a-zA-Z][_0-9a-zA-Z]* {
+#ifdef DEBUG_DEFINE
+        printf("process[%d], pre_process_ifndef_iden[%s], ", cur_process, yytext);
+#endif /* DEBUG_DEFINE */
+
+        if (search_iden_define_table(yytext) != NULL) {
+#ifdef DEBUG_DEFINE
+                printf("[skip]\n");
+#endif /* DEBUG_DEFINE */
+
+                cur_ifdef_skip_depth = 0;
+                BEGIN(pre_process_ifdef_skip);
+        } else {
+#ifdef DEBUG_DEFINE
+                printf("[no skip]\n");
+#endif /* DEBUG_DEFINE */
+
+                if (cur_process == PRE_PROCESS)
+                        BEGIN(pre_process);
+                else if (cur_process == MAIN_PROCESS)
+                        BEGIN(main_process);
+                else
+                        yyerror("system err: pre_process_ifndef_iden");
+        }
+}
+
+<main_process>"#endif" {}
+<pre_process>"#endif" {}
+<pre_process_ifdef_skip>"#endif" {
+        if (cur_ifdef_skip_depth == 0) {
+                if (cur_process == PRE_PROCESS)
+                        BEGIN(pre_process);
+                else if (cur_process == MAIN_PROCESS)
+                        BEGIN(main_process);
+                else
+                        yyerror("system err: pre_process_ifndef_skip");
+        } else {
+                cur_ifdef_skip_depth--;
+        }
+}
+<pre_process_ifdef_skip>"#ifdef" {printf("\nQQQQQQ\n\n"); cur_ifdef_skip_depth++;}
+<pre_process_ifdef_skip>"#ifndef" {printf("\nQQQQQQ\n\n");cur_ifdef_skip_depth++;}
+<pre_process_ifdef_skip>[\n] {linenumber++;}
+<pre_process_ifdef_skip>. {}
 
 <pre_process>"function" BEGIN(pre_process_function);
 <pre_process_function>[_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext); BEGIN(pre_process);}
@@ -418,27 +590,6 @@ static void remove_macro_define_table(char* iden)
 
 <main_process>. {}
 
-<main_process>"#define" BEGIN(main_process_define_iden);
-<main_process_define_iden>[_a-zA-Z][_0-9a-zA-Z]* {
-        strcpy(define_iden_tmp, yytext);
-        BEGIN(main_process_define_replace);
-}
-<main_process_define_iden>[^ ]*$ {
-        printf("syntax err: #define マクロの識別子が不正です\n");
-        exit(EXIT_FAILURE);
-}
-<main_process_define_replace>[ ] {}
-<main_process_define_replace>[^ ].*[^\n] {
-        add_macro_define_table(define_iden_tmp, yytext);
-        BEGIN(main_process);
-}
-
-<main_process>"#undef" BEGIN(main_process_undef_iden);
-<main_process_undef_iden>[_a-zA-Z][_0-9a-zA-Z]* {
-        remove_macro_define_table(yytext);
-        BEGIN(main_process);
-}
-
 <main_process>"#include" BEGIN(main_process_include);
 <main_process_include>["][^"]+["] {
         push_include();
@@ -513,6 +664,8 @@ void start_pre_process(const char* __filepath)
 {
         strcpy(filepath, __filepath);
         linenumber = 1;
+        init_define_table();
+        cur_process = PRE_PROCESS;
         BEGIN(pre_process);
 }
 
@@ -520,6 +673,8 @@ void start_main_process(const char* __filepath)
 {
         strcpy(filepath, __filepath);
         linenumber = 1;
+        init_define_table();
+        cur_process = MAIN_PROCESS;
         BEGIN(main_process);
 }
 
