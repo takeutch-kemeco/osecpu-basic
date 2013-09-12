@@ -30,7 +30,6 @@
 
 extern char filepath[0x1000];
 extern int32_t linenumber;
-extern char* linelist[0x10000];
 
 /* 現在の filepath のファイル中から、line行目を文字列として dst へ読み出す。
  * dst には十分な長さのバッファーを渡すこと。
@@ -618,7 +617,7 @@ static void varlist_set_scope_head(void)
  * 最終的には、システムで用いるメモリーは、全て、このメモリー領域を利用するように置き換えたい。
  */
 
-#define MEM_SIZE (0x100000)
+#define MEM_SIZE (0x200000)
 
 static void init_mem(void)
 {
@@ -643,7 +642,7 @@ static void read_mem(const char* regname_data,
  * 実際には mem の STACK_BEGIN_ADDRESS 以降のメモリー領域を用いる。
  */
 
-#define STACK_BEGIN_ADDRESS (MEM_SIZE - 0x10000)
+#define STACK_BEGIN_ADDRESS (MEM_SIZE - 0x100000)
 
 /* 任意のレジスターの値をスタックにプッシュする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
@@ -830,49 +829,6 @@ static char init_labelstack[] = {
         "labelstack_head = 0;\n"
 };
 
-/* 任意のレジスターの値(SInt32型)を、アタッチスタックにプッシュする
- * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
- * また、代入プロセスが省略できるので高速化する
- */
-static void push_attachstack(const char* register_name)
-{
-        pA("PASMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
-        pA("attachstack_head++;");
-}
-
-/* アタッチスタックからアドレス(SInt32型)を、任意のレジスターへプッシュする
- * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
- * また、代入プロセスが省略できるので高速化する
- */
-static void pop_attachstack(const char* register_name)
-{
-        pA("attachstack_head--;");
-        pA("PALMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
-}
-
-/* アタッチスタックの初期化
- * アタッチスタックは、アタッチに用いるためのアドレスをスタックで管理するためのもの。
- */
-static char init_attachstack[] = {
-        "VPtr attachstack_ptr:P05;\n"
-        "junkApi_malloc(attachstack_ptr, T_SINT32, 0x100000);\n"
-        "SInt32 attachstack_socket:R20;\n"
-        "SInt32 attachstack_head:R21;\n"
-        "attachstack_head = 0;\n"
-};
-
-/* アタッチスタック関連の各種レジスターの値を、実行時に画面に印字する
- * 主にデバッグ用
- */
-static void debug_attachstack(void)
-{
-        pA("junkApi_putConstString('attachstack_socket[');");
-        pA("junkApi_putStringDec('\\1', attachstack_socket, 11, 1);");
-        pA("junkApi_putConstString('], attachstack_head[');");
-        pA("junkApi_putStringDec('\\1', attachstack_head, 11, 1);");
-        pA("junkApi_putConstString(']\\n');");
-}
-
 /* プリセット関数やアキュムレーターを呼び出し命令に対して、追加でさらに共通の定型命令を出力する。
  * すなわち、関数呼び出しのラッパ。
  * （ラベルスタックへの戻りラベルのプッシュ、関数実行、関数後位置への戻りラベル設定）
@@ -886,11 +842,11 @@ static void debug_attachstack(void)
  */
 static void callF(const int32_t label)
 {
-        pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+        pA("PLIMM(%s, %d);", CUR_RETURN_LABEL, cur_label_index_head);
         push_labelstack();
-        pA("PLIMM(P3F, %d);\n", label);
+        pA("PLIMM(P3F, %d);", label);
 
-        pA("LB(1, %d);\n", cur_label_index_head);
+        pA("LB(1, %d);", cur_label_index_head);
         cur_label_index_head++;
 }
 
@@ -900,7 +856,7 @@ static void callF(const int32_t label)
 static void retF(void)
 {
         pop_labelstack();
-        pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
+        pA("PCP(P3F, %s);", CUR_RETURN_LABEL);
 }
 
 /* beginF, endF
@@ -929,14 +885,82 @@ static void retF(void)
         cur_label_index_head += 2;                                      \
                                                                         \
         callF(unique_func_label);                                       \
-        pA("PLIMM(P3F, %d);\n", end_label);                             \
+        pA("PLIMM(P3F, %d);", end_label);                               \
                                                                         \
-        pA("LB(1, %d);\n", unique_func_label);
+        pA("LB(0, %d);", unique_func_label);
 
 #define endF()                                                          \
         retF();                                                         \
-        pA("LB(1, %d);\n", end_label);                                  \
+        pA("LB(0, %d);", end_label);                                    \
         func_label_init_flag = 1;
+
+/* アタッチスタック関連
+ */
+
+/* アタッチスタック関連の各種レジスターの値を、実行時に画面に印字する
+ * 主にデバッグ用
+ */
+static void debug_attachstack(void)
+{
+        beginF();
+        pA("junkApi_putConstString('attachstack_socket[');");
+        pA("junkApi_putStringDec('\\1', attachstack_socket, 11, 1);");
+        pA("junkApi_putConstString('], attachstack_head[');");
+        pA("junkApi_putStringDec('\\1', attachstack_head, 11, 1);");
+        pA("junkApi_putConstString(']\\n');");
+        endF();
+}
+
+/* 任意のレジスターの値(SInt32型)を、アタッチスタックにプッシュする
+ * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
+ * また、代入プロセスが省略できるので高速化する
+ */
+static void push_attachstack(const char* register_name)
+{
+        pA("PASMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
+        pA("attachstack_head++;");
+
+#ifdef DEBUG_ATTACHSTACK
+        pA("junkApi_putConstString('push_attachstack(), ');");
+        debug_attachstack();
+#endif /* DEBUG_ATTACHSTACK */
+}
+
+/* アタッチスタックからアドレス(SInt32型)を、任意のレジスターへプッシュする
+ * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
+ * また、代入プロセスが省略できるので高速化する
+ */
+static void pop_attachstack(const char* register_name)
+{
+        pA("attachstack_head--;");
+        pA("PALMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
+
+#ifdef DEBUG_ATTACHSTACK
+        pA("junkApi_putConstString('pop_attachstack(), ');");
+        debug_attachstack();
+#endif /* DEBUG_ATTACHSTACK */
+}
+
+static void pop_attachstack_dummy(void)
+{
+        pA("attachstack_head--;");
+
+#ifdef DEBUG_ATTACHSTACK
+        pA("junkApi_putConstString('pop_attachstack_dummy(), ');");
+        debug_attachstack();
+#endif /* DEBUG_ATTACHSTACK */
+}
+
+/* アタッチスタックの初期化
+ * アタッチスタックは、アタッチに用いるためのアドレスをスタックで管理するためのもの。
+ */
+static char init_attachstack[] = {
+        "VPtr attachstack_ptr:P05;\n"
+        "junkApi_malloc(attachstack_ptr, T_SINT32, 0x100);\n"
+        "SInt32 attachstack_socket:R20;\n"
+        "SInt32 attachstack_head:R21;\n"
+        "attachstack_head = 0;\n"
+};
 
 /* ヒープメモリー関連
  */
@@ -2207,11 +2231,10 @@ static void __call_user_function(const char* iden)
         if (labellist_search_unsafe(iden) == -1)
                 yyerror("syntax err: 未定義の関数を実行しようとしました");
 
-        /* gosub とほぼ同じ */
-        pA("PLIMM(%s, %d);\n", CUR_RETURN_LABEL, cur_label_index_head);
+        pA("PLIMM(%s, %d);", CUR_RETURN_LABEL, cur_label_index_head);
         push_labelstack();
-        pA("PLIMM(P3F, %d);\n", labellist_search(iden));
-        pA("LB(1, %d);\n", cur_label_index_head);
+        pA("PLIMM(P3F, %d);", labellist_search(iden));
+        pA("LB(1, %d);", cur_label_index_head);
         cur_label_index_head++;
 }
 
@@ -2232,7 +2255,7 @@ static void __define_user_function_begin(const char* iden,
         pA("PLIMM(P3F, %d);", skip_label);
 
         /* 関数呼び出し時には、この位置が関数の先頭、すなわちジャンプ先アドレスとなる */
-        pA("LB(1, %d);\n", labellist_search(iden));
+        pA("LB(1, %d);", labellist_search(iden));
 
         /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時）
          */
@@ -2305,7 +2328,7 @@ static void __define_user_function_return(void)
 
         /* 関数呼び出し元の位置まで戻る */
         pop_labelstack();
-        pA("PCP(P3F, %s);\n", CUR_RETURN_LABEL);
+        pA("PCP(P3F, %s);", CUR_RETURN_LABEL);
 }
 
 /* 関数定義の後半部
@@ -2330,7 +2353,7 @@ static void __define_user_function_end(const int32_t skip_label)
          * また、この skip_label の値は、
          * この関数とペアで呼ばれる関数 __define_user_function_begin() へのそれと同じ値である前提。
          */
-        pA("LB(1, %d);", skip_label);
+        pA("LB(0, %d);", skip_label);
 }
 
 /* 以下、各種プリセット関数 */
@@ -2373,7 +2396,7 @@ static void __func_print(void)
         pA("if ((fixL & 0x00000008) != 0) {fixR += 1;}");
         pA("if ((fixL & 0x00000004) != 0) {fixR += 1;}");
 
-        pA("junkApi_putStringDec('\\1', fixR, 4, 6);\n");
+        pA("junkApi_putStringDec('\\1', fixR, 4, 6);");
 
         /* 自動改行はさせない （最後にスペースを表示するのみ） */
         pA("junkApi_putConstString(' ');");
@@ -4749,6 +4772,9 @@ read_variable
                 __read_variable_array($1, $3);
         }
         | var_identifier __LB {
+                /* 余分なアタッチスタックを捨てる */
+                pop_attachstack_dummy();
+
                 /* 現在の stack_frame をプッシュする。
                  * そして、ここには関数終了後にはリターン値が入った状態となる。
                  */
@@ -4868,13 +4894,13 @@ iterator_for
 
 define_label
         : __DEFINE_LABEL {
-                pA("LB(1, %d);\n", labellist_search($1));
+                pA("LB(1, %d);", labellist_search($1));
         }
         ;
 
 jump
         : __STATE_GOTO __LABEL {
-                pA("PLIMM(P3F, %d);\n", labellist_search($2));
+                pA("PLIMM(P3F, %d);", labellist_search($2));
         }
         | __STATE_RETURN expression {
                 pop_stack("fixA");
