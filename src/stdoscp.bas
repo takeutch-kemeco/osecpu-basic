@@ -86,7 +86,7 @@ function __peek(address)
         dim ret;
 
         asm("fixL" = address);
-        asm("PALMEM0(fixA, T_SINT32, heap_ptr, fixL);");
+        asm("PALMEM0(fixA, T_SINT32, mem_ptr, fixL);");
 
         asm(ret = "fixA");
         return ret;
@@ -112,7 +112,7 @@ function __poke(address, value)
 {
         asm("fixL" = address);
         asm("fixR" = value);
-        asm("PASMEM0(fixR, T_SINT32, heap_ptr, fixL);");
+        asm("PASMEM0(fixR, T_SINT32, mem_ptr, fixL);");
 }
 
 /* 描画領域を初期設定して開く
@@ -221,7 +221,6 @@ function __fillrect(mode, width, height, x, y, color)
         asm("fixR >>= 16;");
         asm("fixLx >>= 16;");
         asm("fixRx >>= 16;");
-        asm("fixS >>= 16;");
 
         asm("junkApi_fillRect(fixT, fixL, fixR, fixLx, fixRx, fixS);");
 }
@@ -258,7 +257,6 @@ function __drawrect(mode, width, height, x, y, color)
         asm("fixR >>= 16;");
         asm("fixLx >>= 16;");
         asm("fixRx >>= 16;");
-        asm("fixS >>= 16;");
 
         asm("junkApi_drawRect(fixT, fixL, fixR, fixLx, fixRx, fixS);");
 }
@@ -289,7 +287,6 @@ function __drawpoint(mode, x, y, color)
         asm("fixT >>= 16;");
         asm("fixLx >>= 16;");
         asm("fixRx >>= 16;");
-        asm("fixS >>= 16;");
 
         asm("junkApi_drawPoint(fixT, fixLx, fixRx, fixS);");
 }
@@ -326,7 +323,6 @@ function __filloval(mode, width, height, x, y, color)
         asm("fixR >>= 16;");
         asm("fixLx >>= 16;");
         asm("fixRx >>= 16;");
-        asm("fixS >>= 16;");
 
         asm("junkApi_fillOval(fixT, fixL, fixR, fixLx, fixRx, fixS);");
 }
@@ -363,7 +359,6 @@ function __drawoval(mode, width, height, x, y, color)
         asm("fixR >>= 16;");
         asm("fixLx >>= 16;");
         asm("fixRx >>= 16;");
-        asm("fixS >>= 16;");
 
         asm("junkApi_drawOval(fixT, fixL, fixR, fixLx, fixRx, fixS);");
 }
@@ -400,7 +395,6 @@ function __drawline(mode, x0, y0, x1, y1, color)
         asm("fixR >>= 16;");
         asm("fixLx >>= 16;");
         asm("fixRx >>= 16;");
-        asm("fixS >>= 16;");
 
         asm("junkApi_drawLine(fixT, fixL, fixR, fixLx, fixRx, fixS);");
 }
@@ -429,8 +423,7 @@ function __inkey(mode)
 /* 乱数を得る
  *
  * 引数:
- * mode: 0: キーコードを得る。
- *       1: キーボードバッファーをクリアーせずにキーコードを得る。
+ * max: 乱数の最大値
  *
  * 戻り値: キーコード
  */
