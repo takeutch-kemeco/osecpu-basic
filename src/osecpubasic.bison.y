@@ -2221,7 +2221,8 @@ static void __read_variable_array(const char* iden, const int32_t dim)
 #endif /* DEBUG_READ_VARIABLE */
 }
 
-/* 以下、ユーザー定義関数関連 */
+/* ユーザー定義関数関連
+ */
 
 /* 関数呼び出し
  */
@@ -2356,7 +2357,8 @@ static void __define_user_function_end(const int32_t skip_label)
         pA("LB(0, %d);", skip_label);
 }
 
-/* 以下、各種プリセット関数 */
+/* 各種プリセット関数
+ */
 
 /* 文字列出力命令を出力する
  * fixL -> null
@@ -4813,22 +4815,28 @@ iterator
         ;
 
 iterator_while
-        : __STATE_WHILE {
-                /* ループの復帰位置をここに設定 */
-                const int32_t loop_head = cur_label_index_head;
-                cur_label_index_head++;
+        : __STATE_WHILE __LB {
+                const int32_t loop_head = cur_label_index_head++;
                 $<ival>$ = loop_head;
 
-                pA("LB(1, %d);", loop_head);
+                /* ループの復帰位置をここに設定 */
+                pA("LB(0, %d);", loop_head);
 
-        } __LB expression __RB {
+        } expression __RB {
+                const int32_t loop_end = cur_label_index_head++;
+                $<ival>$ = loop_end;
+
                 pop_stack("stack_socket");
-                pA("if (stack_socket != 0) {");
+                pA("if (stack_socket == 0) {");
+                pA("PLIMM(P3F, %d);", loop_end);
+                pA("}");
 
         } declaration {
                 /* ループの復帰 */
-                pA("PLIMM(P3F, %d);", $<ival>2);
-                pA_nl("}");
+                pA("PLIMM(P3F, %d);", $<ival>3);
+
+                /* 偽の場合はここへジャンプしてきて終了 */
+                pA("LB(0, %d);", $<ival>6);
         }
         ;
 
