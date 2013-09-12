@@ -4243,6 +4243,7 @@ static void ope_matrix_mul(const char* strA, const char* strL, const char* strR)
 %type <sval> func_filltri func_fillrect
 
 %type <sval> operation const_variable read_variable
+%type <sval> selection
 %type <sval> selection_if selection_if_v selection_if_e
 %type <sval> iterator iterator_while iterator_for
 %type <sval> initializer
@@ -4303,7 +4304,7 @@ declaration
                  */
                 pop_stack_dummy();
         }
-        | selection_if
+        | selection
         | iterator
         | jump __DECL_END
         | define_label __DECL_END
@@ -4784,6 +4785,10 @@ read_variable
         } expression_list __RB {
                 __call_user_function($1);
         }
+        ;
+
+selection
+        : selection_if
         ;
 
 selection_if
