@@ -1,6 +1,7 @@
 #include "stdoscp.bas"
 #include "math.bas"
 #include "matrix.bas"
+#include "stdgr.bas"
 
 dim scw=480, sch=240;
 dim pool[10000], m[3,3], v[3], rd=3.14159265358979/180;
@@ -32,16 +33,16 @@ __openwin(scw, sch);
                 add_vector3(vtx[i], vtx[i], &ov);
         }
 
-        draw_F4(vtx[0], vtx[1], vtx[2], vtx[3], (torgb 255 0 0));   /* 0 1 2 3 */
-        draw_F4(vtx[7], vtx[6], vtx[5], vtx[4], (torgb 0 255 0));   /* 4 5 6 7 */
-        draw_F4(vtx[4], vtx[5], vtx[1], vtx[0], (torgb 0 0 255));   /* 4 5 1 0 */
-        draw_F4(vtx[5], vtx[6], vtx[2], vtx[1], (torgb 255 255 0)); /* 4 5 2 1 */
-        draw_F4(vtx[6], vtx[7], vtx[3], vtx[2], (torgb 0 255 255)); /* 6 7 3 2 */
-        draw_F4(vtx[7], vtx[4], vtx[0], vtx[3], (torgb 255 0 255)); /* 7 4 0 3 */
+        draw_F4(vtx[0], vtx[1], vtx[2], vtx[3], 255, 192, 192); /* 0 1 2 3 */
+        draw_F4(vtx[7], vtx[6], vtx[5], vtx[4], 192, 255, 192); /* 4 5 6 7 */
+        draw_F4(vtx[4], vtx[5], vtx[1], vtx[0], 192, 192, 255); /* 4 5 1 0 */
+        draw_F4(vtx[5], vtx[6], vtx[2], vtx[1], 255, 255, 192); /* 4 5 2 1 */
+        draw_F4(vtx[6], vtx[7], vtx[3], vtx[2], 192, 255, 255); /* 6 7 3 2 */
+        draw_F4(vtx[7], vtx[4], vtx[0], vtx[3], 255, 192, 255); /* 7 4 0 3 */
 
         __sleep(0, 16);
 
-        __fillrect(0, scw, sch, 0, 0, (torgb 100 140 180));
+        __fillrect(0, scw, sch, 0, 0, 0);
 goto *LLL;
 
 function draw_F3(v0, v1, v2, col)
@@ -56,8 +57,9 @@ function draw_F3(v0, v1, v2, col)
                 filltri 0 v0@v[0] v0@v[1] v1@v[0] v1@v[1] v2@v[0] v2@v[1] col;
 }
 
-function draw_F4(v0, v1, v2, v3, col)
+function draw_F4(v0, v1, v2, v3, r, g, b)
 {
+        dim col = torgb(r, g, b);
         draw_F3(v0, v1, v2, col);
         draw_F3(v2, v3, v0, col);
 }
