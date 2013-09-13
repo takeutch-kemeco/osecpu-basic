@@ -1817,7 +1817,29 @@ static void __func_logical_rshift(void)
         endF();
 }
 
-/* 以下、各種代入関数 */
+/* 変数インスタンス関連
+ */
+
+/* ローカル変数のインスタンス生成
+ */
+static void __initializer_local(const char* iden,
+                                const int32_t row_len,
+                                const int32_t col_len)
+{
+        /* これはコンパイル時の変数状態を設定するにすぎない。
+         * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
+         */
+        varlist_add_local(iden, row_len, col_len);
+
+        /* 実際の動作時にメモリー確保するルーチンはこちら側
+         */
+        struct Var* var = varlist_search_local(iden);
+        if (var->is_local)
+                pA("stack_head += %d;", var->array_len);
+}
+
+/* 変数への代入関連
+ */
 
 /* 名前がidenのスカラー変数へ、値を代入する。
  *
@@ -1980,7 +2002,8 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
 #endif /* DEBUG_ASSIGNMENT */
 }
 
-/* 以下、各種リード関数 */
+/* 変数リード関連
+ */
 
 static void __read_variable_ptr_scaler(const char* iden)
 {
@@ -4519,11 +4542,11 @@ initializer_param
 
 initializer
         : __STATE_DIM __IDENTIFIER initializer_param {
-                varlist_add_local($2, $3[1], $3[0]);
+                __initializer_local($2, $3[1], $3[0]);
                 strcpy($$, $2);
         }
         | initializer __OPE_COMMA __IDENTIFIER initializer_param {
-                varlist_add_local($3, $4[1], $4[0]);
+                __initializer_local($3, $4[1], $4[0]);
                 strcpy($$, $3);
         }
         | initializer __OPE_SUBST expression {
