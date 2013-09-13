@@ -542,28 +542,7 @@ static int32_t cur_ifdef_skip_depth;
 
 <main_process>"asm"     return(__STATE_ASM);
 
-<main_process>"print"   return(__FUNC_PRINT);
-<main_process>"input"   return(__FUNC_INPUT);
-<main_process>"peek"    return(__FUNC_PEEK);
-<main_process>"poke"    return(__FUNC_POKE);
-<main_process>"chr$"    return(__FUNC_CHR_S);
-<main_process>"val"     return(__FUNC_VAL);
-<main_process>"mid$"    return(__FUNC_MID_S);
-<main_process>"rnd"     return(__FUNC_RND);
-<main_process>"input$"  return(__FUNC_INPUT_S);
-
-<main_process>"sin"     return(__FUNC_SIN);
-<main_process>"cos"     return(__FUNC_COS);
-<main_process>"tan"     return(__FUNC_TAN);
-<main_process>"sqrt"    return(__FUNC_SQRT);
-
-<main_process>"openwin"         return(__FUNC_OPENWIN);
-<main_process>"torgb"           return(__FUNC_TORGB);
-<main_process>"drawpoint"       return(__FUNC_DRAWPOINT);
-<main_process>"drawline"        return(__FUNC_DRAWLINE);
-<main_process>"filltri"         return(__FUNC_FILLTRI);
-<main_process>"fillrect"        return(__FUNC_FILLRECT);
-<main_process>"sleep"           return(__FUNC_SLEEP);
+<main_process>"filltri" return(__FUNC_FILLTRI);
 
 <main_process>[_a-zA-Z][_0-9a-zA-Z]* {
         char* replace = search_iden_define_table(yytext);
