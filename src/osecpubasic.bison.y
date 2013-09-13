@@ -1461,236 +1461,6 @@ static void __func_minus(void)
         __func_minus_float();
 }
 
-/* powのバックエンドに用いる sqrt 命令を出力する
- * fixL -> fixA
- * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
- *
- * nr x (xn - (xn ^ p - x) / (p * xn ^ (p - 1))
- *    L  R     R * R    L     2    R     ---
- */
-
-static void __func_sqrt(void)
-{
-        beginF();
-
-        /* 終了位置ラベル用（コンパイル時） */
-        static int32_t __func_sqrt_end_label = -1;
-
-        /* コンパイル時に、この関数の呼び出しの最初ならば、ラベル番号を確保する（コンパイル時） */
-        if (__func_sqrt_end_label == -1) {
-                __func_sqrt_end_label = cur_label_index_head;
-                cur_label_index_head++;
-        }
-
-        /* fixL, fixT -> fixT */
-        void nr(void)
-        {
-                push_eoe();
-                pA("fixL = fixR;");
-                __func_mul();
-                pop_eoe();
-                pA("fixLx = fixA;");
-                pA("fixLx -= fixL;");
-
-                push_eoe();
-                pA("fixL = 0x00020000;");
-                __func_mul();
-                pop_eoe();
-                pA("fixRx = fixA;");
-
-                push_eoe();
-                pA("fixL = fixLx;");
-                pA("fixR = fixRx;");
-                __func_div();
-                pop_eoe();
-
-                pA("fixT = fixA;");
-                pA("fixA = fixR - fixT;");
-
-                pA("if (fixT < 0) {fixT = -fixT;}");
-                pA("if (fixT < 0x00000100) {PLIMM(P3F, %d);}", __func_sqrt_end_label);
-        }
-
-        push_eoe();
-        pA("fixR = 0x00020000;");
-        __func_div();
-        pop_eoe();
-
-        pA("fixR = fixA;");     nr();
-        pA("fixR = fixA;");     nr();
-        pA("fixR = fixA;");     nr();
-        pA("fixR = fixA;");     nr();
-        pA("fixR = fixA;");     nr();
-        pA("fixR = fixA;");     nr();
-        pA("fixR = fixA;");     nr();
-        pA("fixR = fixA;");     nr();
-
-        pA("LB(1, %d);", __func_sqrt_end_label);
-
-        endF();
-}
-
-/* powのバックエンドに用いる ±a ^ +b (ただし b = 整数、かつ a != 0) 限定のpow。（bが正の場合限定のpow）
- * fixL ^ fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_pow_p(void)
-{
-        beginF();
-
-        void tt(void)
-        {
-                push_eoe();
-                pA("fixL = fixT;");
-                pA("fixR = fixT;");
-                __func_mul();
-                pop_eoe();
-                pA("fixT = fixA;");
-        }
-
-        void rt(void)
-        {
-                push_eoe();
-                pA("fixL = fixT;");
-                __func_sqrt();
-                pop_eoe();
-                pA("fixT = fixA;");
-        }
-
-        void st(void)
-        {
-                push_eoe();
-                pA("fixL = fixS;");
-                pA("fixR = fixT;");
-                __func_mul();
-                pop_eoe();
-                pA("fixS = fixA;");
-        }
-
-        pA("fixS = 0x00010000;");
-
-        pA("fixT = fixL;");
-        pA("if ((fixR & 0x00010000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x00020000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x00040000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x00080000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x00100000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x00200000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x00400000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x00800000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x01000000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x02000000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x04000000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x08000000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x10000000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x20000000) != 0) {"); st(); pA("}"); tt();
-        pA("if ((fixR & 0x40000000) != 0) {"); st(); pA("}");
-
-        pA("fixT = fixL;"); rt();
-        pA("if ((fixR & 0x00008000) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00004000) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00002000) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00001000) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000800) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000400) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000200) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000100) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000080) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000040) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000020) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000010) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000008) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000004) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000002) != 0) {"); st(); pA("}"); rt();
-        pA("if ((fixR & 0x00000001) != 0) {"); st(); pA("}");
-
-        pA("fixA = fixS;");
-
-        endF();
-}
-
-/* powのバックエンドに用いる ±a ^ -b (ただし b = 整数、かつ a != 0) 限定のpow。（bが負の場合限定のpow）
- * fixL ^ fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_pow_m(void)
-{
-        beginF();
-
-        pA("fixR = -fixR;");
-        __func_pow_p();
-
-        pA("fixL = 0x00010000;");
-        pA("fixR = fixA;");
-        __func_div();
-
-        endF();
-}
-
-/* 冪乗命令を出力する
- * fixL ^ fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_pow(void)
-{
-        beginF();
-
-        /* 左辺が0以外で正の場合 */
-        pA("if (fixL > 0) {");
-                /* 右辺が0 または 正の整数の場合 */
-                pA("if (fixR >= 0) {");
-                        push_eoe();
-                        __func_pow_p();
-                        pop_eoe();
-                pA("}");
-
-                /* 右辺が負の整数の場合 */
-                pA("if (fixR < 0) {");
-                        push_eoe();
-                        __func_pow_m();
-                        pop_eoe();
-                pA("}");
-        pA("}");
-
-        /* 左辺が0以外で負の場合 */
-        pA("if (fixL < 0) {");
-                /* 右辺が非整数の場合 */
-                pA("if ((fixR & 0x0000ffff) != 0) {");
-                        pA("junkApi_putConstString('system err: -a ^ 0.1 is not support.');");
-                        pA("jnukApi_exit(1);");
-                pA("}");
-
-                /* 右辺が0 または 正の整数の場合 */
-                pA("if (fixR >= 0) {");
-                        push_eoe();
-                        __func_pow_p();
-                        pop_eoe();
-                pA("}");
-
-                /* 右辺が負の整数の場合 */
-                pA("if (fixR < 0) {");
-                        push_eoe();
-                        __func_pow_m();
-                        pop_eoe();
-                pA("}");
-        pA("}");
-
-        /* 左辺が0の場合 */
-        pA("if (fixL == 0) {");
-                /* 右辺が0または負の場合は、計算未定義と表示して終了 */
-                pA("if(fixR <= 0) {");
-                        pA("junkApi_putConstString('system err: 0 ^ 0 or 0 ^ -x is not support.');");
-                        pA("jnukApi_exit(1);");
-
-                /* 右辺が正の場合は、常に0を返す */
-                pA("} else {");
-                        pA("fixA = 0;");
-                pA("}");
-        pA("}");
-
-        endF();
-}
-
 /* and命令を出力する
  * fixL & fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
@@ -2346,52 +2116,6 @@ static void __define_user_function_end(const int32_t skip_label)
 /* 各種プリセット関数
  */
 
-/* 描画領域に点を描く
- * fixT, fixL, fixR, fixS -> null
- * あらかじめ fix? に配列の値をセットしておくこと。 演算結果は存在しない。
- *
- * fixT: mode
- * fixL: x座標
- * fixR: y座標
- * fixS: RGB （32bitカラー。フォーマットは0x00RRGGBB）
- */
-static void __func_drawpoint(void)
-{
-        beginF();
-
-        pA("fixT >>= 16;");     /* mode */
-        pA("fixL >>= 16;");     /* x */
-        pA("fixR >>= 16;");     /* y */
-        pA("junkApi_drawPoint(fixT, fixL, fixR, fixS);");
-
-        endF();
-}
-
-/* 描画領域に線を描く
- * fixT, fixL, fixR, fixLx, fixRx, fixS -> null
- * あらかじめ fix? に配列の値をセットしておくこと。 演算結果は存在しない。
- *
- * fixT: mode
- * fixL: 始点x座標
- * fixR: 始点y座標
- * fixLx: 終点x座標
- * fixRx: 終点y座標
- * fixS: RGB （32bitカラー。フォーマットは0x00RRGGBB）
- */
-static void __func_drawline(void)
-{
-        beginF();
-
-        pA("fixT >>= 16;");     /* mode */
-        pA("fixL >>= 16;");     /* x0 */
-        pA("fixR >>= 16;");     /* y0 */
-        pA("fixLx >>= 16;");    /* x1 */
-        pA("fixRx >>= 16;");    /* y1 */
-        pA("junkApi_drawLine(fixT, fixL, fixR, fixLx, fixRx, fixS);");
-
-        endF();
-}
-
 /* 線分ベクトルの絶対値を得る命令を出力する
  * あらかじめ各 fix? に所定の値をセットしておくこと。 演算結果はfixAへ出力される。
  * fixL:x0, fixR:y0, fixLx:x1, fixRx:y1 -> fixA
@@ -2424,7 +2148,7 @@ static void __func_lineabs(void)
          */
         push_eoe();
         pA("fixL = fixT1 + fixT2;");
-        __func_sqrt();
+//        __func_sqrt();
         pop_eoe();
 
         endF();
@@ -2827,7 +2551,7 @@ static void __func_filltri(void)
 
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB
-%left  __OPE_MUL __OPE_DIV __OPE_MOD __OPE_POWER
+%left  __OPE_MUL __OPE_DIV __OPE_MOD
 %left  __OPE_OR __OPE_AND __OPE_XOR __OPE_INVERT __OPE_NOT
 %left  __OPE_LSHIFT __OPE_RSHIFT __OPE_ARITHMETIC_RSHIFT
 %left  __OPE_COMMA __OPE_COLON __OPE_DOT __OPE_ARROW __OPE_VALEN
@@ -3054,11 +2778,6 @@ operation
         | expression __OPE_DIV expression {
                 read_eoe_arg();
                 __func_div();
-                push_stack("fixA");
-        }
-        | expression __OPE_POWER expression {
-                read_eoe_arg();
-                __func_pow();
                 push_stack("fixA");
         }
         | expression __OPE_MOD expression {

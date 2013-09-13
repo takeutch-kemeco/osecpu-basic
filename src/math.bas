@@ -43,9 +43,9 @@ function __sin(a)
                 a = b - pi_2;
 
         b = a;
-        b = b - ((a pow 3) * 0.16666666666666);
-        b = b + ((a pow 5) * 0.00833333333333);
-        b = b - ((a pow 7) * 0.0001984126984127);
+        b = b - (__pow(a, 3) * 0.16666666666666);
+        b = b + (__pow(a, 5) * 0.00833333333333);
+        b = b - (__pow(a, 7) * 0.0001984126984127);
 
         return b;
 }
@@ -75,10 +75,88 @@ function __cos(a)
 function __tan(a)
 {
         return a +
-               ((a pow 3) * 1) / 3 +
-               ((a pow 5) * 2) / 15 +
-               ((a pow 7) * 17) / 315 +
-               ((a pow 9) * 62) / 2835;
+               (__pow(a, 3) * 1) / 3 +
+               (__pow(a, 5) * 2) / 15 +
+               (__pow(a, 7) * 17) / 315 +
+               (__pow(a, 9) * 62) / 2835;
+}
+
+/* sqrt
+ *
+ * 引数:
+ * a: sqrt への引数
+ *
+ * 戻り値: sqrt(a) の結果
+ */
+function __sqrt(x)
+{
+        dim xn = x / 2;
+        dim i;
+        for (i = 0; i < 8; i = i + 1)
+                xn = xn - ((xn * xn) - x) / (2 * xn);
+
+        return xn;
+}
+
+/* powのバックエンドに用いる ±a ^ +b (ただし b = 整数、かつ a != 0) 限定のpow。（bが正の場合限定のpow）
+ */
+function __pow_p(a, b)
+{
+        dim s = 1;
+        dim t = a;
+        dim i;
+        for (i = 0; i < 15; i = i + 1) {
+                if (b and (1 << i))
+                        s = s * t;
+
+                t = t * t;
+        }
+
+        t = a;
+        for (i = 1; i < 16; i = i + 1) {
+                if (b and (1 >> i))
+                        s = s * t;
+
+                t = __sqrt(t);
+        }
+
+        return s;
+}
+
+/* powのバックエンドに用いる ±a ^ -b (ただし b = 整数、かつ a != 0) 限定のpow。（bが負の場合限定のpow）
+ */
+function __pow_m(a, b)
+{
+        return 1 / __pow_p(a, -b);
+}
+
+/* pow
+ * a ^ b -> return
+ */
+function __pow(a, b)
+{
+        if (a > 0) {
+                if (b >= 0) {
+                        return __pow_p(a, b);
+                } else {
+                        return __pow_m(a, b);
+                }
+        } else if (a < 0) {
+                /* 非整数の場合エラー */
+//              if (...
+
+                if (b >= 0) {
+                        return __pow_p(a, b);
+                } else {
+                        return __pow_m(a, b);
+                }
+        } else {
+                if (b <= 0) {
+                        __exit(1);
+                }
+
+                return 0;
+        }
 }
 
 #endif /* __MATH_BAS__ */

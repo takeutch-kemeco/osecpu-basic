@@ -430,8 +430,6 @@ static int32_t cur_ifdef_skip_depth;
 <main_process>"/"       return(__OPE_DIV);
 <main_process>"%"       return(__OPE_MOD);
 
-<main_process>"pow"     return(__OPE_POWER);
-
 <main_process>"|"       return(__OPE_OR);
 <main_process>"and"     return(__OPE_AND);
 <main_process>"^"       return(__OPE_XOR);
