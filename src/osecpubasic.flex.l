@@ -524,12 +524,6 @@ static int32_t cur_ifdef_skip_depth;
 
 <main_process>"sizeof"  return(__OPE_SIZEOF);
 
-<main_process>"mat"     return(__STATE_MAT);
-<main_process>"zer"     return(__STATE_MAT_ZER);
-<main_process>"con"     return(__STATE_MAT_CON);
-<main_process>"idn"     return(__STATE_MAT_IDN);
-<main_process>"trn"     return(__STATE_MAT_TRN);
-
 <main_process>"struct"  return(__STATE_STRUCT);
 <main_process>"enum"  return(__STATE_ENUM);
 
@@ -618,36 +612,6 @@ static int32_t cur_ifdef_skip_depth;
         fprintf(yyaskB,
                 "PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);\n"
                 "heap_offset = stack_socket;\n");
-}
-
-<tune_process>"PASMEM0(stack_socket, T_SINT32, attachstack_ptr, attachstack_head);"[ \n]*"PALMEM0(matbpR, T_SINT32, attachstack_ptr, attachstack_head);" {
-        fprintf(yyaskB,
-                "PASMEM0(stack_socket, T_SINT32, attachstack_ptr, attachstack_head);\n"
-                "matbpR = stack_socket;\n");
-}
-
-<tune_process>"heap_offset = matcountrow << 16;"[ \n]*"heap_base = matbpA;"[ \n]*"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {
-        fprintf(yyaskB,
-                "heap_offset = matcountrow & 0x0000ffff;\n"
-                "heap_base = matbpA;\n");
-}
-
-<tune_process>"heap_offset = matcountrow << 16;"[ \n]*"heap_base = matbpL;"[ \n]*"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {
-        fprintf(yyaskB,
-                "heap_offset = matcountrow & 0x0000ffff;\n"
-                "heap_base = matbpL;\n");
-}
-
-<tune_process>"heap_offset = matcountrow << 16;"[ \n]*"heap_base = matbpR;"[ \n]*"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {
-        fprintf(yyaskB,
-                "heap_offset = matcountrow & 0x0000ffff;\n"
-                "heap_base = matbpR;\n");
-}
-
-<tune_process>"heap_offset <<= 16;"[ \n]*"heap_base = matbpA;"[ \n]*"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {
-        fprintf(yyaskB,
-                "heap_offset &= 0x0000ffff;\n"
-                "heap_base = matbpA;\n");
 }
 
 <tune_process>"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {

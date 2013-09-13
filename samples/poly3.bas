@@ -18,7 +18,7 @@ vt[6]@v[0]=+22; vt[6]@v[1]=+22; vt[6]@v[2]=+22; vt[7]@v[0]=-22; vt[7]@v[1]=+22; 
 __openwin(scw, sch);
 
 *LLL;
-        mat rv = rv + rvd;
+        add_vector3(&rv, &rv, &rvd);
 
         dim mx[3,3], my[3,3], mz[3,3], mt[3,3], rm[3,3];
         rot_matrix3(&rm, &rv);
