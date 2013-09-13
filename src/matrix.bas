@@ -46,7 +46,7 @@ function scale_matrix3(m0, scale)
         }
 }
 
-/* 3ベクトルのスカラー倍
+/* 3次元ベクトルのスカラー倍
  * scale * v0 -> v0
  */
 function scale_vector3(v0, scale)
@@ -58,7 +58,7 @@ function scale_vector3(v0, scale)
                 v0@va[i] = scale * v0@va[i];
 }
 
-/* 3ベクトルの加算
+/* 3次元ベクトルの加算
  * v1 + v2 -> v0
  */
 function add_vector3(v0, v1, v2)
@@ -68,6 +68,18 @@ function add_vector3(v0, v1, v2)
         dim i;
         for (i = 0; i < 3; i = i + 1)
                 v0@va[i] = v1@va[i] + v2@va[i];
+}
+
+/* 3次元ベクトルの減算
+ * v1 - v2 -> v0
+ */
+function sub_vector3(v0, v1, v2)
+{
+        dim va[3];
+
+        dim i;
+        for (i = 0; i < 3; i = i + 1)
+                v0@va[i] = v1@va[i] - v2@va[i];
 }
 
 /* 3x3行列の乗算
@@ -174,6 +186,33 @@ function print_matrix3(m)
                         __print(m@ma[j,i]);
                 }
         }
+}
+
+/* 3次元ベクトルの内積
+ * v1 * v2 -> return
+ */
+function inner_product_vector3(v1, v2)
+{
+        dim va[3];
+        dim tmp = 0;
+
+        dim i;
+        for (i = 0; i < 3; i = i + 1)
+                tmp = tmp + (v1@va[i] * v2@va[i]);
+
+        return tmp;
+}
+
+/* 3次元ベクトルのクロス積
+ * v1 . v2 -> v0
+ */
+function cross_product_vector3(v0, v1, v2)
+{
+        dim va[3];
+
+        v0@va[0] = v1@va[1] * v2@va[2] - v1@va[2] * v2@va[1];
+        v0@va[1] = v1@va[2] * v2@va[0] - v1@va[0] * v2@va[2];
+        v0@va[2] = v1@va[0] * v2@va[1] - v1@va[1] * v2@va[0];
 }
 
 #endif /* __MATRIX_BAS__ */
