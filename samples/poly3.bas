@@ -21,11 +21,7 @@ __openwin(scw, sch);
         mat rv = rv + rvd;
 
         dim mx[3,3], my[3,3], mz[3,3], mt[3,3], rm[3,3];
-        rot_x_matrix3(&mx, rv[0]);
-        rot_y_matrix3(&my, rv[1]);
-        rot_z_matrix3(&mz, rv[2]);
-        mul_matrix3(&mt, &mz, &my);
-        mul_matrix3(&rm, &mt, &mx);
+        rot_matrix3(&rm, &rv);
 
         dim prj=200, tz=100;
         dim ov[3]; ov[0]=scw/2; ov[1]=sch/2; ov[2]=0;
@@ -37,7 +33,7 @@ __openwin(scw, sch);
         }
 
         draw_F4(vtx[0], vtx[1], vtx[2], vtx[3], (torgb 255 0 0));   /* 0 1 2 3 */
-        draw_F4(vtx[4], vtx[5], vtx[6], vtx[7], (torgb 0 255 0));   /* 4 5 6 7 */
+        draw_F4(vtx[7], vtx[6], vtx[5], vtx[4], (torgb 0 255 0));   /* 4 5 6 7 */
         draw_F4(vtx[4], vtx[5], vtx[1], vtx[0], (torgb 0 0 255));   /* 4 5 1 0 */
         draw_F4(vtx[5], vtx[6], vtx[2], vtx[1], (torgb 255 255 0)); /* 4 5 2 1 */
         draw_F4(vtx[6], vtx[7], vtx[3], vtx[2], (torgb 0 255 255)); /* 6 7 3 2 */
@@ -50,12 +46,13 @@ goto *LLL;
 
 function draw_F3(v0, v1, v2, col)
 {
-#ifdef ZERO
-        mat va = v1@v - v0@v;
-        mat vb = v2@v - v1@v;
-        mat va = va * vb;
-        if (va[2] >= 0)
-#endif
+        dim va[3];
+        dim vb[3];
+        dim vc[3];
+        sub_vector3(&va, v1, v0);
+        sub_vector3(&vb, v2, v1);
+        cross_product_vector3(&vc, &va, &vb);
+        if (vc[2] >= 0)
                 filltri 0 v0@v[0] v0@v[1] v1@v[0] v1@v[1] v2@v[0] v2@v[1] col;
 }
 
