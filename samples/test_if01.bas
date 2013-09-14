@@ -1,18 +1,20 @@
+#include "stdoscp.bas"
+
 if (0 < 1)
-        print 123;
+        __print(123);
 
 if (1)
-        print 234;
+        __print(234);
 
-if (0) print -1; else print 345;
+if (0) __print(-1); else __print(345);
 
 if (0)
-        print -1;
+        __print(-1);
 else
-        print 456;
+        __print(456);
 
 if (1) {
-        print 567;
+        __print(567);
 } else {
-        print -1;
+        __print(-1);
 }

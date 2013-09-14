@@ -2571,8 +2571,10 @@ static void __func_filltri(void)
 %type <sval> func_filltri
 
 %type <sval> operation const_variable read_variable
+
 %type <sval> selection
-%type <sval> selection_if selection_if_v selection_if_e
+%type <ival_list> selection_if selection_if_v
+
 %type <sval> iterator iterator_while iterator_for
 %type <sval> initializer
 %type <ival_list> initializer_param
@@ -2908,25 +2910,33 @@ selection
         ;
 
 selection_if
-        : selection_if_v selection_if_e
+        : selection_if_v __STATE_ELSE {
+                pA("LB(0, %d);", $1[0]);
+        } declaration {
+                pA("LB(0, %d);", $1[1]);
+        }
         | selection_if_v {
-                pA(" ");
+                pA("LB(0, %d);", $1[0]);
+                pA("LB(0, %d);", $1[1]);
         }
         ;
 
 selection_if_v
         : __STATE_IF __LB expression __RB {
-                pop_stack("stack_socket");
-                pA("if (stack_socket != 0) {");
-        } declaration {
-                pA_nl("}");
-        }
+                const int32_t else_label = cur_label_index_head++;
+                $<ival>$ = else_label;
 
-selection_if_e
-        : __STATE_ELSE {
-                pA(" else {");
-        } declaration {
+                pop_stack("stack_socket");
+                pA("if (stack_socket == 0) {");
+                pA("PLIMM(P3F, %d);", else_label);
                 pA("}");
+
+        } declaration {
+                const int32_t end_label = cur_label_index_head++;
+                $$[0] = $<ival>5;
+                $$[1] = end_label;
+
+                pA("PLIMM(P3F, %d);", end_label);
         }
         ;
 
