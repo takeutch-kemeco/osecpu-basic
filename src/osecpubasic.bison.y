@@ -1532,9 +1532,7 @@ static void __assignment_scaler(struct Var* var)
                         pA("heap_base = %d;", var->base_ptr);
                 }
         } else {
-                if (var->is_direct) {
-                        pop_stack("heap_base");
-                }
+                pop_stack("heap_base");
         }
 
         /* アドレス位置へ値を書き込む */
@@ -1638,9 +1636,7 @@ static void __assignment_array(struct Var* var, const int32_t dimlen)
                         pA("heap_base = %d;", var->base_ptr);
                 }
         } else {
-                if (var->is_direct) {
-                        pop_stack("heap_base");
-                }
+                pop_stack("heap_base");
         }
 
         /* アドレス + 配列インデックス位置へ値を書き込む
