@@ -2638,7 +2638,7 @@ declaration
         | define_label __DECL_END
         | define_function
         | define_struct
-        | inline_assembler
+        | inline_assembler __DECL_END
         | __DECL_END
         ;
 
