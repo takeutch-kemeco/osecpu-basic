@@ -467,6 +467,7 @@ struct Var {
         int32_t col_len;        /* 行の長さ */
         int32_t row_len;        /* 列の長さ */
         int32_t is_local;       /* この変数がローカルならば非0、グローバルならば0となる */
+        int32_t is_direct;      /* この変数が直接参照ならば非0、間接参照ならば0となる */
 };
 
 #define VARLIST_LEN 0x1000
@@ -569,6 +570,7 @@ static void varlist_add_common(const char* str, const int32_t row_len, const int
         cur->array_len = col_len * row_len;
         cur->base_ptr = (varlist_head == 0) ? 0 : prev->base_ptr + prev->array_len;
         cur->is_local = (cur_scope_depth >= 1) ? 1 : 0;
+        cur->is_direct = 1;     /* デフォルトでは直接参照 */
 
         varlist_head++;
 
@@ -894,74 +896,6 @@ static void retF(void)
         pA("LB(0, %d);", end_label);                                    \
         func_label_init_flag = 1;
 
-/* アタッチスタック関連
- */
-
-/* アタッチスタック関連の各種レジスターの値を、実行時に画面に印字する
- * 主にデバッグ用
- */
-static void debug_attachstack(void)
-{
-        beginF();
-        pA("junkApi_putConstString('attachstack_socket[');");
-        pA("junkApi_putStringDec('\\1', attachstack_socket, 11, 1);");
-        pA("junkApi_putConstString('], attachstack_head[');");
-        pA("junkApi_putStringDec('\\1', attachstack_head, 11, 1);");
-        pA("junkApi_putConstString(']\\n');");
-        endF();
-}
-
-/* 任意のレジスターの値(SInt32型)を、アタッチスタックにプッシュする
- * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
- * また、代入プロセスが省略できるので高速化する
- */
-static void push_attachstack(const char* register_name)
-{
-        pA("PASMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
-        pA("attachstack_head++;");
-
-#ifdef DEBUG_ATTACHSTACK
-        pA("junkApi_putConstString('push_attachstack(), ');");
-        debug_attachstack();
-#endif /* DEBUG_ATTACHSTACK */
-}
-
-/* アタッチスタックからアドレス(SInt32型)を、任意のレジスターへプッシュする
- * 事前に attachstack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
- * また、代入プロセスが省略できるので高速化する
- */
-static void pop_attachstack(const char* register_name)
-{
-        pA("attachstack_head--;");
-        pA("PALMEM0(%s, T_SINT32, attachstack_ptr, attachstack_head);", register_name);
-
-#ifdef DEBUG_ATTACHSTACK
-        pA("junkApi_putConstString('pop_attachstack(), ');");
-        debug_attachstack();
-#endif /* DEBUG_ATTACHSTACK */
-}
-
-static void pop_attachstack_dummy(void)
-{
-        pA("attachstack_head--;");
-
-#ifdef DEBUG_ATTACHSTACK
-        pA("junkApi_putConstString('pop_attachstack_dummy(), ');");
-        debug_attachstack();
-#endif /* DEBUG_ATTACHSTACK */
-}
-
-/* アタッチスタックの初期化
- * アタッチスタックは、アタッチに用いるためのアドレスをスタックで管理するためのもの。
- */
-static char init_attachstack[] = {
-        "VPtr attachstack_ptr:P05;\n"
-        "junkApi_malloc(attachstack_ptr, T_SINT32, 0x100);\n"
-        "SInt32 attachstack_socket:R20;\n"
-        "SInt32 attachstack_head:R21;\n"
-        "attachstack_head = 0;\n"
-};
-
 /* ヒープメモリー関連
  */
 
@@ -1107,7 +1041,6 @@ void init_all(void)
         init_heap();
         init_stack();
         pA(init_labelstack);
-        pA(init_attachstack);
         pA(init_eoe_arg);
 }
 
@@ -1574,39 +1507,37 @@ static void __initializer_local(const char* iden,
 /* 変数への代入関連
  */
 
-/* 名前がidenのスカラー変数へ、値を代入する。
- *
- * iden へは代入先の配列変数名を渡す
+/* スカラー変数へ、値を代入する。
  *
  * 値はあらかじめスタックにプッシュされてる前提。
- * また、アタッチも同様にあらかじめアタッチスタックにプッシュされてる前提。
+ * また、間接参照の場合はスタックに "間接参照アドレス, 値" の順でプッシュされてる前提。
  */
-static void __assignment_scaler(const char* iden)
+static void __assignment_scaler(struct Var* var)
 {
-        /* 変数のスペックを得る。（コンパイル時） */
-        struct Var* var = varlist_search(iden);
-        if (var == NULL)
-                yyerror("syntax err: 未定義のスカラー変数へ代入しようとしました");
+        /* 書き込む値を読んでおく */
+        pop_stack("stack_socket");
 
         /* 変数が配列な場合はエラー（コンパイル時） */
         if (var->row_len != 1 || var->col_len != 1)
                 yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
 
-        /* ヒープ書き込み位置のデフォルト値をセットする命令を出力する（コンパイル時） */
-        if (var->is_local)
-                pA("heap_base = %d + stack_frame;", var->base_ptr);
-        else
-                pA("heap_base = %d;", var->base_ptr);
-
-        /* 書き込む値を読んでおく */
-        pop_stack("stack_socket");
-
-        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
-         * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
+        /* ヒープ書き込み位置をセットする命令を出力する。（コンパイル時）
+         * 直接参照ならば、グローバルかローカルにより処理が変わる。
+         * 間接参照ならば、ここのスタックにアタッチアドレスが詰まれてるはずなので、それをポップして用いる。
          */
-        pop_attachstack("attachstack_socket");
-        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
+        if (var->is_direct) {
+                if (var->is_local) {
+                        pA("heap_base = %d + stack_frame;", var->base_ptr);
+                } else {
+                        pA("heap_base = %d;", var->base_ptr);
+                }
+        } else {
+                if (var->is_direct) {
+                        pop_stack("heap_base");
+                }
+        }
 
+        /* アドレス位置へ値を書き込む */
         write_mem("stack_socket", "heap_base");
 
         /* 変数へ書き込んだ値をスタックへもプッシュしておく
@@ -1622,32 +1553,30 @@ static void __assignment_scaler(const char* iden)
         else
                 pA("junkApi_putConstString('is_global ');");
 
+        if (var->is_direct)
+                pA("junkApi_putConstString('is_direct ');");
+        else
+                pA("junkApi_putConstString('is_indirect ');");
+
         debug_stack();
-        debug_attachstack();
         debug_heap();
 #endif /* DEBUG_ASSIGNMENT */
 }
 
-/* 名前がidenの配列変数中の、任意インデックス番目の要素へ、値を代入する。
+/* 配列変数中の、任意インデックス番目の要素へ、値を代入する。
  *
- * iden へは代入先の配列変数名を渡す
- * dimlen へは iden への添字の次元を渡す（構文エラーの判別に用います）
+ * dimlen へは添字の次元を渡す（構文エラーの判別に用います）
  *
  * 値はあらかじめスタックにプッシュされてる前提。
- * 連続でポップした場合の順番は、
- *     スカラーならば 書き込み値
- *     １次元配列ならば 書き込み値、 添字
- *     2次元配列ならば 書き込み値、 列添字、 行添字
- * という順番でスタックに詰まれている前提。
- *
- * また、アタッチも同様にあらかじめアタッチスタックにプッシュされてる前提。
+ *     スカラーならば "値" の順、
+ *     １次元配列ならば "添字, 値" の順
+ *     2次元配列ならば "行添字, 列添字, 値" の順
+ * また、間接参照の場合はスタックに "間接参照アドレス, 添字群, 値" の順でプッシュされてる前提。
  */
-static void __assignment_array(const char* iden, const int32_t dimlen)
+static void __assignment_array(struct Var* var, const int32_t dimlen)
 {
-        /* 変数のスペックを得る。（コンパイル時） */
-        struct Var* var = varlist_search(iden);
-        if (var == NULL)
-                yyerror("syntax err: 未定義の配列変数へ代入しようとしました");
+        /* 書き込む値を読んでおく */
+        pop_stack("heap_socket");
 
         /* 変数がスカラーな場合は警告（コンパイル時） */
         if (var->row_len == 1 && var->col_len == 1) {
@@ -1677,15 +1606,6 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
         if (dimlen >= 3)
                 yyerror("syntax err: 配列の添字の個数が多すぎます。この言語では２次元配列までしか使えません");
 
-        /* ヒープ書き込み位置のデフォルト値をセットする命令を出力する（コンパイル時） */
-        if (var->is_local)
-                pA("heap_base = %d + stack_frame;", var->base_ptr);
-        else
-                pA("heap_base = %d;", var->base_ptr);
-
-        /* 書き込む値をスタックから読み込む命令を出力（コンパイル時） */
-        pop_stack("heap_socket");
-
         /* ヒープ書き込みオフセット位置をセットする命令を出力する（コンパイル時）
          * これは配列の次元によって分岐する
          */
@@ -1707,12 +1627,24 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
                 yyerror("system err: assignment, var->row_len の値が不正です");
         }
 
-        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする
-         * （アタッチではない場合は、すでにセットされているデフォルトのheap_baseの値のまま）
+        /* ヒープ書き込み位置をセットする命令を出力する。（コンパイル時）
+         * 直接参照ならば、グローバルかローカルにより処理が変わる。
+         * 間接参照ならば、ここのスタックにアタッチアドレスが詰まれてるはずなので、それをポップして用いる。
          */
-        pop_attachstack("attachstack_socket");
-        pA("if (attachstack_socket >= 0) {heap_base = attachstack_socket;}");
+        if (var->is_direct) {
+                if (var->is_local) {
+                        pA("heap_base = %d + stack_frame;", var->base_ptr);
+                } else {
+                        pA("heap_base = %d;", var->base_ptr);
+                }
+        } else {
+                if (var->is_direct) {
+                        pop_stack("heap_base");
+                }
+        }
 
+        /* アドレス + 配列インデックス位置へ値を書き込む
+         */
         pA("heap_base += heap_offset >> 16;");
         write_mem("heap_socket", "heap_base");
 
@@ -1729,8 +1661,12 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
         else
                 pA("junkApi_putConstString('is_global ');");
 
+        if (var->is_direct)
+                pA("junkApi_putConstString('is_direct ');");
+        else
+                pA("junkApi_putConstString('is_indirect ');");
+
         debug_stack();
-        debug_attachstack();
         debug_heap();
 #endif /* DEBUG_ASSIGNMENT */
 }
@@ -1738,46 +1674,41 @@ static void __assignment_array(const char* iden, const int32_t dimlen)
 /* 変数リード関連
  */
 
-static void __read_variable_ptr_scaler(const char* iden)
+static void __read_variable_scaler_common(struct Var* var)
 {
-        /* 変数のスペックを得る。（コンパイル時） */
-        struct Var* var = varlist_search(iden);
-        if (var == NULL)
-                yyerror("syntax err: 未定義のスカラー変数のアドレスを得ようとしました");
-
-        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+        /* 直接参照か、間接参照かに応じて、スタックからポップし
+         * heap_baseへアドレスをセットする（コンパイル時）
          */
-        pop_attachstack("attachstack_socket");
-        pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
-        if (var->is_local)
-                pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
-        else
-                pA("else {heap_base = %d;}", var->base_ptr);
-
-        /* heap_base自体を（アドレス自体を）スタックにプッシュする */
-        push_stack("heap_base");
+        if (var->is_direct) {
+                if (var->is_local) {
+                        pA("heap_base = %d + stack_frame;", var->base_ptr);
+                } else {
+                        pA("heap_base = %d;", var->base_ptr);
+                }
+        } else {
+                pop_stack("heap_base");
+        }
 
 #ifdef DEBUG_READ_VARIABLE
-        pA("junkApi_putConstString('\\nread_variable_ptr_scaler(), ');");
+        pA("junkApi_putConstString('\\nread_variable_scaler_common(), ');");
 
         if (var->is_local)
                 pA("junkApi_putConstString('is_local ');");
         else
                 pA("junkApi_putConstString('is_global ');");
 
+        if (var->is_direct)
+                pA("junkApi_putConstString('is_direct ');");
+        else
+                pA("junkApi_putConstString('is_indirect ');");
+
         debug_stack();
-        debug_attachstack();
         debug_heap();
 #endif /* DEBUG_READ_VARIABLE */
 }
 
-static void __read_variable_ptr_array(const char* iden, const int32_t dim)
+static void __read_variable_array_common(struct Var* var, const int32_t dim)
 {
-        /* 変数のスペックを得る。（コンパイル時） */
-        struct Var* var = varlist_search(iden);
-        if (var == NULL)
-                yyerror("syntax err: 未定義の配列変数のアドレスを得ようとしました");
-
         /* 変数がスカラーな場合はエラー */
         if (var->row_len == 1 && var->col_len == 1)
                 yyerror("syntax err: スカラー変数へ添字による指定をしました");
@@ -1796,33 +1727,30 @@ static void __read_variable_ptr_array(const char* iden, const int32_t dim)
          */
         /* １次元配列の場合 */
         if (var->row_len == 1) {
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
-                 */
-                pop_attachstack("attachstack_socket");
-                pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
-                if (var->is_local)
-                        pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
-                else
-                        pA("else {heap_base = %d;}", var->base_ptr);
-
-                /* heap_base へオフセットを足す
-                 */
+                /* 先に添字をポップしておく */
                 pop_stack("heap_offset");
+
+                /* 直接参照か、間接参照かに応じて、スタックからポップし
+                 * heap_baseへアドレスをセットする（コンパイル時）
+                 */
+                if (var->is_direct) {
+                        if (var->is_local) {
+                                pA("heap_base = %d + stack_frame;", var->base_ptr);
+                        } else {
+                                pA("heap_base = %d;", var->base_ptr);
+                        }
+                } else {
+                        pop_stack("heap_base");
+                }
+
+                /* heap_base へオフセットを足す */
                 pA("heap_base += heap_offset >> 16;");
 
         /* 2次元配列の場合 */
         } else if (var->row_len >= 2) {
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時）
+                /* 先に添字をポップしておく
                  */
-                pop_attachstack("attachstack_socket");
-                pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
-                if (var->is_local)
-                        pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
-                else
-                        pA("else {heap_base = %d;}", var->base_ptr);
 
-                /* heap_base へオフセットを足す
-                 */
                 /* これは[行, 列]の列 */
                 pop_stack("heap_offset");
 
@@ -1832,149 +1760,79 @@ static void __read_variable_ptr_array(const char* iden, const int32_t dim)
                 pop_stack("stack_socket");
                 pA("heap_offset += stack_socket * %d;", var->col_len);
 
-                pA("heap_offset >>= 16;");
-                pA("heap_base += heap_offset;");
+                /* 直接参照か、間接参照かに応じて、スタックからポップし
+                 * heap_baseへアドレスをセットする（コンパイル時）
+                 */
+                if (var->is_direct) {
+                        if (var->is_local) {
+                                pA("heap_base = %d + stack_frame;", var->base_ptr);
+                        } else {
+                                pA("heap_base = %d;", var->base_ptr);
+                        }
+                } else {
+                        pop_stack("heap_base");
+                }
+
+                /* heap_base へオフセットを足す */
+                pA("heap_base += heap_offset >> 16;");
 
         /* 1,2次元以外の場合はシステムエラー */
         } else {
                 yyerror("system err: __OPE_ADDRESS read_variable, col_len の値が不正です");
         }
 
+#ifdef DEBUG_READ_VARIABLE
+        pA("junkApi_putConstString('\\nread_variable_array_common(), ');");
+
+        if (var->is_local)
+                pA("junkApi_putConstString('is_local ');");
+        else
+                pA("junkApi_putConstString('is_global ');");
+
+        if (var->is_direct)
+                pA("junkApi_putConstString('is_direct ');");
+        else
+                pA("junkApi_putConstString('is_indirect ');");
+
+        debug_stack();
+        debug_heap();
+#endif /* DEBUG_READ_VARIABLE */
+}
+
+static void __read_variable_ptr_scaler(struct Var* var)
+{
+        __read_variable_scaler_common(var);
+
         /* heap_base自体を（アドレス自体を）スタックにプッシュする */
         push_stack("heap_base");
-
-#ifdef DEBUG_READ_VARIABLE
-        pA("junkApi_putConstString('\\nread_variable_ptr_array(), ');");
-
-        if (var->is_local)
-                pA("junkApi_putConstString('is_local ');");
-        else
-                pA("junkApi_putConstString('is_global ');");
-
-        debug_stack();
-        debug_attachstack();
-        debug_heap();
-#endif /* DEBUG_READ_VARIABLE */
 }
 
-static void __read_variable_scaler(const char* iden)
+static void __read_variable_ptr_array(struct Var* var, const int32_t dim)
 {
-        /* 変数のスペックを得る。（コンパイル時） */
-        struct Var* var = varlist_search(iden);
-        if (var == NULL)
-                yyerror("syntax err: 未定義のスカラー変数から読もうとしました");
+        __read_variable_array_common(var, dim);
 
-        /* 変数が配列な場合はエラー */
-        if (var->row_len != 1 || var->col_len != 1)
-                yyerror("syntax err: 配列変数へスカラーによる読み込みを行おうとしました");
-
-        /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-        pop_attachstack("attachstack_socket");
-        pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
-        if (var->is_local)
-                pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
-        else
-                pA("else {heap_base = %d;}", var->base_ptr);
-
-        read_mem("stack_socket", "heap_base");
-
-        /* 結果をスタックにプッシュする */
-        push_stack("stack_socket");
-
-#ifdef DEBUG_READ_VARIABLE
-        pA("junkApi_putConstString('\\nread_variable_scaler(), ');");
-
-        if (var->is_local)
-                pA("junkApi_putConstString('is_local ');");
-        else
-                pA("junkApi_putConstString('is_global ');");
-
-        debug_stack();
-        debug_attachstack();
-        debug_heap();
-#endif /* DEBUG_READ_VARIABLE */
+        /* heap_base自体を（アドレス自体を）スタックにプッシュする */
+        push_stack("heap_base");
 }
 
-static void __read_variable_array(const char* iden, const int32_t dim)
+static void __read_variable_scaler(struct Var* var)
 {
-        /* 変数のスペックを得る。（コンパイル時） */
-        struct Var* var = varlist_search(iden);
-        if (var == NULL)
-                yyerror("syntax err: 未定義の配列変数から読もうとしました");
+        __read_variable_scaler_common(var);
 
-        /* 変数がスカラーな場合はエラー */
-        if (var->row_len == 1 && var->col_len == 1)
-                yyerror("syntax err: スカラー変数へ添字による読み込みを行おうとしました");
-
-        /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
-        */
-        /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-        if (var->row_len == 1 && dim != 1)
-                yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
-
-        /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-        else if (var->row_len >= 2 && dim != 2)
-                yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
-
-        /* 配列の次元によって分岐（コンパイル時）
+        /* アドレスから読んで結果をスタックへプッシュ
          */
-        /* １次元配列の場合 */
-        if (var->row_len == 1) {
-                pop_stack("heap_offset");
-
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                pop_attachstack("attachstack_socket");
-                pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
-                if (var->is_local)
-                        pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
-                else
-                        pA("else {heap_base = %d;}", var->base_ptr);
-
-                pA("heap_base += heap_offset >> 16;");
-                read_mem("stack_socket", "heap_base");
-
-        /* 2次元配列の場合 */
-        } else if (var->row_len >= 2) {
-                /* これは[行, 列]の列 */
-                pop_stack("heap_offset");
-
-                /* これは[行, 列]の行。
-                 * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
-                 */
-                pop_stack("stack_socket");
-                pA("heap_offset += stack_socket * %d;", var->col_len);
-
-                /* アタッチスタックからポップして、場合に応じてheap_baseへセットする（コンパイル時） */
-                pop_attachstack("attachstack_socket");
-                pA_nl("if (attachstack_socket >= 0) {heap_base = attachstack_socket;} ");
-                if (var->is_local)
-                        pA("else {heap_base = %d + stack_frame;}", var->base_ptr);
-                else
-                        pA("else {heap_base = %d;}", var->base_ptr);
-
-                pA("heap_base += heap_offset >> 16;");
-                read_mem("stack_socket", "heap_base");
-
-        /* 1,2次元以外の場合はシステムエラー */
-        } else {
-                yyerror("system err: read_variable, col_len の値が不正です");
-        }
-
-        /* 結果をスタックにプッシュする */
+        read_mem("stack_socket", "heap_base");
         push_stack("stack_socket");
+}
 
-#ifdef DEBUG_READ_VARIABLE
-        pA("junkApi_putConstString('\\nread_variable_array(), ');");
+static void __read_variable_array(struct Var* var, const int32_t dim)
+{
+        __read_variable_array_common(var, dim);
 
-        if (var->is_local)
-                pA("junkApi_putConstString('is_local ');");
-        else
-                pA("junkApi_putConstString('is_global ');");
-
-        debug_stack();
-        debug_attachstack();
-        debug_heap();
-#endif /* DEBUG_READ_VARIABLE */
+        /* アドレスから読んで結果をスタックへプッシュ
+         */
+        read_mem("stack_socket", "heap_base");
+        push_stack("stack_socket");
 }
 
 /* ユーザー定義関数関連
@@ -2586,8 +2444,8 @@ static void __func_filltri(void)
 %type <structspecptr> initializer_struct_member_list
 %type <structmemberspecptr> initializer_struct_member
 
-%type <sval> var_identifier
-%type <ival> expression_list identifier_list attach_base
+%type <varptr> var_identifier
+%type <ival> expression_list identifier_list
 
 %type <ival> __declaration_specifiers
 %type <ival> __storage_class_specifier __type_specifier __type_qualifier
@@ -2710,26 +2568,30 @@ initializer
                 strcpy($$, $3);
         }
         | initializer __OPE_SUBST expression {
-                pA("attachstack_socket = -1;");
-                push_attachstack("attachstack_socket");
-                __assignment_scaler($1);
-        }
-        ;
+                struct Var* var = varlist_search($1);
+                if (var == NULL)
+                        yyerror("system err: 変数のインスタンス生成に失敗しました");
 
-attach_base
-        : {
-                pA("attachstack_socket = -1;");
-                push_attachstack("attachstack_socket");
-        }
-        | expression __OPE_ATTACH {
-                pop_stack("stack_socket");
-                push_attachstack("stack_socket");
+                __assignment_scaler(var);
         }
         ;
 
 var_identifier
-        : attach_base __IDENTIFIER {
-                strcpy($$, $2);
+        : expression __OPE_ATTACH __IDENTIFIER {
+                struct Var* var = varlist_search($3);
+                if (var == NULL)
+                        yyerror("syntax err: 未定義の変数を参照しようとしました");
+
+                var->is_direct = 0;     /* 間接参照に設定 */
+                $$ = var;
+        }
+        | __IDENTIFIER {
+                struct Var* var = varlist_search($1);
+                if (var == NULL)
+                        yyerror("syntax err: 未定義の変数を参照しようとしました");
+
+                var->is_direct = 1;     /* 直接参照に設定 */
+                $$ = var;
         }
         ;
 
@@ -2892,10 +2754,7 @@ read_variable
         | var_identifier __ARRAY_LB expression_list __ARRAY_RB {
                 __read_variable_array($1, $3);
         }
-        | var_identifier __LB {
-                /* 余分なアタッチスタックを捨てる */
-                pop_attachstack_dummy();
-
+        | __IDENTIFIER __LB {
                 /* 現在の stack_frame をプッシュする。
                  * そして、ここには関数終了後にはリターン値が入った状態となる。
                  */
