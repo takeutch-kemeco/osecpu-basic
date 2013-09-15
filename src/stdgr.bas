@@ -38,7 +38,7 @@ function __torgb(r, g, b)
         return (r | (g >> 8) | (b >> 16));
 }
 
-#ifdef ZERO
+//#ifdef ZERO
 
 /* 線分をy分割した場合のxを得る
  *
@@ -161,7 +161,7 @@ function __filltri_sl_common(mode, x0, y0, x1, y1, x2, y2, color, ope_comparison
         }
 }
 
-#endif
+//#endif
 
 /* 頂点 a,b,c による三角形塗りつぶしする命令を出力する。
  *

@@ -221,13 +221,41 @@ static int32_t cur_ifdef_skip_depth;
 %x pre_process_ifdef_iden
 %x pre_process_ifdef_skip
 
+%x pre_process_comment_c
+%x pre_process_comment_b
+
 %x main_process
-%x main_process_comment
 %x main_process_include
 
 %x tune_process
 
 %%
+
+<main_process>"//"              BEGIN(pre_process_comment_b);
+<pre_process>"//"               BEGIN(pre_process_comment_b);
+<pre_process_comment_b>.*[\n] {
+        linenumber++;
+
+        if (cur_process == PRE_PROCESS)
+                BEGIN(pre_process);
+        else if (cur_process == MAIN_PROCESS)
+                BEGIN(main_process);
+        else
+                yyerror("system err: pre_process_comment_b");
+}
+
+<main_process>"/*"              BEGIN(pre_process_comment_c);
+<pre_process>"/*"               BEGIN(pre_process_comment_c);
+<pre_process_comment_c>[\n]       {linenumber++;}
+<pre_process_comment_c>.          {}
+<pre_process_comment_c>"*/" {
+        if (cur_process == PRE_PROCESS)
+                BEGIN(pre_process);
+        else if (cur_process == MAIN_PROCESS)
+                BEGIN(main_process);
+        else
+                yyerror("system err: pre_process_comment_c");
+}
 
 <main_process>"#define" BEGIN(pre_process_define_iden);
 <pre_process>"#define" BEGIN(pre_process_define_iden);
@@ -379,13 +407,6 @@ static int32_t cur_ifdef_skip_depth;
         if (pop_include() == -1)
                 yyterminate();
 }
-
-<main_process>"//".*[\n]        {linenumber++;}
-
-<main_process>"/*"              BEGIN(main_process_comment);
-<main_process_comment>[\n]      {linenumber++;}
-<main_process_comment>.         {}
-<main_process_comment>"*/"      BEGIN(main_process);
 
 <main_process>["][^"]*["] {
         /* const string */
