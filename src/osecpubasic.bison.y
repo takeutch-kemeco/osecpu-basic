@@ -2342,7 +2342,6 @@ static void __func_filltri(void)
 syntax_tree
         : declaration_list __EOF {
                 YYACCEPT;
-                /* start_tune_process(); */
         }
         ;
 

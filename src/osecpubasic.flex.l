@@ -603,20 +603,6 @@ static int32_t cur_ifdef_skip_depth;
 <tune_process>"labelstack_head++;"[ \n]*"labelstack_head--;" {}
 <tune_process>"heap_head++;"[ \n]*"heap_head--;" {}
 
-<tune_process>"PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);"[ \n]*"PALMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);" {
-}
-
-<tune_process>"PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);"[ \n]*"PALMEM0(heap_offset, T_SINT32, stack_ptr, stack_head);" {
-        fprintf(yyaskB,
-                "PASMEM0(stack_socket, T_SINT32, stack_ptr, stack_head);\n"
-                "heap_offset = stack_socket;\n");
-}
-
-<tune_process>"heap_offset >>= 16;"[ \n]*"heap_offset &= 0x0000ffff;" {
-        fprintf(yyaskB,
-                "heap_offset >>= 16;\n");
-}
-
 <tune_process>^[\n]     {}
 <tune_process>.*        {fprintf(yyaskB, "%s\n", yytext);}
 

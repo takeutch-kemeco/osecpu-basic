@@ -153,32 +153,7 @@ int main(int argc, char** argv)
         fclose(yyin);
 
 #ifndef DISABLE_TUNE
-#ifndef DISABLE_TUNE_1
         yyin = open_in_file("osecpubasic.tmp.0");
-        yyaskB = open_out_file("osecpubasic.tmp.1");
-
-        start_tune_process();
-        while (yylex() != 0) {
-        }
-
-        fclose(yyaskB);
-        fclose(yyin);
-#endif /* DISABLE_TUNE_1 */
-
-#ifndef DISABLE_TUNE_2
-        yyin = open_in_file("osecpubasic.tmp.1");
-        yyaskB = open_out_file("osecpubasic.tmp.2");
-
-        start_tune_process();
-        while (yylex() != 0) {
-        }
-
-        fclose(yyaskB);
-        fclose(yyin);
-#endif /* DISABLE_TUNE_2 */
-
-#ifndef DISABLE_TUNE_3
-        yyin = open_in_file("osecpubasic.tmp.2");
         yyaskB = open_out_file(out_path);
 
         start_tune_process();
@@ -187,7 +162,6 @@ int main(int argc, char** argv)
 
         fclose(yyaskB);
         fclose(yyin);
-#endif /* DISABLE_TUNE_3 */
 #endif /* DISABLE_TUNE */
 
         return EXIT_SUCCESS;
