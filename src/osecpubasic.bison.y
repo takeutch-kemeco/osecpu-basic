@@ -1504,173 +1504,14 @@ static void __initializer_local(const char* iden,
                 pA("stack_head += %d;", var->array_len);
 }
 
-/* 変数への代入関連
+/* 変数インスタンスの具象アドレス取得関連
+ * これは struct Var が指す変数の、実際のメモリー上のアドレスを heap_base へ取得する。
+ * この heap_base へ読み書きすることで、変数への読み書きとなる。
  */
 
-/* スカラー変数へ、値を代入する。
- *
- * 値はあらかじめスタックにプッシュされてる前提。
- * また、間接参照の場合はスタックに "間接参照アドレス, 値" の順でプッシュされてる前提。
+/* スカラー変数の具象アドレスを heap_base に得る
  */
-static void __assignment_scaler(struct Var* var)
-{
-        /* 書き込む値を読んでおく */
-        pop_stack("stack_socket");
-
-        /* 変数が配列な場合はエラー（コンパイル時） */
-        if (var->row_len != 1 || var->col_len != 1)
-                yyerror("syntax err: 配列変数へスカラーによる書き込みを行おうとしました");
-
-        /* ヒープ書き込み位置をセットする命令を出力する。（コンパイル時）
-         * 直接参照ならば、グローバルかローカルにより処理が変わる。
-         * 間接参照ならば、ここのスタックにアタッチアドレスが詰まれてるはずなので、それをポップして用いる。
-         */
-        if (var->is_direct) {
-                if (var->is_local) {
-                        pA("heap_base = %d + stack_frame;", var->base_ptr);
-                } else {
-                        pA("heap_base = %d;", var->base_ptr);
-                }
-        } else {
-                pop_stack("heap_base");
-        }
-
-        /* アドレス位置へ値を書き込む */
-        write_mem("stack_socket", "heap_base");
-
-        /* 変数へ書き込んだ値をスタックへもプッシュしておく
-         * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
-         */
-        push_stack("stack_socket");
-
-#ifdef DEBUG_ASSIGNMENT
-        pA("junkApi_putConstString('\\nassignment_scaler(), ');");
-
-        if (var->is_local)
-                pA("junkApi_putConstString('is_local ');");
-        else
-                pA("junkApi_putConstString('is_global ');");
-
-        if (var->is_direct)
-                pA("junkApi_putConstString('is_direct ');");
-        else
-                pA("junkApi_putConstString('is_indirect ');");
-
-        debug_stack();
-        debug_heap();
-#endif /* DEBUG_ASSIGNMENT */
-}
-
-/* 配列変数中の、任意インデックス番目の要素へ、値を代入する。
- *
- * dimlen へは添字の次元を渡す（構文エラーの判別に用います）
- *
- * 値はあらかじめスタックにプッシュされてる前提。
- *     スカラーならば "値" の順、
- *     １次元配列ならば "添字, 値" の順
- *     2次元配列ならば "行添字, 列添字, 値" の順
- * また、間接参照の場合はスタックに "間接参照アドレス, 添字群, 値" の順でプッシュされてる前提。
- */
-static void __assignment_array(struct Var* var, const int32_t dimlen)
-{
-        /* 書き込む値を読んでおく */
-        pop_stack("heap_socket");
-
-        /* 変数がスカラーな場合は警告（コンパイル時） */
-        if (var->row_len == 1 && var->col_len == 1) {
-                yywarning("syntax warning: スカラー変数へ添字による書き込みを行おうとしました。"
-                          "これは不正ではありませんが、意図的な記述で無いならばミスの可能性が高いです");
-        }
-
-        /* 変数の次元に対して、指定された添字の次元が異なる場合を調べてエラー表示する（コンパイル時）
-         */
-
-        /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合は警告（コンパイル時） */
-        if (var->row_len == 1 && dimlen != 1) {
-                yywarning("syntax warning: 1次元配列として宣言された変数に対して、異なる次元の添字を指定しました。"
-                          "これは不正ではありませんが、意図的な記述で無いならばミスの可能性が高いです");
-        }
-
-        /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合は警告（コンパイル時） */
-        if (var->row_len >= 2 && dimlen != 2)
-                yywarning("syntax warning: 2次元配列として宣言された変数に対して、異なる次元の添字を指定しました。"
-                          "これは不正ではありませんが、意図的な記述で無いならばミスの可能性が高いです");
-
-        /* 配列の添字が0次元の場合はエラー（コンパイル時） */
-        if (dimlen == 0)
-                yyerror("syntax err: 配列の添字がありません");
-
-        /* 配列の添字が3次元以上の場合はエラー（コンパイル時） */
-        if (dimlen >= 3)
-                yyerror("syntax err: 配列の添字の個数が多すぎます。この言語では２次元配列までしか使えません");
-
-        /* ヒープ書き込みオフセット位置をセットする命令を出力する（コンパイル時）
-         * これは配列の次元によって分岐する
-         */
-        /* １次元配列の場合 */
-        if (var->row_len == 1) {
-                pop_stack("heap_offset");
-
-        /* 2次元配列の場合 */
-        } else if (var->row_len >= 2) {
-                /* これは[行, 列]の列 */
-                pop_stack("heap_offset");
-
-                /* これは[行, 列]の行 */
-                pop_stack("stack_socket");
-                pA("heap_offset += stack_socket * %d;", var->col_len);
-
-        /* 1,2次元以外の場合はシステムエラー */
-        } else {
-                yyerror("system err: assignment, var->row_len の値が不正です");
-        }
-
-        /* ヒープ書き込み位置をセットする命令を出力する。（コンパイル時）
-         * 直接参照ならば、グローバルかローカルにより処理が変わる。
-         * 間接参照ならば、ここのスタックにアタッチアドレスが詰まれてるはずなので、それをポップして用いる。
-         */
-        if (var->is_direct) {
-                if (var->is_local) {
-                        pA("heap_base = %d + stack_frame;", var->base_ptr);
-                } else {
-                        pA("heap_base = %d;", var->base_ptr);
-                }
-        } else {
-                pop_stack("heap_base");
-        }
-
-        /* アドレス + 配列インデックス位置へ値を書き込む
-         */
-        pA("heap_base += heap_offset >> 16;");
-        write_mem("heap_socket", "heap_base");
-
-        /* 変数へ書き込んだ値をスタックへもプッシュしておく
-         * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
-         */
-        push_stack("heap_socket");
-
-#ifdef DEBUG_ASSIGNMENT
-        pA("junkApi_putConstString('\\nassignment_array(), ');");
-
-        if (var->is_local)
-                pA("junkApi_putConstString('is_local ');");
-        else
-                pA("junkApi_putConstString('is_global ');");
-
-        if (var->is_direct)
-                pA("junkApi_putConstString('is_direct ');");
-        else
-                pA("junkApi_putConstString('is_indirect ');");
-
-        debug_stack();
-        debug_heap();
-#endif /* DEBUG_ASSIGNMENT */
-}
-
-/* 変数リード関連
- */
-
-static void __read_variable_scaler_common(struct Var* var)
+static void __get_variable_scaler_concrete_address(struct Var* var)
 {
         /* 直接参照か、間接参照かに応じて、スタックからポップし
          * heap_baseへアドレスをセットする（コンパイル時）
@@ -1685,8 +1526,8 @@ static void __read_variable_scaler_common(struct Var* var)
                 pop_stack("heap_base");
         }
 
-#ifdef DEBUG_READ_VARIABLE
-        pA("junkApi_putConstString('\\nread_variable_scaler_common(), ');");
+#ifdef DEBUG_VARIABLE
+        pA("junkApi_putConstString('\\n__get_variable_scaler_concrete_address(), ');");
 
         if (var->is_local)
                 pA("junkApi_putConstString('is_local ');");
@@ -1700,10 +1541,12 @@ static void __read_variable_scaler_common(struct Var* var)
 
         debug_stack();
         debug_heap();
-#endif /* DEBUG_READ_VARIABLE */
+#endif /* DEBUG_VARIABLE */
 }
 
-static void __read_variable_array_common(struct Var* var, const int32_t dim)
+/* 配列変数インスタンスの任意インデックスの具象アドレスを heap_base に得る
+ */
+static void __get_variable_array_concrete_address(struct Var* var, const int32_t dim)
 {
         /* 変数がスカラーな場合はエラー */
         if (var->row_len == 1 && var->col_len == 1)
@@ -1777,8 +1620,8 @@ static void __read_variable_array_common(struct Var* var, const int32_t dim)
                 yyerror("system err: __OPE_ADDRESS read_variable, col_len の値が不正です");
         }
 
-#ifdef DEBUG_READ_VARIABLE
-        pA("junkApi_putConstString('\\nread_variable_array_common(), ');");
+#ifdef DEBUG_VARIABLE
+        pA("junkApi_putConstString('\\n__get_variable_array_concrete_address(), ');");
 
         if (var->is_local)
                 pA("junkApi_putConstString('is_local ');");
@@ -1792,12 +1635,58 @@ static void __read_variable_array_common(struct Var* var, const int32_t dim)
 
         debug_stack();
         debug_heap();
-#endif /* DEBUG_READ_VARIABLE */
+#endif /* DEBUG_VARIABLE */
 }
+
+/* 変数への代入関連
+ */
+
+/* スカラー変数へ、値を代入する。
+ *
+ * 値はあらかじめスタックにプッシュされてる前提。
+ * また、間接参照の場合はスタックに "間接参照アドレス, 値" の順でプッシュされてる前提。
+ */
+static void __assignment_scaler(struct Var* var)
+{
+        pop_stack("stack_socket");
+        __get_variable_scaler_concrete_address(var);
+        write_mem("stack_socket", "heap_base");
+
+        /* 変数へ書き込んだ値をスタックへもプッシュしておく
+         * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
+         */
+        push_stack("stack_socket");
+}
+
+/* 配列変数中の、任意インデックス番目の要素へ、値を代入する。
+ *
+ * dimlen へは添字の次元を渡す（構文エラーの判別に用います）
+ *
+ * 値はあらかじめスタックにプッシュされてる前提。
+ *     スカラーならば "値" の順、
+ *     １次元配列ならば "添字, 値" の順
+ *     2次元配列ならば "行添字, 列添字, 値" の順
+ * また、間接参照の場合はスタックに "間接参照アドレス, 添字群, 値" の順でプッシュされてる前提。
+ */
+static void __assignment_array(struct Var* var, const int32_t dimlen)
+{
+        /* 書き込む値を読んでおく */
+        pop_stack("heap_socket");
+        __get_variable_array_concrete_address(var, dimlen);
+        write_mem("heap_socket", "heap_base");
+
+        /* 変数へ書き込んだ値をスタックへもプッシュしておく
+         * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
+         */
+        push_stack("heap_socket");
+}
+
+/* 変数リード関連
+ */
 
 static void __read_variable_ptr_scaler(struct Var* var)
 {
-        __read_variable_scaler_common(var);
+        __get_variable_scaler_concrete_address(var);
 
         /* heap_base自体を（アドレス自体を）スタックにプッシュする */
         push_stack("heap_base");
@@ -1805,7 +1694,7 @@ static void __read_variable_ptr_scaler(struct Var* var)
 
 static void __read_variable_ptr_array(struct Var* var, const int32_t dim)
 {
-        __read_variable_array_common(var, dim);
+        __get_variable_array_concrete_address(var, dim);
 
         /* heap_base自体を（アドレス自体を）スタックにプッシュする */
         push_stack("heap_base");
@@ -1813,7 +1702,7 @@ static void __read_variable_ptr_array(struct Var* var, const int32_t dim)
 
 static void __read_variable_scaler(struct Var* var)
 {
-        __read_variable_scaler_common(var);
+        __get_variable_scaler_concrete_address(var);
 
         /* アドレスから読んで結果をスタックへプッシュ
          */
@@ -1823,7 +1712,7 @@ static void __read_variable_scaler(struct Var* var)
 
 static void __read_variable_array(struct Var* var, const int32_t dim)
 {
-        __read_variable_array_common(var, dim);
+        __get_variable_array_concrete_address(var, dim);
 
         /* アドレスから読んで結果をスタックへプッシュ
          */
