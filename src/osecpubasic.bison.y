@@ -2982,7 +2982,7 @@ iterator_for
                 $<ival>$ = loop_head;
 
                 /* head ラベル */
-                pA("LB(1, %d);", loop_head);
+                pA("LB(0, %d);", loop_head);
 
         } __DECL_END {
                 /* end ラベルID */
@@ -3011,7 +3011,7 @@ iterator_for
                 $<ival>$ = loop_pre_head;
 
                 /* pre_head ラベル */
-                pA("LB(1, %d);", loop_pre_head);
+                pA("LB(0, %d);", loop_pre_head);
 
         } expression __RB {
                 /* スタックを掃除 */
@@ -3021,14 +3021,14 @@ iterator_for
                 pA("PLIMM(P3F, %d);", $<ival>4);
 
                 /* main ラベル */
-                pA("LB(1, %d);", $<ival>8);
+                pA("LB(0, %d);", $<ival>8);
 
         } declaration {
                 /* pre_head ラベルへジャンプ */
                 pA("PLIMM(P3F, %d);", $<ival>10);
 
                 /* end ラベル */
-                pA("LB(1, %d);", $<ival>6);
+                pA("LB(0, %d);", $<ival>6);
         }
 
 define_label
