@@ -1,6 +1,8 @@
+#include "stdoscp.bas"
+
 #define A 123
 dim a = A;
-print a;
+__print(a);
 #define A 234
 a = A;
-print a;
+__print(a);

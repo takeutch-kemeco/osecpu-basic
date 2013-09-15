@@ -59,7 +59,7 @@ function draw_F3(v0, v1, v2, col)
 
 function draw_F4(v0, v1, v2, v3, r, g, b)
 {
-        dim col = torgb(r, g, b);
+        dim col = __torgb(r, g, b);
         draw_F3(v0, v1, v2, col);
         draw_F3(v2, v3, v0, col);
 }

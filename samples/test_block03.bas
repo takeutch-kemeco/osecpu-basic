@@ -1,3 +1,5 @@
+#include "stdoscp.bas"
+
 /* ブロック内から外部へ goto や gosub した場合は、
  * そのジャンプ先がブロック外である場合は、ブロック内で宣言されたローカル変数は無効となる。
  * そして、ジャンプ先から再びブロック内に戻ってきた場合であれば、ローカル変数は再び有効となる。（値も保持されたままで）
@@ -20,10 +22,10 @@ dim a = 123;
         dim a = 234;
 
         l0();
-        print a;
+        __print(a);
 }
 
-print a;
+__print(a);
 
 
 
@@ -34,7 +36,7 @@ goto *LB;
         dim b;
 *LB;
         b = 456;
-        print b;
+        __print(b);
 }
 
 
@@ -44,12 +46,12 @@ goto *LC;
 {
         dim c = 678;
 *LC;
-        print c;
+        __print(c);
 }
 
 
 
 function l0()
 {
-        print a;
+        __print(a);
 }

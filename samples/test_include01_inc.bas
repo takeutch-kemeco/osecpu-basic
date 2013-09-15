@@ -1,3 +1,2 @@
 dim a = 123;
-print a;
-
+__print(a);

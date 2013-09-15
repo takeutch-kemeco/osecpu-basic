@@ -1,2 +1,4 @@
+#include "stdoscp.bas"
+
 while (1)
-        print 1;
+        __print(1);

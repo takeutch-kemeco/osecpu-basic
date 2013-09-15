@@ -3,7 +3,7 @@ dim b;
 /* c; */
 dim x;
 x = 234;
-print x;
+__print(x);
 //print c;
 dim b;
 /* c; */

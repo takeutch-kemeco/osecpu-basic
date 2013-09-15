@@ -50,7 +50,7 @@ function draw_W4(v0, v1, v2, v3, r, g, b)
         dim va[3];
         dim vb[3];
         dim vc[3];
-        dim col = torgb(r, g, b);
+        dim col = __torgb(r, g, b);
         sub_vector3(&va, v1, v0);
         sub_vector3(&vb, v2, v1);
         cross_product_vector3(&vc, &va, &vb);

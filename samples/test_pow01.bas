@@ -1,3 +1,6 @@
+#include "stdoscp.bas"
+#include "math.bas"
+
 /* ２個単位で、各ペア同士がほぼ同じ数にならなければ異常
  */
 
@@ -15,13 +18,13 @@ b[9]=5.588974955097326;
 
 dim a = 1.23;
 
-print 1.23 pow a; print b[0];
-print b[0] pow a; print b[1];
-print b[1] pow a; print b[2];
-print b[2] pow a; print b[3];
-print b[3] pow a; print b[4];
-print b[4] pow a; print b[5];
-print b[5] pow a; print b[6];
-print b[6] pow a; print b[7];
-print b[7] pow a; print b[8];
-print b[8] pow a; print b[9];
+__print(__pow(1.23, a)); __print(b[0]);
+__print(__pow(b[0], a)); __print(b[1]);
+__print(__pow(b[1], a)); __print(b[2]);
+__print(__pow(b[2], a)); __print(b[3]);
+__print(__pow(b[3], a)); __print(b[4]);
+__print(__pow(b[4], a)); __print(b[5]);
+__print(__pow(b[5], a)); __print(b[6]);
+__print(__pow(b[6], a)); __print(b[7]);
+__print(__pow(b[7], a)); __print(b[8]);
+__print(__pow(b[8], a)); __print(b[9]);

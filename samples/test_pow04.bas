@@ -1,3 +1,6 @@
+#include "stdoscp.bas"
+#include "math.bas"
+
 /* ２個単位で、各ペア同士がほぼ同じ数にならなければ異常
  */
 
@@ -27,13 +30,13 @@ p[7]=7;
 p[8]=8;
 p[9]=9;
 
-print a pow p[0]; print b[0];
-print a pow p[1]; print b[1];
-print a pow p[2]; print b[2];
-print a pow p[3]; print b[3];
-print a pow p[4]; print b[4];
-print a pow p[5]; print b[5];
-print a pow p[6]; print b[6];
-print a pow p[7]; print b[7];
-print a pow p[8]; print b[8];
-print a pow p[9]; print b[9];
+__print(__pow(a, p[0])); __print(b[0]);
+__print(__pow(a, p[1])); __print(b[1]);
+__print(__pow(a, p[2])); __print(b[2]);
+__print(__pow(a, p[3])); __print(b[3]);
+__print(__pow(a, p[4])); __print(b[4]);
+__print(__pow(a, p[5])); __print(b[5]);
+__print(__pow(a, p[6])); __print(b[6]);
+__print(__pow(a, p[7])); __print(b[7]);
+__print(__pow(a, p[8])); __print(b[8]);
+__print(__pow(a, p[9])); __print(b[9]);

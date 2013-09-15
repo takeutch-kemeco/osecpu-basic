@@ -1,6 +1,8 @@
+#include "stdoscp.bas"
+
 dim x=123;
-print fact(5);
-print x;
+__print(fact(5));
+__print(x);
 
 function fact(x)
 {

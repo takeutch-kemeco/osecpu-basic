@@ -1,7 +1,9 @@
+#include "stdoscp.bas"
+
 #define ABC 123
-print ABC;
+__print(ABC);
 
 #undef ABC
 dim ABC = 234;
-print ABC;
+__print(ABC);
 

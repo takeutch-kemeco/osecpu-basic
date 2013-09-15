@@ -1,4 +1,6 @@
-print 0777;
-print 0xff;
-print 0XFF;
-print 123;
+#include "stdoscp.bas"
+
+__print(0777);
+__print(0xff);
+__print(0XFF);
+__print(123);

@@ -1,3 +1,6 @@
+#include "stdoscp.bas"
+#include "math.bas"
+
 /* ２個単位で、各ペア同士がほぼ同じ数にならなければ異常
  */
 
@@ -81,79 +84,79 @@ b[69]=0.5784397643882;
 
 dim a =-(3.14159265359 / 2);
 
-print cos (a + 0.0); print b[0];
-print cos (a + 0.1); print b[1];
-print cos (a + 0.2); print b[2];
-print cos (a + 0.3); print b[3];
-print cos (a + 0.4); print b[4];
-print cos (a + 0.5); print b[5];
-print cos (a + 0.6); print b[6];
-print cos (a + 0.7); print b[7];
-print cos (a + 0.8); print b[8];
-print cos (a + 0.9); print b[9];
+__print(__cos((a + 0.0))); __print(b[0]);
+__print(__cos((a + 0.1))); __print(b[1]);
+__print(__cos((a + 0.2))); __print(b[2]);
+__print(__cos((a + 0.3))); __print(b[3]);
+__print(__cos((a + 0.4))); __print(b[4]);
+__print(__cos((a + 0.5))); __print(b[5]);
+__print(__cos((a + 0.6))); __print(b[6]);
+__print(__cos((a + 0.7))); __print(b[7]);
+__print(__cos((a + 0.8))); __print(b[8]);
+__print(__cos((a + 0.9))); __print(b[9]);
 
-print cos (a + 1.0); print b[10];
-print cos (a + 1.1); print b[11];
-print cos (a + 1.2); print b[12];
-print cos (a + 1.3); print b[13];
-print cos (a + 1.4); print b[14];
-print cos (a + 1.5); print b[15];
-print cos (a + 1.6); print b[16];
-print cos (a + 1.7); print b[17];
-print cos (a + 1.8); print b[18];
-print cos (a + 1.9); print b[19];
+__print(__cos((a + 1.0))); __print(b[10]);
+__print(__cos((a + 1.1))); __print(b[11]);
+__print(__cos((a + 1.2))); __print(b[12]);
+__print(__cos((a + 1.3))); __print(b[13]);
+__print(__cos((a + 1.4))); __print(b[14]);
+__print(__cos((a + 1.5))); __print(b[15]);
+__print(__cos((a + 1.6))); __print(b[16]);
+__print(__cos((a + 1.7))); __print(b[17]);
+__print(__cos((a + 1.8))); __print(b[18]);
+__print(__cos((a + 1.9))); __print(b[19]);
 
-print cos (a + 2.0); print b[20];
-print cos (a + 2.1); print b[21];
-print cos (a + 2.2); print b[22];
-print cos (a + 2.3); print b[23];
-print cos (a + 2.4); print b[24];
-print cos (a + 2.5); print b[25];
-print cos (a + 2.6); print b[26];
-print cos (a + 2.7); print b[27];
-print cos (a + 2.8); print b[28];
-print cos (a + 2.9); print b[29];
+__print(__cos((a + 2.0))); __print(b[20]);
+__print(__cos((a + 2.1))); __print(b[21]);
+__print(__cos((a + 2.2))); __print(b[22]);
+__print(__cos((a + 2.3))); __print(b[23]);
+__print(__cos((a + 2.4))); __print(b[24]);
+__print(__cos((a + 2.5))); __print(b[25]);
+__print(__cos((a + 2.6))); __print(b[26]);
+__print(__cos((a + 2.7))); __print(b[27]);
+__print(__cos((a + 2.8))); __print(b[28]);
+__print(__cos((a + 2.9))); __print(b[29]);
 
-print cos (a + 3.0); print b[30];
-print cos (a + 3.1); print b[31];
-print cos (a + 3.2); print b[32];
-print cos (a + 3.3); print b[33];
-print cos (a + 3.4); print b[34];
-print cos (a + 3.5); print b[35];
-print cos (a + 3.6); print b[36];
-print cos (a + 3.7); print b[37];
-print cos (a + 3.8); print b[38];
-print cos (a + 3.9); print b[39];
+__print(__cos((a + 3.0))); __print(b[30]);
+__print(__cos((a + 3.1))); __print(b[31]);
+__print(__cos((a + 3.2))); __print(b[32]);
+__print(__cos((a + 3.3))); __print(b[33]);
+__print(__cos((a + 3.4))); __print(b[34]);
+__print(__cos((a + 3.5))); __print(b[35]);
+__print(__cos((a + 3.6))); __print(b[36]);
+__print(__cos((a + 3.7))); __print(b[37]);
+__print(__cos((a + 3.8))); __print(b[38]);
+__print(__cos((a + 3.9))); __print(b[39]);
 
-print cos (a + 4.0); print b[40];
-print cos (a + 4.1); print b[41];
-print cos (a + 4.2); print b[42];
-print cos (a + 4.3); print b[43];
-print cos (a + 4.4); print b[44];
-print cos (a + 4.5); print b[45];
-print cos (a + 4.6); print b[46];
-print cos (a + 4.7); print b[47];
-print cos (a + 4.8); print b[48];
-print cos (a + 4.9); print b[49];
+__print(__cos((a + 4.0))); __print(b[40]);
+__print(__cos((a + 4.1))); __print(b[41]);
+__print(__cos((a + 4.2))); __print(b[42]);
+__print(__cos((a + 4.3))); __print(b[43]);
+__print(__cos((a + 4.4))); __print(b[44]);
+__print(__cos((a + 4.5))); __print(b[45]);
+__print(__cos((a + 4.6))); __print(b[46]);
+__print(__cos((a + 4.7))); __print(b[47]);
+__print(__cos((a + 4.8))); __print(b[48]);
+__print(__cos((a + 4.9))); __print(b[49]);
 
-print cos (a + 5.0); print b[50];
-print cos (a + 5.1); print b[51];
-print cos (a + 5.2); print b[52];
-print cos (a + 5.3); print b[53];
-print cos (a + 5.4); print b[54];
-print cos (a + 5.5); print b[55];
-print cos (a + 5.6); print b[56];
-print cos (a + 5.7); print b[57];
-print cos (a + 5.8); print b[58];
-print cos (a + 5.9); print b[59];
+__print(__cos((a + 5.0))); __print(b[50]);
+__print(__cos((a + 5.1))); __print(b[51]);
+__print(__cos((a + 5.2))); __print(b[52]);
+__print(__cos((a + 5.3))); __print(b[53]);
+__print(__cos((a + 5.4))); __print(b[54]);
+__print(__cos((a + 5.5))); __print(b[55]);
+__print(__cos((a + 5.6))); __print(b[56]);
+__print(__cos((a + 5.7))); __print(b[57]);
+__print(__cos((a + 5.8))); __print(b[58]);
+__print(__cos((a + 5.9))); __print(b[59]);
 
-print cos (a + 6.0); print b[60];
-print cos (a + 6.1); print b[61];
-print cos (a + 6.2); print b[62];
-print cos (a + 6.3); print b[63];
-print cos (a + 6.4); print b[64];
-print cos (a + 6.5); print b[65];
-print cos (a + 6.6); print b[66];
-print cos (a + 6.7); print b[67];
-print cos (a + 6.8); print b[68];
-print cos (a + 6.9); print b[69];
+__print(__cos((a + 6.0))); __print(b[60]);
+__print(__cos((a + 6.1))); __print(b[61]);
+__print(__cos((a + 6.2))); __print(b[62]);
+__print(__cos((a + 6.3))); __print(b[63]);
+__print(__cos((a + 6.4))); __print(b[64]);
+__print(__cos((a + 6.5))); __print(b[65]);
+__print(__cos((a + 6.6))); __print(b[66]);
+__print(__cos((a + 6.7))); __print(b[67]);
+__print(__cos((a + 6.8))); __print(b[68]);
+__print(__cos((a + 6.9))); __print(b[69]);

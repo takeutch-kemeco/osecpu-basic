@@ -1,17 +1,18 @@
+#include "stdoscp.bas"
+
 dim a = 4;
-print a >> 1;
-print a >> 2;
-print a >> 3;
+__print(a >> 1);
+__print(a >> 2);
+__print(a >> 3);
 
-print a << 1;
-print a << 2;
-print a << 3;
+__print(a << 1);
+__print(a << 2);
+__print(a << 3);
 
-print a >> 16;
-print a >> 20;
+__print(a >> 16);
+__print(a >> 20);
 
-print (a >> 16) << 16;
-print (a >> 16) << 28;
-print (a >> 16) << 29;
-print (a >> 16) << 30;
-
+__print((a >> 16) << 16);
+__print((a >> 16) << 28);
+__print((a >> 16) << 29);
+__print((a >> 16) << 30);
