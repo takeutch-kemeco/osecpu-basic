@@ -85,9 +85,9 @@ function __search_minmidmax3(a, b, c)
         if (max == 0) {
                 dim min = __search_min2(b, c);
                 if (min == 0)
-                        return (0 << 4) | (1 << 2) | (2 << 0);
+                        return (0 << 4) | (2 << 2) | (1 << 0);
 
-                return (0 << 4) | (2 << 2) | (1 << 0);
+                return (0 << 4) | (1 << 2) | (2 << 0);
         } else if (max == 1) {
                 dim min = __search_min2(a, c);
                 if (min == 0)
