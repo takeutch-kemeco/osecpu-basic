@@ -45,6 +45,8 @@ __openwin(scw, sch);
         __fillrect(0, scw, sch, 0, 0, 0);
 goto *LLL;
 
+*END;
+
 function draw_F3(v0, v1, v2, col)
 {
         dim va[3];
@@ -53,8 +55,10 @@ function draw_F3(v0, v1, v2, col)
         sub_vector3(&va, v1, v0);
         sub_vector3(&vb, v2, v1);
         cross_product_vector3(&vc, &va, &vb);
+
         if (vc[2] >= 0)
                 filltri 0 v0@v[0] v0@v[1] v1@v[0] v1@v[1] v2@v[0] v2@v[1] col;
+//              __filltri(0, v0@v[0], v0@v[1], v1@v[0], v1@v[1], v2@v[0], v2@v[1], col);
 }
 
 function draw_F4(v0, v1, v2, v3, r, g, b)

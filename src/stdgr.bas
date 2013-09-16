@@ -38,24 +38,6 @@ function __torgb(r, g, b)
         return (r | (g >> 8) | (b >> 16));
 }
 
-//#ifdef ZERO
-
-/* 線分をy分割した場合のxを得る
- *
- * 引数:
- * x0, y0: 始点座標
- * x1, y1: 終点座標
- * sprit_y: y分割座標
- *
- * 戻り値: 線分をy分割した場合のx
- *
- * 非公開関数
- */
-function __linesprit_y(x0, y0, x1, y1, sprit_y)
-{
-        return x0 + (((x1 - x0) / (y1 - y0)) * (sprit_y - y0));
-}
-
 /* 3項から最大値インデックスを探す
  *
  * 引数:
@@ -65,12 +47,12 @@ function __linesprit_y(x0, y0, x1, y1, sprit_y)
  */
 function __search_max3(a, b, c)
 {
-        if ((b >= c) and (b >= a))
-                return 1;
-        else if ((c >= a) and (c >= b))
-                return 2;
-        else
+        if ((a >= b) and (a >= c))
                 return 0;
+        else if ((b >= c) and (b >= a))
+                return 1;
+        else
+                return 2;
 }
 
 /* 2項から最小値インデックスを探す
@@ -82,10 +64,10 @@ function __search_max3(a, b, c)
  */
 function __search_min2(a, b)
 {
-        if (b <= a)
-                return 1;
-        else
+        if (a <= b)
                 return 0;
+        else
+                return 1;
 }
 
 /* 3項から最大値、中間値、最小値のインデックスを探す命令を出力する
@@ -104,24 +86,20 @@ function __search_minmidmax3(a, b, c)
                 dim min = __search_min2(b, c);
                 if (min == 0)
                         return (0 << 4) | (1 << 2) | (2 << 0);
-                else
-                        return (0 << 4) | (2 << 2) | (1 << 0);
-        }
 
-        if (max == 1) {
+                return (0 << 4) | (2 << 2) | (1 << 0);
+        } else if (max == 1) {
                 dim min = __search_min2(a, c);
                 if (min == 0)
                         return (1 << 4) | (2 << 2) | (0 << 0);
-                else
-                        return (1 << 4) | (0 << 2) | (2 << 0);
-        }
 
-        if (max == 2) {
+                return (1 << 4) | (0 << 2) | (2 << 0);
+        } else {
                 dim min = __search_min2(a, b);
                 if (min == 0)
                         return (2 << 4) | (1 << 2) | (0 << 0);
-                else
-                        return (2 << 4) | (0 << 2) | (1 << 0);
+
+                return (2 << 4) | (0 << 2) | (1 << 0);
         }
 }
 
@@ -131,21 +109,24 @@ function __search_minmidmax3(a, b, c)
  * mode: 描画モード
  * x0, y0, x1, y1, x2, y2: 塗りつぶしたい三角形の頂点座標
  * color: RGB色値
- * ope_comparison: 0 なら <=、 1 なら >= として動作する
+ * type:
+ *      0 : min -> max （正）方向
+ *      1 : max -> min （負）方向
  *
  * 戻り値: 無し
  *
  * ope_comparison: これは +方向 or -方向用 によって処理を変えるため
  */
-function __filltri_sl_common(mode, x0, y0, x1, y1, x2, y2, color, ope_comparison)
+function __filltri_sl_common(mode, x0, y0, x1, y1, x2, y2, color, type)
 {
-        dim ac_dx = (x0 - x2) / (y0 - y2);
-        dim bc_dx = (x1 - x2) / (y1 - y2);
+        dim ac_dx = (x2 - x0) / (y2 - y0);
+        dim bc_dx = (x2 - x1) / (y2 - y1);
 
-        if (ope_comparison == 0) {
+        if (type == 0) {
                 while (y0 <= y2) {
                         __drawline(mode, x0, y0, x1, y0, color);
                         __drawline(mode, x0, y0+1, x1, y0+1, color);
+
                         y0 = y0 + 1;
                         x0 = x0 + ac_dx;
                         x1 = x1 + bc_dx;
@@ -154,14 +135,13 @@ function __filltri_sl_common(mode, x0, y0, x1, y1, x2, y2, color, ope_comparison
                 while (y0 >= y2) {
                         __drawline(mode, x0, y0, x1, y0, color);
                         __drawline(mode, x0, y0+1, x1, y0+1, color);
+
                         y0 = y0 - 1;
                         x0 = x0 - ac_dx;
                         x1 = x1 - bc_dx;
                 }
         }
 }
-
-//#endif
 
 /* 頂点 a,b,c による三角形塗りつぶしする命令を出力する。
  *
@@ -174,10 +154,6 @@ function __filltri_sl_common(mode, x0, y0, x1, y1, x2, y2, color, ope_comparison
  */
 function __filltri(mode, x0, y0, x1, y1, x2, y2, color)
 {
-        filltri 0 x0 y0 x1 y1 x2 y2 color;
-
-#ifdef ZERO
-
         /* min, mid, max を調べて min,max 間の中点座標単位 mx, my を得て、
          * それら中点座標を用いて、2つのスキャンライン三角形に分割し、それぞれを描画する。
          */
@@ -222,24 +198,26 @@ function __filltri(mode, x0, y0, x1, y1, x2, y2, color)
                 min_x = x1; min_y = y1;
 
         /* 210 */
-        } else {
+        } else if (order == 36) {
                 max_x = x2; max_y = y2;
                 mid_x = x1; mid_y = y1;
                 min_x = x0; min_y = y0;
+        } else {
+                return;
         }
 
         /* min,max間を midYで分割した場合のsx,syを得る
          */
-        dim sx = __linesprit_y(min_x, min_y, max_x, max_y, mid_y);
+        dim sx = min_x + (((max_x - min_x) / (max_y - min_y)) * (mid_y - min_y));
         dim sy = mid_y;
 
         /* 三角形 s,mid,min の描画 */
-        __filltri_sl_common(mode, mid_x, mid_y, min_x, min_y, color, 1);
+        __filltri_sl_common(mode, sx, sy, mid_x, mid_y, min_x, min_y, color, 1);
+
+        /* color = color >> 1; */
 
         /* 三角形 s,mid,max の描画 */
-        __filltri_sl_common(mode, mid_x, mid_y, max_x, max_y, color, 0);
-
-#endif
+        __filltri_sl_common(mode, sx, sy, mid_x, mid_y, max_x, max_y, color, 0);
 }
 
 #endif /* __STDGR_BAS__ */
