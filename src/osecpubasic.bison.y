@@ -1853,296 +1853,6 @@ static void __define_user_function_end(const int32_t skip_label)
         pA("LB(0, %d);", skip_label);
 }
 
-/* 各種プリセット関数
- */
-
-/* 線分の傾きaを得る（ただしx=ay）
- * あらかじめ各 fix? に所定の値をセットしておくこと。 演算結果は fixA へ出力される。
- * fixL:x0, fixR:y0, fixLx:x1, fixRx:y1 -> fixA
- *
- * 非公開関数
- */
-static void __func_linebias_ay(void)
-{
-        beginF();
-
-        pA("fixL = fixLx - fixL;");
-        pA("fixR = fixRx - fixR;");
-        __func_div();
-
-        endF();
-}
-
-/* 線分をy分割した場合のxを得る
- * あらかじめ各 fix? に所定の値をセットしておくこと。 演算結果は fixA へ出力される。
- * fixL:x0, fixR:y0, fixLx:x1, fixRx:y1, fixS:spritY
- *
- * 非公開関数
- */
-static void __func_linesprit_y(void)
-{
-        beginF();
-
-        pA("fixS -= fixR;");
-
-        push_eoe();
-        __func_linebias_ay();
-        pop_eoe();
-
-        push_eoe();
-        pA("fixL = fixA;");
-        pA("fixR = fixS;");
-        __func_mul();
-        pop_eoe();
-
-        pA("fixA += fixL;");
-
-        endF();
-}
-
-/* 3項から最大値インデックスを探す命令を出力する
- * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
- *
- * 結果は [0] = fixL, [1] = fixR, [2] = fixS と考えた場合のインデックス値
- *
- * 非公開関数
- */
-static void __func_search_max3(void)
-{
-        beginF();
-
-        pA("fixA = 0;");
-        pA("if ((fixR >= fixS) & (fixR >= fixL)) {fixA = 1;}");
-        pA("if ((fixS >= fixL) & (fixS >= fixR)) {fixA = 2;}");
-
-        endF();
-}
-
-/* 2項から最小値インデックスを探す命令を出力する
- * あらかじめ fixL, fixR に値をセットしておくこと。演算結果はfixAへ出力される。
- *
- * 結果は [0] = fixL, [1] = fixR と考えた場合のインデックス値
- *
- * 非公開関数
- */
-static void __func_search_min2(void)
-{
-        beginF();
-
-        pA("fixA = 0;");
-        pA("if (fixR <= fixL) {fixA = 1;}");
-
-        endF();
-}
-
-/* 3項から最大値、中間値、最小値のインデックスを探す命令を出力する
- * あらかじめ fixL, fixR, fixS に値をセットしておくこと。演算結果はfixAへ出力される。
- *
- * 結果は [0] = fixL, [1] = fixR, [2] = fixS と考えた場合のインデックス値を、2bit毎に配列した値
- * 0-1bit = min, 2-3bit = mid, 4-5bit = max
- *
- * 非公開関数
- */
-static void __func_search_minmidmax3(void)
-{
-        beginF();
-
-        __func_search_max3();
-        pA("fixT = fixA;");
-        pA("fixT1 = fixT << 4;");
-
-        pA("if (fixT == 0) {");
-                pA("fixL = fixS;");
-                __func_search_min2();
-                pA("if (fixA == 0) {fixA = fixT1 | %d | %d;}", (1 << 2), (2 << 0));
-                pA("if (fixA == 1) {fixA = fixT1 | %d | %d;}", (2 << 2), (1 << 0));
-        pA("}");
-
-        pA("if (fixT == 1) {");
-                pA("fixR = fixS;");
-                __func_search_min2();
-                pA("if (fixA == 0) {fixA = fixT1 | %d | %d;}", (2 << 2), (0 << 0));
-                pA("if (fixA == 1) {fixA = fixT1 | %d | %d;}", (0 << 2), (2 << 0));
-        pA("}");
-
-        pA("if (fixT == 2) {");
-                __func_search_min2();
-                pA("if (fixA == 0) {fixA = fixT1 | %d | %d;}", (1 << 2), (0 << 0));
-                pA("if (fixA == 1) {fixA = fixT1 | %d | %d;}", (0 << 2), (1 << 0));
-        pA("}");
-
-        endF();
-}
-
-/* 頂点 a,b,c (ay = by) をスキャンライン単位で三角形塗りつぶしする命令を出力する。
- * あらかじめ以下のルールで値をセットしておくこと。 演算結果は存在しない。
- * fixL = x0, fixR = y0, fixLx = x1, fixRx = y1, fixT1 = x2, fixT2 = y2
- * fixT = mode, fixS = RGB
- *
- * ope_comparison には ">=" か "<=" の文字列を与える想定。
- * for_step には "+" か "-" の文字列を与える想定。
- * これらは +方向、-方向用、それぞれ専用の決め打ち関数を生成するため。
- *
- * 非公開関数
- */
-static void __func_filltri_sl_common(const char* ope_comparison, const char* for_step)
-{
-        /* ope_comparison毎に、コンパイル時に複数生成される想定なので、
-         * 関数内を beginF(), endF() で囲んではいけない。
-         *
-         * この関数自体を囲むことには問題は無い。
-         */
-
-        /* line a,c 側の dx を fixT3 へ得る
-         */
-        push_eoe();
-                pA("fixL = fixT1 - fixL;");
-                pA("fixR = fixT2 - fixR;");
-                __func_div();
-        pop_eoe();
-        pA("fixT3 = fixA;");
-
-        /* line b,c 側の dx を fixT4 へ得る
-         */
-        push_eoe();
-                pA("fixL = fixT1 - fixLx;");
-                pA("fixR = fixT2 - fixRx;");
-                __func_div();
-        pop_eoe();
-        pA("fixT4 = fixA;");
-
-        /* forループ
-         */
-
-        /* 局所ループ用に無名ラベルをセット （外側forの戻り位置）
-         */
-        const int32_t local_label_y = cur_label_index_head;
-        cur_label_index_head++;
-        pA("LB(1, %d);", local_label_y);
-
-        pA("if (fixR %s fixT2) {", ope_comparison);
-                push_eoe();
-                        pA("fixL >>= 16;");
-                        pA("fixR >>= 16;");
-                        pA("fixLx >>= 16;");
-                        pA("junkApi_drawLine(fixT, fixL, fixR, fixLx, fixR, fixS);");
-
-                        /* 隙間対策
-                         */
-                        pA("fixR++;");
-                        pA("junkApi_drawLine(fixT, fixL, fixR, fixLx, fixR, fixS);");
-                pop_eoe();
-
-                pA("fixR %s= %d;", for_step, (1 << 16));
-
-                pA("fixL %s= fixT3;", for_step);
-                pA("fixLx %s= fixT4;", for_step);
-
-                /* ループの復帰
-                 */
-                pA("PLIMM(P3F, %d);", local_label_y);
-        pA("}");
-}
-
-/* 頂点 a,b,c による三角形塗りつぶしする命令を出力する。
- * あらかじめ以下のルールで値をセットしておくこと。 演算結果は存在しない。
- * fixL = x0, fixR = y0, fixLx = x1, fixRx = y1, fixT1 = x2, fixT2 = y2,
- * fixT = mode, fixS = RGB
- */
-static void __func_filltri(void)
-{
-        beginF();
-
-        /* min, mid, max を調べて min,max 間の中点座標単位を fixT3, fixT4 に得て、
-         * それら中点座標を用いて、2つのスキャンライン三角形に分割し、それぞれを描画する。
-         */
-
-        /* y0,y1,y2 のmin,mid,maxを得る。
-         * 結果は fixT3
-         */
-        push_eoe();
-                pA("fixL = fixR;");
-                pA("fixR = fixRx;");
-                pA("fixS = fixT2;");
-                __func_search_minmidmax3();
-        pop_eoe();
-
-        pA("fixT3 = fixA;");
-
-        /* 頂点をmin,mid,max順に再配置
-         */
-
-        /* 012 */
-        pA("if (fixT3 == %d) {", (0 << 4) | (1 << 2) | (2 << 0));
-                pA("fixA = fixT1; fixT1 = fixL; fixL = fixA;");
-                pA("fixA = fixT2; fixT2 = fixR; fixR = fixA;");
-        pA("}");
-
-        /* 021 */
-        pA("if (fixT3 == %d) {", (0 << 4) | (2 << 2) | (1 << 0));
-                pA("fixA = fixT1; fixT1 = fixL; fixL = fixLx; fixLx = fixA;");
-                pA("fixA = fixT2; fixT2 = fixR; fixR = fixRx; fixRx = fixA;");
-        pA("}");
-
-        /* 120 */
-        pA("if (fixT3 == %d) {", (1 << 4) | (2 << 2) | (0 << 0));
-                pA("fixA = fixT1; fixT1 = fixLx; fixLx = fixA;");
-                pA("fixA = fixT2; fixT2 = fixRx; fixRx = fixA;");
-        pA("}");
-
-        /* 102 */
-        pA("if (fixT3 == %d) {", (1 << 4) | (0 << 2) | (2 << 0));
-                pA("fixA = fixT1; fixT1 = fixLx; fixLx = fixL; fixL = fixA;");
-                pA("fixA = fixT2; fixT2 = fixRx; fixRx = fixR; fixR = fixA;");
-        pA("}");
-
-        /* 201 */
-        pA("if (fixT3 == %d) {", (2 << 4) | (0 << 2) | (1 << 0));
-                pA("fixA = fixLx; fixLx = fixL; fixL = fixA;");
-                pA("fixA = fixRx; fixRx = fixR; fixR = fixA;");
-        pA("}");
-
-        /* 210 の場合は変化無し */
-
-        /* min,max間を midYで分割した場合のsx,syを得る
-         * fixT3:sx, fixT4:sy
-         */
-        push_eoe();
-                pA("fixS = fixRx;");
-
-                pA("fixLx = fixT1;");
-                pA("fixRx = fixT2;");
-
-                __func_linesprit_y();
-        pop_eoe();
-
-        pA("fixT3 = fixA;");
-        pA("fixT4 = fixRx;");
-
-        /* 三角形 s,mid,min の描画
-         */
-        push_eoe();
-                pA("fixT1 = fixL;");
-                pA("fixT2 = fixR;");
-
-                pA("fixL = fixT3;");
-                pA("fixR = fixT4;");
-
-                __func_filltri_sl_common(">=", "-");
-        pop_eoe();
-
-        /* 三角形 s,mid,max の描画
-         */
-        push_eoe();
-                pA("fixL = fixT3;");
-                pA("fixR = fixT4;");
-
-                __func_filltri_sl_common("<=", "+");
-        pop_eoe();
-
-        endF();
-}
-
 %}
 
 %union {
@@ -2191,8 +1901,6 @@ static void __func_filltri(void)
 %token __STATE_ASM
 %token __STATE_FUNCTION
 
-%token __FUNC_FILLTRI
-
 %left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD
@@ -2212,8 +1920,6 @@ static void __func_filltri(void)
 %type <sval> __CONST_STRING const_strings
 %type <sval> __IDENTIFIER __LABEL __DEFINE_LABEL
 
-%type <sval> func_filltri
-
 %type <sval> operation const_variable read_variable
 
 %type <sval> selection
@@ -2222,7 +1928,7 @@ static void __func_filltri(void)
 %type <sval> iterator iterator_while iterator_for
 %type <sval> initializer
 %type <ival_list> initializer_param
-%type <sval> expression assignment jump define_label function
+%type <sval> expression assignment jump define_label
 %type <sval> syntax_tree declaration_list declaration declaration_block
 %type <sval> define_function
 
@@ -2291,7 +1997,6 @@ expression
         | read_variable
         | assignment
         | comparison
-        | function
         ;
 
 expression_list
@@ -2303,28 +2008,6 @@ expression_list
         }
         | expression __OPE_COMMA expression_list {
                 $$ = 1 + $3;
-        }
-        ;
-
-function
-        : func_filltri
-        ;
-
-func_filltri
-        : __FUNC_FILLTRI expression
-                         expression expression expression expression expression expression
-                         expression
-        {
-                pop_stack("fixS");       /* RGB */
-                pop_stack("fixT2");      /* y2 */
-                pop_stack("fixT1");      /* x2 */
-                pop_stack("fixRx");      /* y1 */
-                pop_stack("fixLx");      /* x1 */
-                pop_stack("fixR");       /* y0 */
-                pop_stack("fixL");       /* x0 */
-                pop_stack("fixT");       /* mode */
-                __func_filltri();
-                push_stack_dummy(); /* 終了時に push +1 な状態にするため */
         }
         ;
 

@@ -561,8 +561,6 @@ static int32_t cur_ifdef_skip_depth;
 
 <main_process>"asm"     return(__STATE_ASM);
 
-<main_process>"filltri" return(__FUNC_FILLTRI);
-
 <main_process>[_a-zA-Z][_0-9a-zA-Z]* {
         char* replace = search_iden_define_table(yytext);
 
