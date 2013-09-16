@@ -619,11 +619,11 @@ static void varlist_set_scope_head(void)
  * 最終的には、システムで用いるメモリーは、全て、このメモリー領域を利用するように置き換えたい。
  */
 
-#define MEM_SIZE (0x200000)
+#define MEM_SIZE (0x400000)
 
 static void init_mem(void)
 {
-        pA("VPtr mem_ptr:P04;");
+        pA("VPtr mem_ptr:P01;");
         pA("junkApi_malloc(mem_ptr, T_SINT32, %d);", MEM_SIZE);
 }
 
@@ -644,7 +644,7 @@ static void read_mem(const char* regname_data,
  * 実際には mem の STACK_BEGIN_ADDRESS 以降のメモリー領域を用いる。
  */
 
-#define STACK_BEGIN_ADDRESS (MEM_SIZE - 0x100000)
+#define STACK_BEGIN_ADDRESS (MEM_SIZE - 0x200000)
 
 /* 任意のレジスターの値をスタックにプッシュする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
@@ -790,7 +790,7 @@ void labellist_add(const char* str)
 }
 
 /* gosub での return 先ラベルの保存用に使うポインターレジスター */
-#define CUR_RETURN_LABEL "P02"
+#define CUR_RETURN_LABEL "P03"
 
 /* ラベルスタックにラベル型（VPtr型）をプッシュする
  * 事前に以下のレジスタをセットしておくこと:
@@ -798,8 +798,8 @@ void labellist_add(const char* str)
  */
 static void push_labelstack(void)
 {
-        pA("PAPSMEM0(labelstack_socket, T_VPTR, labelstack_ptr, labelstack_head);");
-        pA("labelstack_head++;");
+        pA("PSMEM0(labelstack_socket, T_VPTR, labelstack_ptr);");
+        pA("PADDI(labelstack_ptr, T_VPTR, labelstack_ptr, 1);");
 }
 
 /* ラベルスタックからラベル型（VPtr型）をポップする
@@ -807,8 +807,8 @@ static void push_labelstack(void)
  */
 static void pop_labelstack(void)
 {
-        pA("labelstack_head--;");
-        pA("PAPLMEM0(labelstack_socket, T_VPTR, labelstack_ptr, labelstack_head);");
+        pA("PADDI(labelstack_ptr, T_VPTR, labelstack_ptr, -1);");
+        pA("PLMEM0(labelstack_socket, T_VPTR, labelstack_ptr);");
 }
 
 /* ラベルスタックの初期化
@@ -824,11 +824,9 @@ static void pop_labelstack(void)
  * また特殊なレジスタでしか扱えない）
  */
 static char init_labelstack[] = {
-        "VPtr labelstack_ptr:P01;\n"
+        "VPtr labelstack_ptr:P02;\n"
         "junkApi_malloc(labelstack_ptr, T_VPTR, " LABEL_INDEX_LEN_STR ");\n"
         "VPtr labelstack_socket:" CUR_RETURN_LABEL ";\n"
-        "SInt32 labelstack_head:R01;\n"
-        "labelstack_head = 0;\n"
 };
 
 /* プリセット関数やアキュムレーターを呼び出し命令に対して、追加でさらに共通の定型命令を出力する。
@@ -903,7 +901,7 @@ static void retF(void)
  */
 void init_heap(void)
 {
-        pA("VPtr heap_ptr:P04;");
+        pA("VPtr heap_ptr:P01;");
         pA("SInt32 heap_socket:R04;");
         pA("SInt32 heap_base:R06;");
         pA("SInt32 heap_offset:R05;");
