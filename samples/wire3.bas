@@ -18,7 +18,7 @@ vt[6]@v[0]=+22; vt[6]@v[1]=+22; vt[6]@v[2]=+22; vt[7]@v[0]=-22; vt[7]@v[1]=+22; 
 
 __openwin(scw, sch);
 
-*LLL;
+while (1) {
         add_vector3(&rv, &rv, &rvd);
 
         dim mx[3,3], my[3,3], mz[3,3], mt[3,3], rm[3,3];
@@ -33,17 +33,17 @@ __openwin(scw, sch);
                 add_vector3(vtx[i], vtx[i], &ov);
         }
 
-        draw_W4(vtx[0], vtx[1], vtx[2], vtx[3], 255, 192, 192);   /* 0 1 2 3 */
-        draw_W4(vtx[7], vtx[6], vtx[5], vtx[4], 192, 255, 192);   /* 4 5 6 7 */
-        draw_W4(vtx[4], vtx[5], vtx[1], vtx[0], 192, 192, 255);   /* 4 5 1 0 */
-        draw_W4(vtx[5], vtx[6], vtx[2], vtx[1], 255, 255, 192);   /* 4 5 2 1 */
-        draw_W4(vtx[6], vtx[7], vtx[3], vtx[2], 192, 255, 255);   /* 6 7 3 2 */
-        draw_W4(vtx[7], vtx[4], vtx[0], vtx[3], 255, 192, 255);   /* 7 4 0 3 */
+        draw_W4(vtx[0], vtx[1], vtx[2], vtx[3], 255, 192, 192);
+        draw_W4(vtx[7], vtx[6], vtx[5], vtx[4], 192, 255, 192);
+        draw_W4(vtx[4], vtx[5], vtx[1], vtx[0], 192, 192, 255);
+        draw_W4(vtx[5], vtx[6], vtx[2], vtx[1], 255, 255, 192);
+        draw_W4(vtx[6], vtx[7], vtx[3], vtx[2], 192, 255, 255);
+        draw_W4(vtx[7], vtx[4], vtx[0], vtx[3], 255, 192, 255);
 
         __sleep(0, 16);
 
-        __fillrect(0, scw, sch, 0, 0, 0);
-goto *LLL;
+        __fillrect(0, scw, sch, 0, 0, __torgb(0, 0, 0));
+}
 
 function draw_W4(v0, v1, v2, v3, r, g, b)
 {
