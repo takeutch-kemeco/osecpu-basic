@@ -6,6 +6,7 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ライセンスは GPL2 です。
 
+![poly3.png](./img/poly3.png)
 
 
 ***
