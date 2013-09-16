@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([osecpubasic], [0.0.7], [takeutchkemeco@gmail.com])
+AC_INIT([osecpubasic], [0.0.8], [takeutchkemeco@gmail.com])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_HEADERS([src/config.h])
