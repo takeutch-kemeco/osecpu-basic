@@ -698,9 +698,9 @@ static void pop_stack_dummy(void)
  */
 static void init_stack(void)
 {
-        pA("SInt32 stack_socket:R02;");
-        pA("SInt32 stack_head:R03;");
-        pA("SInt32 stack_frame:R12;");
+        pA("SInt32 stack_head:R01;");
+        pA("SInt32 stack_frame:R02;");
+        pA("SInt32 stack_socket:R03;");
 
         pA("stack_head = %d;", STACK_BEGIN_ADDRESS);
         pA("stack_frame = 0;");
@@ -901,10 +901,9 @@ static void retF(void)
  */
 void init_heap(void)
 {
-        pA("VPtr heap_ptr:P01;");
-        pA("SInt32 heap_socket:R04;");
-        pA("SInt32 heap_base:R06;");
-        pA("SInt32 heap_offset:R05;");
+        pA("SInt32 heap_base:R04;");
+        pA("SInt32 heap_socket:R05;");
+        pA("SInt32 heap_offset:R06;");
         pA("heap_base = 0;");
 };
 
@@ -1021,10 +1020,10 @@ static char init_eoe_arg[] = {
         "SInt32 fixT1:R0E;\n"
         "SInt32 fixT2:R0F;\n"
         "SInt32 fixT3:R10;\n"
-        "SInt32 fixT4:R25;\n"
-        "SInt32 fixA1:R22;\n"
-        "SInt32 fixA2:R23;\n"
-        "SInt32 fixA3:R24;\n"
+        "SInt32 fixT4:R11;\n"
+        "SInt32 fixA1:R12;\n"
+        "SInt32 fixA2:R13;\n"
+        "SInt32 fixA3:R14;\n"
 };
 
 /* 全ての初期化
