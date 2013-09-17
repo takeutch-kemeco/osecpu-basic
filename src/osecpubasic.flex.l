@@ -543,8 +543,9 @@ static int32_t cur_ifdef_skip_depth;
 
 <main_process>"sizeof"  return(__OPE_SIZEOF);
 
-<main_process>"struct"  return(__STATE_STRUCT);
-<main_process>"enum"  return(__STATE_ENUM);
+<main_process>"struct"  return(__TYPE_STRUCT);
+<main_process>"union"   return(__TYPE_UNION);
+<main_process>"enum"    return(__TYPE_ENUM);
 
 <main_process>"function" {return(__STATE_FUNCTION);}
 

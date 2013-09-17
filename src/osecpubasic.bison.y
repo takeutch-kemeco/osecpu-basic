@@ -1897,7 +1897,8 @@ static void __define_user_function_end(const int32_t skip_label)
 %token __TYPE_CONST
 %token __TYPE_VOLATILE
 
-%token __STATE_STRUCT __STATE_ENUM
+%token __TYPE_STRUCT __TYPE_UNION __TYPE_ENUM
+
 %token __STATE_ASM
 %token __STATE_FUNCTION
 
@@ -2434,7 +2435,7 @@ initializer_struct_member_list
         ;
 
 define_struct
-        : __STATE_STRUCT __IDENTIFIER __BLOCK_LB
+        : __TYPE_STRUCT __IDENTIFIER __BLOCK_LB
           initializer_struct_member_list __BLOCK_RB __DECL_END
         {
                 structspec_set_name($4, $2);
@@ -2480,21 +2481,21 @@ __external_declaration
         ;
 
 __function_declaration
-        :
+        : __declaration_specifiers __declarator __declaration_list __compound_statement
         ;
 
 __declaration
-        : __declaration_specifiers __DECL_END
-        | __declaration_specifiers __init_declarator_list __DECL_END
+        : __declaration_specifiers __init_declarator_list __DECL_END
+        ;
 
 __declaration_list
-        : __declaration
+        : /* empty */
+        | __declaration
         | __declaration_list __declaration
+        ;
 
 __declaration_specifiers
-        : __storage_class_specifier
-        | __type_specifier
-        | __type_qualifier
+        : /* empty */
         | __storage_class_specifier __declaration_specifiers {
                 return($1 | $2);
         }
@@ -2524,6 +2525,9 @@ __type_specifier
         | __TYPE_DOUBLE         {return(TYPE_DOUBLE);}
         | __TYPE_SIGNED         {return(TYPE_SIGNED);}
         | __TYPE_UNSIGNED       {return(TYPE_UNSIGNED);}
+        | __struct_or_union_specifier
+        | __enum_specifier
+        | __typedef_name
         ;
 
 __type_qualifier
@@ -2532,19 +2536,23 @@ __type_qualifier
         ;
 
 __struct_or_union_specifier
-        :
+        : __struct_or_union __identifier __BLOCK_LB __struct_declaration_list __BLOCK_RB
+        | __struct_or_union __identifier
         ;
 
 __struct_or_union
-        :
+        : __TYPE_STRUCT
+        | __TYPE_UNION
         ;
 
 __struct_declaration_list
-        :
+        : __struct_declaration
+        | __struct_declaration_list __struct_declaration
         ;
 
 __init_declarator_list
-        : __init_declarator
+        : /* empty */
+        | __init_declarator
         | __init_declarator_list __OPE_COMMA __init_declarator
         ;
 
@@ -2558,8 +2566,9 @@ __struct_declaration
         ;
 
 __specifier_qualifier_list
-        : __struct_declarator
-        | __struct_declarator_list __OPE_COMMA __struct_declarator
+        : /* empty */
+        | __type_specifier __specifier_qualifier_list
+        | __type_qualifier __specifier_qualifier_list
         ;
 
 __struct_declarator_list
@@ -2570,13 +2579,11 @@ __struct_declarator_list
 __struct_declarator
         : __declarator
         | __declarator __OPE_COLON __constant_expression
-        | __OPE_COLON __constant_expression
         ;
 
 __enum_specifier
-        : __STATE_ENUM __IDENTIFIER __BLOCK_LB __enumerator_list __BLOCK_RB
-        | __STATE_ENUM __BLOCK_LB __enumerator_list __BLOCK_RB
-        | __STATE_ENUM __IDENTIFIER
+        : __TYPE_ENUM __identifier __BLOCK_LB __enumerator_list __BLOCK_RB
+        | __TYPE_ENUM __identifier
         ;
 
 __enumerator_list
@@ -2585,39 +2592,38 @@ __enumerator_list
         ;
 
 __enumerator
-        : __IDENTIFIER
-        | __IDENTIFIER __OPE_SUBST __constant_expression
+        : __identifier
+        | __identifier __OPE_SUBST __constant_expression
         ;
 
 __declarator
-        : __OPE_MUL __direct_declarator %prec __OPE_POINTER
-        | __direct_declarator
+        : /* empty */
+        | __pointer __direct_declarator
         ;
 
 __direct_declarator
-        : __IDENTIFIER
+        : __identifier
         | __LB __declarator __RB
         | __direct_declarator __ARRAY_LB __constant_expression __ARRAY_RB
-        | __direct_declarator __ARRAY_LB __ARRAY_RB
         | __direct_declarator __LB __parameter_type_list __RB
         | __direct_declarator __LB __identifier_list __RB
-        | __direct_declarator __LB __RB
         ;
 
 __pointer
-        : __OPE_MUL %prec __OPE_POINTER
+        : /* empty */
         | __OPE_MUL __type_qualifier_list %prec __OPE_POINTER
-        | __OPE_MUL __pointer %prec __OPE_POINTER
         | __OPE_MUL __type_qualifier_list __pointer %prec __OPE_POINTER
         ;
 
 __type_qualifier_list
-        : __type_qualifier
+        : /* empty */
+        | __type_qualifier
         | __type_qualifier_list __type_qualifier
         ;
 
 __parameter_type_list
-        : __parameter_list
+        : /* empty */
+        | __parameter_list
         | __parameter_list __OPE_COMMA __OPE_VALEN
         ;
 
@@ -2629,12 +2635,12 @@ __parameter_list
 __parameter_declaration
         : __declaration_specifiers __declaration
         | __declaration_specifiers __abstract_declarator
-        | __declaration_specifiers
         ;
 
 __identifier_list
-        : __IDENTIFIER
-        | __identifier_list __OPE_COMMA __IDENTIFIER
+        : /* empty */
+        | __identifier
+        | __identifier_list __OPE_COMMA __identifier
         ;
 
 __initializer
@@ -2650,31 +2656,23 @@ __initializer_list
 
 __type_name
         : __specifier_qualifier_list __abstract_declarator
-        | __specifier_qualifier_list
         ;
 
 __abstract_declarator
-        : __OPE_MUL %prec __OPE_POINTER
-        | __OPE_MUL __direct_abstract_declarator %prec __OPE_POINTER
-        | __direct_abstract_declarator
+        : /* empty */
+        | __pointer
+        | __pointer __direct_abstract_declarator
         ;
 
 __direct_abstract_declarator
-        : __LB __abstract_declarator __RB
-
+        : /* empty */
+        | __LB __abstract_declarator __RB
         | __direct_abstract_declarator __ARRAY_LB __constant_expression __ARRAY_RB
-        | __ARRAY_LB __constant_expression __ARRAY_RB
-        | __direct_abstract_declarator __ARRAY_LB __ARRAY_RB
-        | __ARRAY_LB __ARRAY_RB
-
         | __direct_abstract_declarator __LB __parameter_type_list __RB
-        | __LB __parameter_type_list __RB
-        | __direct_abstract_declarator __LB __RB
-        | __LB __RB
         ;
 
 __typedef_name
-        : /* __IDENTIFIER */
+        : __identifier
         ;
 
 __statement
@@ -2687,25 +2685,22 @@ __statement
         ;
 
 __labeled_statement
-        : __IDENTIFIER __OPE_COLON __statement
+        : __identifier __OPE_COLON __statement
         | __STATE_CASE __constant_expression __OPE_COLON __statement
         | __STATE_DEFAULT __OPE_COLON __statement
         ;
 
 __expression_statement
         : __expression __DECL_END
-        | __DECL_END
         ;
 
 __compound_statement
         : __BLOCK_LB __declaration_list __statement_list __BLOCK_RB
-        | __BLOCK_LB __statement_list __BLOCK_RB
-        | __BLOCK_LB __declaration_list __BLOCK_RB
-        | __BLOCK_LB __BLOCK_RB
         ;
 
 __statement_list
-        : __statement
+        : /* empty */
+        | __statement
         | __statement_list __statement
         ;
 
@@ -2722,14 +2717,15 @@ __iteration_statement
         ;
 
 __jump_statement
-        : __STATE_GOTO __IDENTIFIER __DECL_END
+        : __STATE_GOTO __identifier __DECL_END
         | __STATE_CONTINUE __DECL_END
         | __STATE_BREAK __DECL_END
         | __STATE_RETURN __expression __DECL_END
         ;
 
 __expression
-        : __assignment_expression
+        : /* empty */
+        | __assignment_expression
         | __expression __OPE_COMMA __assignment_expression
         ;
 
@@ -2758,7 +2754,8 @@ __conditional_expression
         ;
 
 __constant_expression
-        : __conditional_expression
+        : /* empty */
+        | __conditional_expression
         ;
 
 __logical_OR_expression
@@ -2821,7 +2818,7 @@ __multiplicative_expression
 
 __cast_expression
         : __unary_expression
-        | __LB __IDENTIFIER __RB __cast_expression
+        | __LB __type_name __RB __cast_expression
         ;
 
 __unary_expression
@@ -2830,7 +2827,7 @@ __unary_expression
         | __OPE_DEC __unary_expression
         | __unary_operator __cast_expression
         | __OPE_SIZEOF __unary_expression
-        | __OPE_SIZEOF __LB __IDENTIFIER __RB
+        | __OPE_SIZEOF __LB __identifier __RB
         ;
 
 __unary_operator
@@ -2846,21 +2843,21 @@ __postfix_expression
         : __primary_expression
         | __postfix_expression __ARRAY_LB __expression __ARRAY_RB
         | __postfix_expression __LB __argument_expression_list __RB
-        | __postfix_expression __OPE_DOT __IDENTIFIER
-        | __postfix_expression __OPE_ARROW __IDENTIFIER
+        | __postfix_expression __OPE_DOT __identifier
+        | __postfix_expression __OPE_ARROW __identifier
         | __postfix_expression __OPE_INC
         | __postfix_expression __OPE_DEC
         ;
 
 __primary_expression
-        : __IDENTIFIER
+        : __identifier
         | __constant
         | __CONST_STRING
         | __LB __expression __RB
         ;
 
 __argument_expression_list
-        :
+        : /* empty */
         | __assignment_expression
         | __argument_expression_list __OPE_COMMA __assignment_expression
         ;
@@ -2874,6 +2871,11 @@ __constant
 
 __enumeration_constant
         :
+        ;
+
+__identifier
+        : /* empty */
+        | __IDENTIFIER
         ;
 
 %%
