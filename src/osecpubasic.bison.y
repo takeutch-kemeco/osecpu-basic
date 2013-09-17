@@ -1924,14 +1924,13 @@ static void __define_user_function_end(const int32_t skip_label)
 
 %type <sval> operation const_variable read_variable
 
-%type <sval> selection
 %type <ival_list> selection_if selection_if_v
 
-%type <sval> iterator iterator_while iterator_for
+%type <sval> iteration_while iteration_for
 %type <sval> initializer
 %type <ival_list> initializer_param
-%type <sval> expression assignment jump define_label
-%type <sval> syntax_tree declaration_list declaration declaration_block
+%type <sval> assignment
+%type <sval> declaration_list declaration
 %type <sval> define_function
 
 %type <sval> define_struct
@@ -1944,53 +1943,76 @@ static void __define_user_function_end(const int32_t skip_label)
 %type <ival> __declaration_specifiers
 %type <ival> __storage_class_specifier __type_specifier __type_qualifier
 
-%start syntax_tree
+%start translation_unit
 
 %%
 
-syntax_tree
-        : declaration_list __EOF {
+translation_unit
+        : __EOF {
+                YYACCEPT;
+        }
+        | external_declaration __EOF {
+                YYACCEPT;
+        }
+        | translation_unit external_declaration __EOF {
                 YYACCEPT;
         }
         ;
 
-declaration_list
-        : declaration
-        | declaration declaration_list
-        | __translation_unit
+external_declaration
+        : declaration_list
         ;
 
-declaration_block
+declaration_list
+        : /* empty */
+        | declaration
+        | declaration declaration_list
+        ;
+
+compound_statement
         : __BLOCK_LB __BLOCK_RB {
                 /* 空の場合は何もしない */
         }
         | __BLOCK_LB {
                 inc_cur_scope_depth();  /* コンパイル時 */
                 varlist_scope_push();   /* コンパイル時 */
-        } declaration_list __BLOCK_RB {
+        } declaration_list statement_list __BLOCK_RB {
                 dec_cur_scope_depth();  /* コンパイル時 */
                 varlist_scope_pop();    /* コンパイル時 */
         }
         ;
 
 declaration
-        : declaration_block
-        | initializer __DECL_END
-        | expression __DECL_END  {
+        : initializer __DECL_END
+        | define_function
+        | define_struct
+        | statement
+        ;
+
+statement
+        : labeled_statement
+        | expression_statement
+        | compound_statement
+        | selection_statement
+        | iteration_statement
+        | jump_statement
+        | inline_assembler_statement
+        ;
+
+statement_list
+        : /* empty */
+        | statement
+        | statement_list statement
+        ;
+
+expression_statement
+        : __DECL_END
+        | expression __DECL_END {
                 /* expression に属するステートメントは、
-                 * 終了時点で”必ず”スタックへのプッシュが1個だけ余計に残ってるという前提。
-                 * それを掃除するため。
+                 * 終了時点で”必ず”スタックへのプッシュが1個だけ余計に残ってる為、それを掃除する。
                  */
                 pop_stack_dummy();
         }
-        | selection
-        | iterator
-        | jump __DECL_END
-        | define_label __DECL_END
-        | define_function
-        | define_struct
-        | inline_assembler __DECL_END
-        | __DECL_END
         ;
 
 expression
@@ -2043,6 +2065,11 @@ initializer
                         yyerror("system err: 変数のインスタンス生成に失敗しました");
 
                 __assignment_scaler(var);
+
+                /* initializer は終了時点でスタックが +-0 である必要があるので、
+                 * __assignment_scaler() によるプッシュを捨てる。
+                 */
+                pop_stack_dummy();
         }
         ;
 
@@ -2234,14 +2261,14 @@ read_variable
         }
         ;
 
-selection
+selection_statement
         : selection_if
         ;
 
 selection_if
         : selection_if_v __STATE_ELSE {
                 pA("LB(0, %d);", $1[0]);
-        } declaration {
+        } statement {
                 pA("LB(0, %d);", $1[1]);
         }
         | selection_if_v {
@@ -2260,7 +2287,7 @@ selection_if_v
                 pA("PLIMM(P3F, %d);", else_label);
                 pA("}");
 
-        } declaration {
+        } statement {
                 const int32_t end_label = cur_label_index_head++;
                 $$[0] = $<ival>5;
                 $$[1] = end_label;
@@ -2269,12 +2296,12 @@ selection_if_v
         }
         ;
 
-iterator
-        : iterator_while
-        | iterator_for
+iteration_statement
+        : iteration_while
+        | iteration_for
         ;
 
-iterator_while
+iteration_while
         : __STATE_WHILE __LB {
                 const int32_t loop_head = cur_label_index_head++;
                 $<ival>$ = loop_head;
@@ -2291,7 +2318,7 @@ iterator_while
                 pA("PLIMM(P3F, %d);", loop_end);
                 pA("}");
 
-        } declaration {
+        } statement {
                 /* ループの復帰 */
                 pA("PLIMM(P3F, %d);", $<ival>3);
 
@@ -2300,7 +2327,7 @@ iterator_while
         }
         ;
 
-iterator_for
+iteration_for
         : __STATE_FOR __LB expression {
                 /* スタックを掃除 */
                 pop_stack("stack_socket");
@@ -2352,7 +2379,7 @@ iterator_for
                 /* main ラベル */
                 pA("LB(0, %d);", $<ival>8);
 
-        } declaration {
+        } statement {
                 /* pre_head ラベルへジャンプ */
                 pA("PLIMM(P3F, %d);", $<ival>10);
 
@@ -2360,21 +2387,21 @@ iterator_for
                 pA("LB(0, %d);", $<ival>6);
         }
 
-define_label
-        : __DEFINE_LABEL {
+labeled_statement
+        : __DEFINE_LABEL __DECL_END {
                 pA("LB(1, %d);", labellist_search($1));
         }
         ;
 
-jump
-        : __STATE_GOTO __LABEL {
+jump_statement
+        : __STATE_GOTO __LABEL __DECL_END {
                 pA("PLIMM(P3F, %d);", labellist_search($2));
         }
-        | __STATE_RETURN expression {
+        | __STATE_RETURN expression __DECL_END {
                 pop_stack("fixA");
                 __define_user_function_return();
         }
-        | __STATE_RETURN {
+        | __STATE_RETURN __DECL_END {
                 /* 空の return の場合は return 0 として動作させる。
                  * これは、ユーザー定義関数は expression なので、
                  * 終了後に必ずスタックが +1 状態である必要があるため。
@@ -2452,20 +2479,20 @@ const_strings
         }
         ;
 
-inline_assembler
-        : __STATE_ASM __LB const_strings __RB {
+inline_assembler_statement
+        : __STATE_ASM __LB const_strings __RB  __DECL_END {
                 pA($3);
         }
-        | __STATE_ASM __LB const_strings __OPE_SUBST expression __RB {
+        | __STATE_ASM __LB const_strings __OPE_SUBST expression __RB __DECL_END {
                 pop_stack($3);
         }
-        | __STATE_ASM __LB var_identifier __OPE_SUBST const_strings __RB {
+        | __STATE_ASM __LB var_identifier __OPE_SUBST const_strings __RB __DECL_END {
                 push_stack($5);
                 __assignment_scaler($3);
         }
         | __STATE_ASM __LB
           var_identifier __ARRAY_LB expression_list __ARRAY_RB
-          __OPE_SUBST const_strings __RB {
+          __OPE_SUBST const_strings __RB __DECL_END {
                 push_stack($8);
                 __assignment_array($3, $5);
         }
