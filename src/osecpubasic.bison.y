@@ -468,6 +468,7 @@ struct Var {
         int32_t row_len;        /* 列の長さ */
         int32_t is_local;       /* この変数がローカルならば非0、グローバルならば0となる */
         int32_t is_direct;      /* この変数が直接参照ならば非0、間接参照ならば0となる */
+        int32_t specifier;      /* この変数の型、および型クラスを示すフラグ */
 };
 
 #define VARLIST_LEN 0x1000
