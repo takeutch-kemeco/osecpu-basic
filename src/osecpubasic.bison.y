@@ -1498,8 +1498,9 @@ static void __initializer_local(const char* iden,
         /* 実際の動作時にメモリー確保するルーチンはこちら側
          */
         struct Var* var = varlist_search_local(iden);
+
         if (var->is_local)
-                pA("stack_head += %d;", var->array_len);
+                pA("stack_head = %d + stack_frame;", var->base_ptr + var->array_len);
 }
 
 /* 変数インスタンスの具象アドレス取得関連
