@@ -1494,11 +1494,10 @@ static void __initializer_local(const char* iden,
          * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
          */
         varlist_add_local(iden, row_len, col_len);
+        struct Var* var = varlist_search_local(iden);
 
         /* 実際の動作時にメモリー確保するルーチンはこちら側
          */
-        struct Var* var = varlist_search_local(iden);
-
         if (var->is_local)
                 pA("stack_head = %d + stack_frame;", var->base_ptr + var->array_len);
 }
@@ -1637,29 +1636,32 @@ static void __get_variable_array_concrete_address(struct Var* var, const int32_t
 #endif /* DEBUG_VARIABLE */
 }
 
+/* スカラー変数、または配列変数インスタンスの任意インデックスの具象アドレスを heap_base に得る
+ *
+ * dim へは配列インデックスの個数を渡す。（スカラーの場合は0を渡す）
+ */
+static void __get_variable_concrete_address(struct Var* var, const int32_t dim)
+{
+        switch (dim) {
+        case 0:
+                __get_variable_scaler_concrete_address(var);
+                break;
+
+        case 1 ... 2:
+                __get_variable_array_concrete_address(var, dim);
+                break;
+
+        default:
+                yyerror("system err: __get_variable_concrete_address(), dim");
+        }
+}
+
 /* 変数への代入関連
  */
 
-/* スカラー変数へ、値を代入する。
- *
- * 値はあらかじめスタックにプッシュされてる前提。
- * また、間接参照の場合はスタックに "間接参照アドレス, 値" の順でプッシュされてる前提。
- */
-static void __assignment_scaler(struct Var* var)
-{
-        pop_stack("stack_socket");
-        __get_variable_scaler_concrete_address(var);
-        write_mem("stack_socket", "heap_base");
-
-        /* 変数へ書き込んだ値をスタックへもプッシュしておく
-         * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
-         */
-        push_stack("stack_socket");
-}
-
 /* 配列変数中の、任意インデックス番目の要素へ、値を代入する。
  *
- * dimlen へは添字の次元を渡す（構文エラーの判別に用います）
+ * dim へは添字の次元を渡す。（スカラー変数の場合は0を渡す）
  *
  * 値はあらかじめスタックにプッシュされてる前提。
  *     スカラーならば "値" の順、
@@ -1667,11 +1669,11 @@ static void __assignment_scaler(struct Var* var)
  *     2次元配列ならば "行添字, 列添字, 値" の順
  * また、間接参照の場合はスタックに "間接参照アドレス, 添字群, 値" の順でプッシュされてる前提。
  */
-static void __assignment_array(struct Var* var, const int32_t dimlen)
+static void __assignment_variable(struct Var* var, const int32_t dim)
 {
         /* 書き込む値を読んでおく */
         pop_stack("heap_socket");
-        __get_variable_array_concrete_address(var, dimlen);
+        __get_variable_concrete_address(var, dim);
         write_mem("heap_socket", "heap_base");
 
         /* 変数へ書き込んだ値をスタックへもプッシュしておく
@@ -1683,35 +1685,17 @@ static void __assignment_array(struct Var* var, const int32_t dimlen)
 /* 変数リード関連
  */
 
-static void __read_variable_ptr_scaler(struct Var* var)
+static void __read_variable_ptr(struct Var* var, const int32_t dim)
 {
-        __get_variable_scaler_concrete_address(var);
+        __get_variable_concrete_address(var, dim);
 
         /* heap_base自体を（アドレス自体を）スタックにプッシュする */
         push_stack("heap_base");
 }
 
-static void __read_variable_ptr_array(struct Var* var, const int32_t dim)
+static void __read_variable(struct Var* var, const int32_t dim)
 {
-        __get_variable_array_concrete_address(var, dim);
-
-        /* heap_base自体を（アドレス自体を）スタックにプッシュする */
-        push_stack("heap_base");
-}
-
-static void __read_variable_scaler(struct Var* var)
-{
-        __get_variable_scaler_concrete_address(var);
-
-        /* アドレスから読んで結果をスタックへプッシュ
-         */
-        read_mem("stack_socket", "heap_base");
-        push_stack("stack_socket");
-}
-
-static void __read_variable_array(struct Var* var, const int32_t dim)
-{
-        __get_variable_array_concrete_address(var, dim);
+        __get_variable_concrete_address(var, dim);
 
         /* アドレスから読んで結果をスタックへプッシュ
          */
@@ -2065,10 +2049,10 @@ initializer
                 if (var == NULL)
                         yyerror("system err: 変数のインスタンス生成に失敗しました");
 
-                __assignment_scaler(var);
+                __assignment_variable(var, 0);
 
                 /* initializer は終了時点でスタックが +-0 である必要があるので、
-                 * __assignment_scaler() によるプッシュを捨てる。
+                 * __assignment_variable() によるプッシュを捨てる。
                  */
                 pop_stack_dummy();
         }
@@ -2095,10 +2079,10 @@ var_identifier
 
 assignment
         : var_identifier __OPE_SUBST expression {
-                __assignment_scaler($1);
+                __assignment_variable($1, 0);
         }
         | var_identifier __ARRAY_LB expression_list __ARRAY_RB __OPE_SUBST expression {
-                __assignment_array($1, $3);
+                __assignment_variable($1, $3);
         }
         ;
 
@@ -2241,16 +2225,16 @@ comparison
 
 read_variable
         : __OPE_ADDRESS var_identifier {
-                __read_variable_ptr_scaler($2);
+                __read_variable_ptr($2, 0);
         }
         | __OPE_ADDRESS var_identifier __ARRAY_LB expression_list __ARRAY_RB {
-                __read_variable_ptr_array($2, $4);
+                __read_variable_ptr($2, $4);
         }
         | var_identifier {
-                __read_variable_scaler($1);
+                __read_variable($1, 0);
         }
         | var_identifier __ARRAY_LB expression_list __ARRAY_RB {
-                __read_variable_array($1, $3);
+                __read_variable($1, $3);
         }
         | __IDENTIFIER __LB {
                 /* 現在の stack_frame をプッシュする。
@@ -2489,13 +2473,13 @@ inline_assembler_statement
         }
         | __STATE_ASM __LB var_identifier __OPE_SUBST const_strings __RB __DECL_END {
                 push_stack($5);
-                __assignment_scaler($3);
+                __assignment_variable($3, 0);
         }
         | __STATE_ASM __LB
           var_identifier __ARRAY_LB expression_list __ARRAY_RB
           __OPE_SUBST const_strings __RB __DECL_END {
                 push_stack($8);
-                __assignment_array($3, $5);
+                __assignment_variable($3, $5);
         }
         ;
 
