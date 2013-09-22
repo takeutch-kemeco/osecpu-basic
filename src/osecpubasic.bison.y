@@ -683,6 +683,28 @@ struct EC {
         int32_t child_len;
 };
 
+/* 白紙のECインスタンスをメモリー領域を確保して生成
+ */
+struct EC* new_ec(void)
+{
+        struct EC* ec = malloc(sizeof(*ec));
+        ec->type_specifier = 0;
+        ec->type_qualifier = 0;
+        ec->storage_class = 0;
+        ec->type_operator = 0;
+        ec->type_expression = 0;
+        ec->child_len = 0;
+        return ec;
+}
+
+/* メモリー領域を開放してECインスタンスを消去
+ * (枝(child_ptr[])も含めての開放ではない)
+ */
+void delete_ec(struct EC* ec)
+{
+        free((void*)ec);
+}
+
 /* 低レベルなメモリー領域
  * これは単純なリード・ライトしか備えていない、システム中での最も低レベルなメモリー領域と、そのIOを提供する。
  * それらリード・ライトがどのような意味を持つかは、呼出側（高レベル側）が各自でルールを決めて運用する。
@@ -1919,6 +1941,7 @@ static void __define_user_function_end(const int32_t skip_label)
         struct Var* varptr;
         struct StructSpec* structspecptr;
         struct StructMemberSpec* structmemberspecptr;
+        struct EC* ec;
 }
 
 %token __STATE_IF __STATE_ELSE
@@ -1977,7 +2000,9 @@ static void __define_user_function_end(const int32_t skip_label)
 %type <sval> __CONST_STRING const_strings
 %type <sval> __IDENTIFIER __LABEL __DEFINE_LABEL
 
-%type <sval> operation const_variable read_variable
+%type <sval> operation read_variable
+
+%type <ec> const_variable
 
 %type <ival_list> selection_if selection_if_v
 
@@ -2072,7 +2097,17 @@ expression_statement
 
 expression
         : operation
-        | const_variable
+        | const_variable {
+                if ($1->type_specifier == (TYPE_SIGNED | TYPE_INT)) {
+                        pA("stack_socket = %d;", $1->const_int);
+                        push_stack("stack_socket");
+                } else if ($1->type_specifier == TYPE_FLOAT) {
+                        pA("stack_socket = %d;", $1->const_int); /* 実際は固定小数なのでint */
+                        push_stack("stack_socket");
+                } else {
+                        yyerror("system err: const_variable");
+                }
+        }
         | read_variable
         | assignment
         | comparison
@@ -2157,21 +2192,27 @@ assignment
         ;
 
 const_variable
-        : __CONST_STRING {
-                push_stack_dummy();
+        : __CONST_INTEGER {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CONSTANT;
+                ec->type_specifier = TYPE_SIGNED | TYPE_INT;
+                ec->type_qualifier = TYPE_CONST;
+                ec->const_int = $1 << 16;
+                $$ = ec;
         }
         | __CONST_FLOAT {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CONSTANT;
+                ec->type_specifier = TYPE_FLOAT;
+                ec->type_qualifier = TYPE_CONST;
+
                 double a;
                 double b = modf($1, &a);
                 int32_t ia = ((int32_t)a) << 16;
                 int32_t ib = ((int32_t)(0x0000ffff * b)) & 0x0000ffff;
+                ec->const_int = ia | ib; /* 実際は固定小数なのでint */
 
-                pA("stack_socket = %d;", ia | ib);
-                push_stack("stack_socket");
-        }
-        | __CONST_INTEGER {
-                pA("stack_socket = %d;", $1 << 16);
-                push_stack("stack_socket");
+                $$ = ec;
         }
         ;
 
