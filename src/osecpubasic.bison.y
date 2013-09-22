@@ -613,6 +613,76 @@ static void varlist_set_scope_head(void)
         }
 }
 
+/* ExpressionContainer 関連
+ */
+
+/* EC の演算種類を示すフラグ
+ */
+#define EC_ASSIGNMENT           1       /* 代入 */
+#define EC_COMPARISON           2       /* 比較 */
+#define EC_CONDITIONAL          3       /* (a == b) ? x : y; 構文による分岐 */
+#define EC_CALC                 5       /* 二項演算。論理演算(a || b など)も含む */
+#define EC_CAST                 6       /* 型変換 */
+#define EC_UNARY                7       /* 前置演算子による演算 */
+#define EC_PRIMARY              8       /* 後置演算子による演算 */
+#define EC_CONSTANT             9       /* 定数 */
+
+/* EC の演算子を示すフラグ
+ */
+#define EC_OPE_MUL              1
+#define EC_OPE_DIV              2
+#define EC_OPE_MOD              3
+#define EC_OPE_ADD              4
+#define EC_OPE_SUB              5
+#define EC_OPE_LSHIFT           6
+#define EC_OPE_RSHIFT           7
+#define EC_OPE_AND              8
+#define EC_OPE_OR               9
+#define EC_OPE_XOR              10
+#define EC_OPE_NOT              11      /* ! */
+#define EC_OPE_EQ               12      /* == */
+#define EC_OPT_NE               13      /* != */
+#define EC_OPE_LT               14      /* < */
+#define EC_OPE_GT               15      /* > */
+#define EC_OPE_LE               16      /* <= */
+#define EC_OPE_GE               17      /* >= */
+#define EC_OPE_LOGICAL_AND      18      /* && */
+#define EC_OPE_LOGICAL_OR       19      /* || */
+#define EC_OPE_INC              20      /* ++ */
+#define EC_OPE_DEC              21      /* -- */
+#define EC_OPE_ADDRESS          22      /* & によるアドレス取得 */
+#define EC_OPE_POINTER          23      /* ポインター * によるアクセス */
+#define EC_OPE_SIZEOF           24      /* sizeof */
+#define EC_OPE_ARRAY            25      /* [] による配列アクセス */
+#define EC_OPE_FUNCTION         26      /* f() による関数コール */
+#define EC_OPE_DIRECT_STRUCT    27      /* . による構造体メンバーへの直接アクセス */
+#define EC_OPE_INDIRECT_STRUCT  28      /* -> による構造体メンバーへの間接アクセス */
+
+/* EC (ExpressionContainer)
+ * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
+ *
+ * type_specifier: 型
+ * type_qualifier: コンパイル時の補助情報, const | volatile
+ * strage_class: 記憶領域のタイプ, auto | register | static | extern | typedef
+ * type_operator: 演算子
+ * type_expression: 演算種類
+ * child_ptr[]: この EC をルートとして広がる枝ECへのポインター
+ * child_len: child_ptr[] に登録されている枝の数
+ */
+#define EC_CHILD_MAX 32
+struct EC {
+        char iden[IDENLIST_STR_LEN];
+        uint32_t const_int;
+        double const_float;
+        uint32_t type_specifier;
+        uint32_t type_qualifier;
+        uint32_t storage_class;
+        uint32_t type_operator;
+        uint32_t type_expression;
+        struct EC* child_ptr[EC_CHILD_MAX];
+        int32_t child_len;
+};
+
 /* 低レベルなメモリー領域
  * これは単純なリード・ライトしか備えていない、システム中での最も低レベルなメモリー領域と、そのIOを提供する。
  * それらリード・ライトがどのような意味を持つかは、呼出側（高レベル側）が各自でルールを決めて運用する。
