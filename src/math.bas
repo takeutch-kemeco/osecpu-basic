@@ -33,11 +33,11 @@ function __sin(a)
         dim pi_h = 3.14159265358979 / 2;
 
         dim b = a % pi_2;
-        if ((b >= 0) and (b < pi_h))
+        if ((b >= 0) & (b < pi_h))
                 a = b;
-        else if ((b >= pi_h) and (b < pi))
+        else if ((b >= pi_h) & (b < pi))
                 a = pi - b;
-        else if ((b >= pi) and (b < pi + pi_h))
+        else if ((b >= pi) & (b < pi + pi_h))
                 a = (-pi) - (b - pi_2);
         else
                 a = b - pi_2;
@@ -106,7 +106,7 @@ function __pow_p(a, b)
         dim t = a;
         dim i;
         for (i = 0; i < 15; i = i + 1) {
-                if (b and (1 << i))
+                if (b & (1 << i))
                         s = s * t;
 
                 t = t * t;
@@ -114,7 +114,7 @@ function __pow_p(a, b)
 
         t = a;
         for (i = 1; i < 16; i = i + 1) {
-                if (b and (1 >> i))
+                if (b & (1 >> i))
                         s = s * t;
 
                 t = __sqrt(t);

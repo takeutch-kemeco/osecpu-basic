@@ -12,6 +12,8 @@
 dim padding[10];
 dim p;
 
+__print(7 & 3);
+
 dim a=123;
 p=&a;
 __print(p@a);

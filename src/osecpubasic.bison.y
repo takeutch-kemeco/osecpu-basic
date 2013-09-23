@@ -2506,15 +2506,17 @@ comparison
         ;
 
 read_variable
-        : __OPE_ADDRESS var_identifier {
+        : __OPE_AND var_identifier %prec __OPE_ADDRESS {
                 __read_variable_ptr($2, 0);
         }
-        | __OPE_ADDRESS var_identifier __ARRAY_LB expression __ARRAY_RB {
+        | __OPE_AND var_identifier __ARRAY_LB expression __ARRAY_RB
+          %prec __OPE_ADDRESS {
                 __read_variable_ptr($2, 1);
         }
-        | __OPE_ADDRESS var_identifier
+        | __OPE_AND var_identifier
           __ARRAY_LB expression __ARRAY_RB
-          __ARRAY_LB expression __ARRAY_RB {
+          __ARRAY_LB expression __ARRAY_RB
+          %prec __OPE_ADDRESS {
                 __read_variable_ptr($2, 2);
         }
         | var_identifier {

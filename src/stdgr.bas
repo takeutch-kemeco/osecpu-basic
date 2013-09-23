@@ -47,9 +47,9 @@ function __torgb(r, g, b)
  */
 function __search_max3(a, b, c)
 {
-        if ((a >= b) and (a >= c))
+        if ((a >= b) & (a >= c))
                 return 0;
-        else if ((b >= c) and (b >= a))
+        else if ((b >= c) & (b >= a))
                 return 1;
         else
                 return 2;

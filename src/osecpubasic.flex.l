@@ -452,7 +452,7 @@ static int32_t cur_ifdef_skip_depth;
 <main_process>"%"       return(__OPE_MOD);
 
 <main_process>"|"       return(__OPE_OR);
-<main_process>"and"     return(__OPE_AND);
+<main_process>"&"       return(__OPE_AND);
 <main_process>"^"       return(__OPE_XOR);
 <main_process>"~"       return(__OPE_INVERT);
 <main_process>"!"       return(__OPE_NOT);
@@ -464,7 +464,6 @@ static int32_t cur_ifdef_skip_depth;
 <main_process>">>"      return(__OPE_RSHIFT);
 
 <main_process>"@"       return(__OPE_ATTACH);
-<main_process>"&"       return(__OPE_ADDRESS);
 
 <main_process>"="       return(__OPE_SUBST);
 <main_process>"&="      return(__OPE_AND_SUBST);
