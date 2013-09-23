@@ -2104,7 +2104,7 @@ void translate_ec(struct EC* ec)
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD
 %left  __OPE_OR __OPE_AND __OPE_XOR __OPE_INVERT __OPE_NOT
-%left  __OPE_LSHIFT __OPE_RSHIFT __OPE_ARITHMETIC_RSHIFT
+%left  __OPE_LSHIFT __OPE_RSHIFT
 %left  __OPE_COMMA __OPE_COLON __OPE_DOT __OPE_ARROW __OPE_VALEN
 %token __OPE_PLUS __OPE_MINUS
 %token __OPE_ATTACH __OPE_ADDRESS __OPE_POINTER
@@ -2443,9 +2443,6 @@ operation
                 ec->child_ptr[1] = $3;
                 ec->child_len = 2;
                 $$ = ec;
-        }
-        | expression __OPE_ARITHMETIC_RSHIFT expression {
-                yyerror("system err: >>> not support");
         }
         | __OPE_ADD expression %prec __OPE_PLUS {
                 $$ = $2;
