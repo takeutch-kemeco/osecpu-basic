@@ -613,98 +613,6 @@ static void varlist_set_scope_head(void)
         }
 }
 
-/* ExpressionContainer 関連
- */
-
-/* EC の演算種類を示すフラグ
- */
-#define EC_ASSIGNMENT           1       /* 代入 */
-#define EC_COMPARISON           2       /* 比較 */
-#define EC_CONDITIONAL          3       /* (a == b) ? x : y; 構文による分岐 */
-#define EC_CALC                 5       /* 二項演算。論理演算(a || b など)も含む */
-#define EC_CAST                 6       /* 型変換 */
-#define EC_UNARY                7       /* 前置演算子による演算 */
-#define EC_PRIMARY              8       /* 後置演算子による演算 */
-#define EC_CONSTANT             9       /* 定数 */
-
-/* EC の演算子を示すフラグ
- */
-#define EC_OPE_MUL              1
-#define EC_OPE_DIV              2
-#define EC_OPE_MOD              3
-#define EC_OPE_ADD              4
-#define EC_OPE_SUB              5
-#define EC_OPE_LSHIFT           6
-#define EC_OPE_RSHIFT           7
-#define EC_OPE_AND              8
-#define EC_OPE_OR               9
-#define EC_OPE_XOR              10
-#define EC_OPE_NOT              11      /* ! */
-#define EC_OPE_EQ               12      /* == */
-#define EC_OPT_NE               13      /* != */
-#define EC_OPE_LT               14      /* < */
-#define EC_OPE_GT               15      /* > */
-#define EC_OPE_LE               16      /* <= */
-#define EC_OPE_GE               17      /* >= */
-#define EC_OPE_LOGICAL_AND      18      /* && */
-#define EC_OPE_LOGICAL_OR       19      /* || */
-#define EC_OPE_INC              20      /* ++ */
-#define EC_OPE_DEC              21      /* -- */
-#define EC_OPE_ADDRESS          22      /* & によるアドレス取得 */
-#define EC_OPE_POINTER          23      /* ポインター * によるアクセス */
-#define EC_OPE_SIZEOF           24      /* sizeof */
-#define EC_OPE_ARRAY            25      /* [] による配列アクセス */
-#define EC_OPE_FUNCTION         26      /* f() による関数コール */
-#define EC_OPE_DIRECT_STRUCT    27      /* . による構造体メンバーへの直接アクセス */
-#define EC_OPE_INDIRECT_STRUCT  28      /* -> による構造体メンバーへの間接アクセス */
-
-/* EC (ExpressionContainer)
- * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
- *
- * type_specifier: 型
- * type_qualifier: コンパイル時の補助情報, const | volatile
- * strage_class: 記憶領域のタイプ, auto | register | static | extern | typedef
- * type_operator: 演算子
- * type_expression: 演算種類
- * child_ptr[]: この EC をルートとして広がる枝ECへのポインター
- * child_len: child_ptr[] に登録されている枝の数
- */
-#define EC_CHILD_MAX 32
-struct EC {
-        char iden[IDENLIST_STR_LEN];
-        uint32_t const_int;
-        double const_float;
-        uint32_t type_specifier;
-        uint32_t type_qualifier;
-        uint32_t storage_class;
-        uint32_t type_operator;
-        uint32_t type_expression;
-        struct EC* child_ptr[EC_CHILD_MAX];
-        int32_t child_len;
-};
-
-/* 白紙のECインスタンスをメモリー領域を確保して生成
- */
-struct EC* new_ec(void)
-{
-        struct EC* ec = malloc(sizeof(*ec));
-        ec->type_specifier = 0;
-        ec->type_qualifier = 0;
-        ec->storage_class = 0;
-        ec->type_operator = 0;
-        ec->type_expression = 0;
-        ec->child_len = 0;
-        return ec;
-}
-
-/* メモリー領域を開放してECインスタンスを消去
- * (枝(child_ptr[])も含めての開放ではない)
- */
-void delete_ec(struct EC* ec)
-{
-        free((void*)ec);
-}
-
 /* 低レベルなメモリー領域
  * これは単純なリード・ライトしか備えていない、システム中での最も低レベルなメモリー領域と、そのIOを提供する。
  * それらリード・ライトがどのような意味を持つかは、呼出側（高レベル側）が各自でルールを決めて運用する。
@@ -1931,6 +1839,217 @@ static void __define_user_function_end(const int32_t skip_label)
         pA("LB(0, %d);", skip_label);
 }
 
+/* ExpressionContainer 関連
+ */
+
+/* EC の演算種類を示すフラグ
+ */
+#define EC_ASSIGNMENT           1       /* 代入 */
+#define EC_COMPARISON           2       /* 比較 */
+#define EC_CONDITIONAL          3       /* (a == b) ? x : y; 構文による分岐 */
+#define EC_CALC                 5       /* 二項演算。論理演算(a || b など)も含む */
+#define EC_CAST                 6       /* 型変換 */
+#define EC_UNARY                7       /* 前置演算子による演算 */
+#define EC_POSTFIX              8       /* 後置演算子による演算 */
+#define EC_CONSTANT             9       /* 定数 */
+
+/* EC の演算子を示すフラグ
+ */
+#define EC_OPE_MUL              1
+#define EC_OPE_DIV              2
+#define EC_OPE_MOD              3
+#define EC_OPE_ADD              4
+#define EC_OPE_SUB              5
+#define EC_OPE_LSHIFT           6
+#define EC_OPE_RSHIFT           7
+#define EC_OPE_AND              8
+#define EC_OPE_OR               9
+#define EC_OPE_XOR              10
+#define EC_OPE_INV              29      /* ~ */
+#define EC_OPE_NOT              11      /* ! */
+#define EC_OPE_EQ               12      /* == */
+#define EC_OPT_NE               13      /* != */
+#define EC_OPE_LT               14      /* < */
+#define EC_OPE_GT               15      /* > */
+#define EC_OPE_LE               16      /* <= */
+#define EC_OPE_GE               17      /* >= */
+#define EC_OPE_LOGICAL_AND      18      /* && */
+#define EC_OPE_LOGICAL_OR       19      /* || */
+#define EC_OPE_INC              20      /* ++ */
+#define EC_OPE_DEC              21      /* -- */
+#define EC_OPE_ADDRESS          22      /* & によるアドレス取得 */
+#define EC_OPE_POINTER          23      /* ポインター * によるアクセス */
+#define EC_OPE_SIZEOF           24      /* sizeof */
+#define EC_OPE_ARRAY            25      /* [] による配列アクセス */
+#define EC_OPE_FUNCTION         26      /* f() による関数コール */
+#define EC_OPE_DIRECT_STRUCT    27      /* . による構造体メンバーへの直接アクセス */
+#define EC_OPE_INDIRECT_STRUCT  28      /* -> による構造体メンバーへの間接アクセス */
+
+/* EC (ExpressionContainer)
+ * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
+ *
+ * type_specifier: 型
+ * type_qualifier: コンパイル時の補助情報, const | volatile
+ * strage_class: 記憶領域のタイプ, auto | register | static | extern | typedef
+ * type_operator: 演算子
+ * type_expression: 演算種類
+ * child_ptr[]: この EC をルートとして広がる枝ECへのポインター
+ * child_len: child_ptr[] に登録されている枝の数
+ */
+#define EC_CHILD_MAX 32
+struct EC {
+        char iden[IDENLIST_STR_LEN];
+        uint32_t const_int;
+        double const_float;
+        uint32_t type_specifier;
+        uint32_t type_qualifier;
+        uint32_t storage_class;
+        uint32_t type_operator;
+        uint32_t type_expression;
+        struct EC* child_ptr[EC_CHILD_MAX];
+        int32_t child_len;
+};
+
+/* 白紙のECインスタンスをメモリー領域を確保して生成
+ */
+struct EC* new_ec(void)
+{
+        struct EC* ec = malloc(sizeof(*ec));
+        ec->type_specifier = 0;
+        ec->type_qualifier = 0;
+        ec->storage_class = 0;
+        ec->type_operator = 0;
+        ec->type_expression = 0;
+        ec->child_len = 0;
+        return ec;
+}
+
+/* メモリー領域を開放してECインスタンスを消去
+ * (枝(child_ptr[])も含めての開放ではない)
+ */
+void delete_ec(struct EC* ec)
+{
+        free((void*)ec);
+}
+
+/* EC木をアセンブラへ翻訳
+ */
+void translate_ec(struct EC* ec)
+{
+        if (ec->type_expression == 0)
+                return;
+
+        if (ec->type_expression == EC_CONSTANT) {
+                if (ec->type_specifier == (TYPE_SIGNED | TYPE_INT)) {
+                        pA("stack_socket = %d;", ec->const_int);
+                        push_stack("stack_socket");
+                } else if (ec->type_specifier == TYPE_FLOAT) {
+                        pA("stack_socket = %d;", ec->const_int); /* 実際は固定小数なのでint */
+                        push_stack("stack_socket");
+                } else {
+                        yyerror("system err: translate_ec(), EC_CONSTANT");
+                }
+        } else if (ec->type_expression == EC_CALC) {
+                if (ec->type_operator == EC_OPE_ADD) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        read_eoe_arg();
+                        __func_add();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_SUB) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        read_eoe_arg();
+                        __func_sub();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_MUL) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        read_eoe_arg();
+                        __func_mul();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_DIV) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        read_eoe_arg();
+                        __func_div();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_MOD) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        read_eoe_arg();
+                        __func_mod();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_OR) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        read_eoe_arg();
+                        __func_or();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_AND) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        read_eoe_arg();
+                        __func_and();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_XOR) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        read_eoe_arg();
+                        __func_xor();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_LSHIFT) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        read_eoe_arg();
+                        __func_lshift();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_RSHIFT) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        read_eoe_arg();
+                        __func_logical_rshift();
+                        push_stack("fixA");
+                } else {
+                        yyerror("system err: translate_ec(), EC_CALC");
+                }
+        } else if (ec->type_expression == EC_UNARY) {
+               if (ec->type_operator == EC_OPE_INV) {
+                        translate_ec(ec->child_ptr[0]);
+
+                        pop_stack("fixL");
+                        __func_invert();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_NOT) {
+                        translate_ec(ec->child_ptr[0]);
+
+                        pop_stack("fixL");
+                        __func_not();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_SUB) {
+                        translate_ec(ec->child_ptr[0]);
+
+                        pop_stack("fixL");
+                        __func_minus();
+                        push_stack("fixA");
+                } else {
+                        yyerror("system err: translate_ec(), EC_UNARY");
+                }
+        } else {
+                yyerror("system err: translate_ec()");
+        }
+}
+
 %}
 
 %union {
@@ -2000,9 +2119,9 @@ static void __define_user_function_end(const int32_t skip_label)
 %type <sval> __CONST_STRING const_strings
 %type <sval> __IDENTIFIER __LABEL __DEFINE_LABEL
 
-%type <sval> operation read_variable
+%type <sval> read_variable
 
-%type <ec> const_variable
+%type <ec> expression const_variable operation
 
 %type <ival_list> selection_if selection_if_v
 
@@ -2096,21 +2215,23 @@ expression_statement
         ;
 
 expression
-        : operation
-        | const_variable {
-                if ($1->type_specifier == (TYPE_SIGNED | TYPE_INT)) {
-                        pA("stack_socket = %d;", $1->const_int);
-                        push_stack("stack_socket");
-                } else if ($1->type_specifier == TYPE_FLOAT) {
-                        pA("stack_socket = %d;", $1->const_int); /* 実際は固定小数なのでint */
-                        push_stack("stack_socket");
-                } else {
-                        yyerror("system err: const_variable");
-                }
+        : operation {
+                translate_ec($1);
+                $$ = new_ec();
         }
-        | read_variable
-        | assignment
-        | comparison
+        | const_variable {
+                translate_ec($1);
+                $$ = new_ec();
+        }
+        | read_variable {
+                $$ = new_ec();
+        }
+        | assignment {
+                $$ = new_ec();
+        }
+        | comparison {
+                $$ = new_ec();
+        }
         ;
 
 expression_list
@@ -2218,80 +2339,127 @@ const_variable
 
 operation
         : expression __OPE_ADD expression {
-                read_eoe_arg();
-                __func_add();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_ADD;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         | expression __OPE_SUB expression {
-                read_eoe_arg();
-                __func_sub();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_SUB;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         | expression __OPE_MUL expression {
-                read_eoe_arg();
-                __func_mul();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_MUL;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         | expression __OPE_DIV expression {
-                read_eoe_arg();
-                __func_div();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_DIV;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         | expression __OPE_MOD expression {
-                read_eoe_arg();
-                __func_mod();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_MOD;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         | expression __OPE_OR expression {
-                read_eoe_arg();
-                __func_or();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_OR;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         | expression __OPE_AND expression {
-                read_eoe_arg();
-                __func_and();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_AND;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         | expression __OPE_XOR expression {
-                read_eoe_arg();
-                __func_xor();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_XOR;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         | __OPE_INVERT expression {
-                pop_stack("fixL");
-                __func_invert();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_UNARY;
+                ec->type_operator = EC_OPE_INV;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
         }
         | __OPE_NOT expression {
-                pop_stack("fixL");
-                __func_not();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_UNARY;
+                ec->type_operator = EC_OPE_NOT;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
         }
         | expression __OPE_LSHIFT expression {
-                read_eoe_arg();
-                __func_lshift();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_LSHIFT;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         | expression __OPE_RSHIFT expression {
-                read_eoe_arg();
-                __func_logical_rshift();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_RSHIFT;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         | expression __OPE_ARITHMETIC_RSHIFT expression {
-                read_eoe_arg();
-                __func_arithmetic_rshift();
-                push_stack("fixA");
+                yyerror("system err: >>> not support");
         }
         | __OPE_ADD expression %prec __OPE_PLUS {
-                /* 何もしない */
+                $$ = $2;
         }
         | __OPE_SUB expression %prec __OPE_MINUS {
-                pop_stack("fixL");
-                __func_minus();
-                push_stack("fixA");
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_UNARY;
+                ec->type_operator = EC_OPE_SUB;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
         }
         | __LB expression __RB {
-                /* 何もしない */
+                $$ = $2;
         }
         ;
 
