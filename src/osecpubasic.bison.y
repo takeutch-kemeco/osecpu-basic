@@ -2255,8 +2255,9 @@ initializer_param
                 $$[0] = $2;
                 $$[1] = 1;
         }
-        | __ARRAY_LB __CONST_INTEGER __OPE_COMMA __CONST_INTEGER __ARRAY_RB {
-                $$[0] = $4;
+        | __ARRAY_LB __CONST_INTEGER __ARRAY_RB
+          __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
+                $$[0] = $5;
                 $$[1] = $2;
         }
         ;
@@ -2307,8 +2308,13 @@ assignment
         : var_identifier __OPE_SUBST expression {
                 __assignment_variable($1, 0);
         }
-        | var_identifier __ARRAY_LB expression_list __ARRAY_RB __OPE_SUBST expression {
-                __assignment_variable($1, $3);
+        | var_identifier __ARRAY_LB expression __ARRAY_RB __OPE_SUBST expression {
+                __assignment_variable($1, 1);
+        }
+        | var_identifier
+          __ARRAY_LB expression __ARRAY_RB
+          __ARRAY_LB expression __ARRAY_RB __OPE_SUBST expression {
+                __assignment_variable($1, 2);
         }
         ;
 
@@ -2503,14 +2509,24 @@ read_variable
         : __OPE_ADDRESS var_identifier {
                 __read_variable_ptr($2, 0);
         }
-        | __OPE_ADDRESS var_identifier __ARRAY_LB expression_list __ARRAY_RB {
-                __read_variable_ptr($2, $4);
+        | __OPE_ADDRESS var_identifier __ARRAY_LB expression __ARRAY_RB {
+                __read_variable_ptr($2, 1);
+        }
+        | __OPE_ADDRESS var_identifier
+          __ARRAY_LB expression __ARRAY_RB
+          __ARRAY_LB expression __ARRAY_RB {
+                __read_variable_ptr($2, 2);
         }
         | var_identifier {
                 __read_variable($1, 0);
         }
-        | var_identifier __ARRAY_LB expression_list __ARRAY_RB {
-                __read_variable($1, $3);
+        | var_identifier __ARRAY_LB expression __ARRAY_RB {
+                __read_variable($1, 1);
+        }
+        | var_identifier
+          __ARRAY_LB expression __ARRAY_RB
+          __ARRAY_LB expression __ARRAY_RB {
+                __read_variable($1, 2);
         }
         | __IDENTIFIER __LB {
                 /* 現在の stack_frame をプッシュする。
@@ -2752,10 +2768,19 @@ inline_assembler_statement
                 __assignment_variable($3, 0);
         }
         | __STATE_ASM __LB
-          var_identifier __ARRAY_LB expression_list __ARRAY_RB
+          var_identifier
+          __ARRAY_LB expression __ARRAY_RB
           __OPE_SUBST const_strings __RB __DECL_END {
                 push_stack($8);
-                __assignment_variable($3, $5);
+                __assignment_variable($3, 1);
+        }
+        | __STATE_ASM __LB
+          var_identifier
+          __ARRAY_LB expression __ARRAY_RB
+          __ARRAY_LB expression __ARRAY_RB
+          __OPE_SUBST const_strings __RB __DECL_END {
+                push_stack($11);
+                __assignment_variable($3, 2);
         }
         ;
 
