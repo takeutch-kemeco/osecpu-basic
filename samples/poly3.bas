@@ -4,7 +4,7 @@
 #include "stdgr.bas"
 
 dim scw=480, sch=240;
-dim pool[10000], m[3,3], v[3], rd=3.14159265358979/180;
+dim pool[10000], m[3][3], v[3], rd=3.14159265358979/180;
 dim vt[8]; vt[0]=100>>16; vt[1]=104>>16; vt[2]=108>>16; vt[3]=112>>16;
            vt[4]=116>>16; vt[5]=120>>16; vt[6]=124>>16; vt[7]=128>>16;
 dim vtx[8]; vtx[0]=160>>16; vtx[1]=164>>16; vtx[2]=168>>16; vtx[3]=172>>16;
@@ -21,7 +21,7 @@ __openwin(scw, sch);
 while (1) {
         add_vector3(&rv, &rv, &rvd);
 
-        dim mx[3,3], my[3,3], mz[3,3], mt[3,3], rm[3,3];
+        dim mx[3][3], my[3][3], mz[3][3], mt[3][3], rm[3][3];
         rot_matrix3(&rm, &rv);
 
         dim prj=200, tz=100;

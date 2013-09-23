@@ -2,7 +2,7 @@
 #include "math.bas"
 #include "stdgr.bas"
 
-dim rm[3,3];
+dim rm[3][3];
 dim rv[3];
 
 dim v0[3]; v0[0] = 10; v0[1] = 12; v0[2] = 0;
