@@ -224,238 +224,6 @@ static void dec_cur_scope_depth(void)
                 yyerror("system err: dec_cur_scope_depth();");
 }
 
-/* 構造体スペックリスト関連
- */
-
-/* 構造体メンバースペック
- */
-struct StructMemberSpec {
-        char* name;             /* メンバー変数の名前 */
-        int32_t array_len;      /* メンバー変数全体の長さ */
-        int32_t col_len;        /* 行の長さ */
-        int32_t row_len;        /* 列の長さ */
-};
-
-/* 構造体メンバースペックの内容を一覧表示する。
- * 主にデバッグ用。
- * tab は字下げインデント用の文字列。
- */
-static void structmemberspec_print(struct StructMemberSpec* member,
-                                   const char* tab)
-{
-        printf("%sStructMemberSpec: name[%s], array_len[%d], col_len[%d], row_len[%d]\n",
-               tab, member->name, member->array_len, member->col_len, member->row_len);
-}
-
-/* 構造体メンバースペックに値をセットする
- */
-static void structmemberspec_set(struct StructMemberSpec* member,
-                                 const char* iden,
-                                 const int32_t col_len,
-                                 const int32_t row_len)
-{
-        if (iden == NULL)
-                yyerror("system err: structmemberspec_set(), iden == null");
-
-        if (iden[0] == '\0')
-                yyerror("system err: structmemberspec_set(), iden[0] == 0");
-
-        if (row_len <= 0)
-                yyerror("syntax err: 構造体メンバーの配列の行（たて方向、y方向）サイズに0を指定しました");
-
-        if (col_len <= 0)
-                yyerror("syntax err: 構造体メンバーの配列の列（よこ方向、x方向）サイズに0を指定しました");
-
-        member->name = malloc(sizeof(*member->name));
-        strcpy(member->name, iden);
-
-        member->col_len = col_len;
-        member->row_len = row_len;
-        member->array_len = col_len * row_len;
-
-#ifdef DEBUG_STRUCTMEMBERSPEC
-        printf("structmemberspec: name[%s], array_len[%d], col_len[%d], row_len[%d]\n",
-               member->name, member->array_len, member->col_len, member->row_len);
-#endif /* DEBUG_STRUCTMEMBERSPEC */
-}
-
-/* 構造体メンバースペックのメモリー領域を確保し、値をセットし、アドレスを返す
- */
-static struct StructMemberSpec* structmemberspec_new(const char* iden,
-                                                     const int32_t col_len,
-                                                     const int32_t row_len)
-{
-        struct StructMemberSpec* member = malloc(sizeof(*member));
-        structmemberspec_set(member, iden, col_len, row_len);
-        return member;
-}
-
-/* 構造体のスペック
- */
-
-/* 構造体が持てるメンバー数の上限 */
-#define STRUCTLIST_MEMBER_MAX 0x100
-
-struct StructSpec {
-        char* name;             /* 構造体の名前 */
-        int32_t struct_len;     /* 構造体全体の長さ */
-
-        /* 各メンバー変数スペックへのポインターのリスト */
-        struct StructMemberSpec* member_ptr[STRUCTLIST_MEMBER_MAX];
-
-        /* 各メンバー変数のオフセット */
-        int32_t member_offset[STRUCTLIST_MEMBER_MAX];
-
-        int32_t member_len;     /* メンバー変数の個数 */
-};
-
-/* 構造体スペックの内容を一覧表示する。
- * 主にデバッグ用。
- * tab は字下げインデント用の文字列。
- */
-static void structspec_print(struct StructSpec* spec, const char* tab)
-{
-        printf("%sStructSpec: name[%s], struct_len[%d], member_len[%d]\n",
-               tab, spec->name, spec->struct_len, spec->member_len);
-
-        char tab2[0x100];
-        strcpy(tab2, tab);
-        strcat(tab2, "\t");
-
-        int i;
-        for (i = 0; i < spec->member_len; i++) {
-                printf("%smember_offset%d[%d]\n",
-                       tab2, i, spec->member_offset[i]);
-
-                structmemberspec_print(spec->member_ptr[i], tab2);
-        }
-}
-
-/* 構造体スペックに任意の名前のメンバーが登録されてるかを検索し、アドレスを返す。
- * 存在しなければ NULL を返す。
- */
-static struct StructMemberSpec* structspec_search(struct StructSpec* spec,
-                                                  const char* iden)
-{
-        int i = spec->member_len;
-        while (i-->0) {
-                struct StructMemberSpec* p = spec->member_ptr[i];
-                if (strcmp(p->name, iden) == 0)
-                        return p;
-        }
-
-        return NULL;
-}
-
-/* 構造体スペックに構造体メンバースペックを追加する
- */
-static void structspec_add_member(struct StructSpec* spec,
-                                  struct StructMemberSpec* member)
-{
-        /* 既に重複したメンバー名が登録されていた場合はエラー */
-        if (structspec_search(spec, member->name) != NULL)
-                yyerror("syntax err: 構造体のメンバー名が重複しています");
-
-        spec->member_ptr[spec->member_len] = member;
-
-        /* 構造体中での、メンバーのオフセット位置をセット。
-         * 新規追加する構造体メンバーのオフセット位置は、その時点での構造体サイズとなる。
-         */
-        spec->member_offset[spec->member_len] = spec->struct_len;
-
-        /* メンバーを追加したので、その分だけ増えた構造体サイズを更新する */
-        spec->struct_len += member->array_len;
-
-        /* メンバーを追加したので、構造体に含まれるメンバー個数を更新する */
-        spec->member_len++;
-
-#ifdef DEBUG_STRUCTSPEC
-        printf("structspec: name[%s], struct_len[%d], member_len[%d]\n",
-               spec->name, spec->struct_len, spec->member_len);
-#endif /* DEBUG_STRUCTSPEC */
-}
-
-/* 無名の構造体スペックのメモリー領域を確保し、初期状態をセットして、アドレスを返す
- */
-static struct StructSpec* structspec_new(void)
-{
-        struct StructSpec* spec = malloc(sizeof(*spec));
-        spec->name = NULL;
-        spec->struct_len = 0;
-        spec->member_len = 0;
-
-        return spec;
-}
-
-/* 無名の構造体スペックに名前をつける
- */
-static void structspec_set_name(struct StructSpec* spec,
-                                const char* iden)
-{
-        if (spec->name != NULL)
-                yyerror("system err: structspec_set_name(), spec->name != NULL");
-
-        spec->name = malloc(sizeof(iden) + 1);
-        strcpy(spec->name, iden);
-
-#ifdef DEBUG_STRUCTSPEC
-        printf("structspec_set_name(): name[%s], struct_len[%d], member_len[%d]\n",
-               spec->name, spec->struct_len, spec->member_len);
-#endif /* DEBUG_STRUCTSPEC */
-}
-
-/* 構造体スペックのポインターリスト
- */
-#define STRUCTSPEC_PTRLIST_LEN 0x1000
-static struct StructSpec* structspec_ptrlist[STRUCTSPEC_PTRLIST_LEN];
-
-/* 現在の構造体スペックのポインターリストの先頭位置 */
-static int32_t cur_structspec_ptrlist_head = 0;
-
-/* 構造体スペックのポインターリストから、任意の名前の構造体スペックが登録されてるかを調べてアドレスを返す。
- * 無ければ NULL を返す。
- */
-static struct StructSpec* structspec_ptrlist_search(const char* iden)
-{
-        int i = cur_structspec_ptrlist_head;
-        while (i-->0) {
-                struct StructSpec* spec = structspec_ptrlist[i];
-                if (strcmp(spec->name, iden) == 0)
-                        return spec;
-        }
-
-        return NULL;
-}
-
-/* 構造体スペックのポインターリストに登録されてる構造体の一覧表を表示する。
- * 主にデバッグ用。
- */
-static void structspec_ptrlist_print(void)
-{
-        int i;
-        for (i = 0; i < cur_structspec_ptrlist_head; i++) {
-                printf("structspec_ptrlist: cur_structspec_ptrlist_head[%d]\n",
-                       cur_structspec_ptrlist_head);
-
-                structspec_print(structspec_ptrlist[i], "\t");
-        }
-}
-
-/* 構造体スペックのポインターリストへ、新たな構造体スペックを追加登録する
- */
-static void structspec_ptrlist_add(struct StructSpec* spec)
-{
-        if (structspec_ptrlist_search(spec->name) != NULL)
-                yyerror("syntax err: 構造体のメンバー名が重複しています");
-
-        structspec_ptrlist[cur_structspec_ptrlist_head] = spec;
-        cur_structspec_ptrlist_head++;
-
-#ifdef DEBUG_STRUCTSPEC_PTRLIST
-        structspec_ptrlist_print();
-#endif /* DEBUG_STRUCTSPEC_PTRLIST */
-}
-
 /* 変数スペックリスト関連
  */
 
@@ -623,7 +391,207 @@ static void varlist_set_scope_head(void)
         }
 }
 
-/* 低レベルなメモリー領域
+/* 構造体スペックリスト関連
+ */
+
+/* 構造体が持てるメンバー数の上限 */
+#define STRUCTLIST_MEMBER_MAX 0x100
+
+/* 構造体のスペック
+ */
+struct StructSpec {
+        char iden[IDENLIST_STR_LEN];    /* 構造体の名前 */
+        int32_t struct_len;             /* 構造体全体の長さ */
+        struct Var* member_ptr[STRUCTLIST_MEMBER_MAX];  /* 各メンバー変数スペックへのポインターのリスト */
+        int32_t member_offset[STRUCTLIST_MEMBER_MAX];   /* 各メンバー変数のオフセット */
+        int32_t member_len;             /* メンバー変数の個数 */
+};
+
+/* 構造体メンバースペックのメモリー領域を確保し、値をセットし、アドレスを返す
+ */
+static struct Var* structmemberspec_new(const char* iden,
+                                        int32_t* unit_len,
+                                        const int32_t dim_len)
+{
+        struct Var* member = malloc(sizeof(*member));
+
+        strcpy(member->iden, iden);
+
+        int32_t total_len = 1;
+        int32_t i;
+        for (i = 0; i < dim_len; i++) {
+                member->unit_len[i] = unit_len[i];
+                total_len *= unit_len[i];
+        }
+
+        member->dim_len = dim_len;
+        member->total_len = total_len;
+
+        return member;
+}
+
+/* 構造体メンバースペックの内容を一覧表示する。
+ * 主にデバッグ用。
+ * tab は字下げインデント用の文字列。
+ */
+static void structmemberspec_print(struct Var* member,
+                                   const char* tab)
+{
+        printf("%sStructMemberSpec: iden[%s], array_len[%d], ",
+               tab, member->iden, member->dim_len);
+
+        int32_t i;
+        for (i = 0; i < member->dim_len; i++) {
+                printf("[%d]", member->unit_len[i]);
+        }
+        printf("\n");
+}
+
+/* 構造体スペックの内容を一覧表示する。
+ * 主にデバッグ用。
+ * tab は字下げインデント用の文字列。
+ */
+static void structspec_print(struct StructSpec* spec, const char* tab)
+{
+        printf("%sStructSpec: iden[%s], struct_len[%d], member_len[%d]\n",
+               tab, spec->iden, spec->struct_len, spec->member_len);
+
+        char tab2[0x100];
+        strcpy(tab2, tab);
+        strcat(tab2, "\t");
+
+        int i;
+        for (i = 0; i < spec->member_len; i++) {
+                printf("%smember_offset%d[%d]\n",
+                       tab2, i, spec->member_offset[i]);
+
+                structmemberspec_print(spec->member_ptr[i], tab2);
+        }
+}
+
+/* 構造体スペックに任意の名前のメンバーが登録されてるかを検索し、メンバーの変数スペックを返す。
+ * 存在しなければ NULL を返す。
+ */
+static struct Var* structspec_search(struct StructSpec* spec, const char* iden)
+{
+        int i = spec->member_len;
+        while (i-->0) {
+                struct Var* p = spec->member_ptr[i];
+                if (strcmp(p->iden, iden) == 0)
+                        return p;
+        }
+
+        return NULL;
+}
+
+/* 構造体スペックに構造体メンバーの変数スペックを追加する
+ */
+static void structspec_add_member(struct StructSpec* spec, struct Var* member)
+{
+        /* 既に重複したメンバー名が登録されていた場合はエラー */
+        if (structspec_search(spec, member->iden) != NULL)
+                yyerror("syntax err: 構造体のメンバー名が重複しています");
+
+        spec->member_ptr[spec->member_len] = member;
+
+        /* 構造体中での、メンバーのオフセット位置をセット。
+         * 新規追加する構造体メンバーのオフセット位置は、その時点での構造体サイズとなる。
+         */
+        spec->member_offset[spec->member_len] = spec->struct_len;
+
+        /* メンバーを追加したので、その分だけ増えた構造体サイズを更新する */
+        spec->struct_len += member->total_len;
+
+        /* メンバーを追加したので、構造体に含まれるメンバー個数を更新する */
+        spec->member_len++;
+
+#ifdef DEBUG_STRUCTSPEC
+        printf("structspec: iden[%s], struct_len[%d], member_len[%d]\n",
+               spec->iden, spec->struct_len, spec->member_len);
+#endif /* DEBUG_STRUCTSPEC */
+}
+
+/* 無名の構造体スペックのメモリー領域を確保し、初期状態をセットして、アドレスを返す
+ */
+static struct StructSpec* structspec_new(void)
+{
+        struct StructSpec* spec = malloc(sizeof(*spec));
+        spec->iden[0] = '\0';
+        spec->struct_len = 0;
+        spec->member_len = 0;
+
+        return spec;
+}
+
+/* 無名の構造体スペックに名前をつける
+ */
+static void structspec_set_iden(struct StructSpec* spec,
+                                const char* iden)
+{
+        if (spec->iden[0] != '\0')
+                yyerror("system err: structspec_set_name(), spec->iden != NULL");
+
+        strcpy(spec->iden, iden);
+
+#ifdef DEBUG_STRUCTSPEC
+        printf("structspec_set_iden(): iden[%s], struct_len[%d], member_len[%d]\n",
+               spec->iden, spec->struct_len, spec->member_len);
+#endif /* DEBUG_STRUCTSPEC */
+}
+
+/* 構造体スペックのポインターリスト
+ */
+#define STRUCTSPEC_PTRLIST_LEN 0x1000
+static struct StructSpec* structspec_ptrlist[STRUCTSPEC_PTRLIST_LEN];
+
+/* 現在の構造体スペックのポインターリストの先頭位置 */
+static int32_t cur_structspec_ptrlist_head = 0;
+
+/* 構造体スペックのポインターリストから、任意の名前の構造体スペックが登録されてるかを調べてアドレスを返す。
+ * 無ければ NULL を返す。
+ */
+static struct StructSpec* structspec_ptrlist_search(const char* iden)
+{
+        int i = cur_structspec_ptrlist_head;
+        while (i-->0) {
+                struct StructSpec* spec = structspec_ptrlist[i];
+                if (strcmp(spec->iden, iden) == 0)
+                        return spec;
+        }
+
+        return NULL;
+}
+
+/* 構造体スペックのポインターリストに登録されてる構造体の一覧表を表示する。
+ * 主にデバッグ用。
+ */
+static void structspec_ptrlist_print(void)
+{
+        int i;
+        for (i = 0; i < cur_structspec_ptrlist_head; i++) {
+                printf("structspec_ptrlist: cur_structspec_ptrlist_head[%d]\n",
+                       cur_structspec_ptrlist_head);
+
+                structspec_print(structspec_ptrlist[i], "\t");
+        }
+}
+
+/* 構造体スペックのポインターリストへ、新たな構造体スペックを追加登録する
+ */
+static void structspec_ptrlist_add(struct StructSpec* spec)
+{
+        if (structspec_ptrlist_search(spec->iden) != NULL)
+                yyerror("syntax err: 構造体のメンバー名が重複しています");
+
+        structspec_ptrlist[cur_structspec_ptrlist_head] = spec;
+        cur_structspec_ptrlist_head++;
+
+#ifdef DEBUG_STRUCTSPEC_PTRLIST
+        structspec_ptrlist_print();
+#endif /* DEBUG_STRUCTSPEC_PTRLIST */
+}
+
+/* 低レベルなメモリー領域関連
  * これは単純なリード・ライトしか備えていない、システム中での最も低レベルなメモリー領域と、そのIOを提供する。
  * それらリード・ライトがどのような意味を持つかは、呼出側（高レベル側）が各自でルールを決めて運用する。
  *
@@ -1968,6 +1936,7 @@ void translate_ec(struct EC* ec)
         float fval;
         char sval[0x1000];
         int32_t ival_list[0x400];
+        struct Var* varptr;
         struct VarHandle* varhandleptr;
         struct StructSpec* structspecptr;
         struct StructMemberSpec* structmemberspecptr;
@@ -2045,7 +2014,7 @@ void translate_ec(struct EC* ec)
 
 %type <sval> define_struct
 %type <structspecptr> initializer_struct_member_list
-%type <structmemberspecptr> initializer_struct_member
+%type <varptr> initializer_struct_member
 
 %type <varhandleptr> var_identifier
 %type <ival> expression_list identifier_list
@@ -2626,10 +2595,10 @@ define_function
 
 initializer_struct_member
         : __STATE_DIM __IDENTIFIER initializer_param __DECL_END {
-                $$ = structmemberspec_new($2, $3[1], $3[0]);
+                $$ = structmemberspec_new($2, &($3[1]), $3[0]);
         }
         | initializer_struct_member __OPE_COMMA __IDENTIFIER initializer_param __DECL_END {
-                $$ = structmemberspec_new($3, $4[1], $4[0]);
+                $$ = structmemberspec_new($3, &($4[1]), $4[0]);
         }
         ;
 
@@ -2649,10 +2618,10 @@ initializer_struct_member_list
         ;
 
 define_struct
-        : __TYPE_STRUCT __IDENTIFIER __BLOCK_LB
-          initializer_struct_member_list __BLOCK_RB __DECL_END
+        : __TYPE_STRUCT __IDENTIFIER
+          __BLOCK_LB initializer_struct_member_list __BLOCK_RB __DECL_END
         {
-                structspec_set_name($4, $2);
+                structspec_set_iden($4, $2);
                 structspec_ptrlist_add($4);
         }
         ;
