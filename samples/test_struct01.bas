@@ -1,12 +1,12 @@
 struct A {
-        dim x;
+        float x;
 };
 
 struct Bcd {
-        dim xxx;
-        dim yyy[10];
-        dim zzz[100][200];
-        dim ZZZ[100][200][300][400][500];
+        float xxx;
+        float yyy[10];
+        float zzz[100][200];
+        float ZZZ[100][200][300][400][500];
 };
 
 struct cDE {

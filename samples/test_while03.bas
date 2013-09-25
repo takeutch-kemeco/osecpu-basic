@@ -1,8 +1,8 @@
 #include "stdoscp.bas"
 
-dim j = 0;
+float j = 0;
 while (j < 10) {
-        dim i = 0;
+        float i = 0;
         while (i < 10) {
                 __print((j * 100) + i);
 

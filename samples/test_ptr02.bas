@@ -3,11 +3,11 @@
 /* 配列ポインターのテスト
  */
 
-dim padding[10];
-dim p;
-dim x;
+float padding[10];
+float p;
+float x;
 
-dim a[100];
+float a[100];
 a[50]=123;
 p=&a[50];
 

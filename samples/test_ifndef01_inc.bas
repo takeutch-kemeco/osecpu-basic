@@ -4,7 +4,7 @@
 
 function f(x)
 {
-        dim a;
+        float a;
 }
 
 #endif

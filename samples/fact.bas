@@ -1,6 +1,6 @@
 #include "stdoscp.bas"
 
-dim x=123;
+float x=123;
 __print(fact(5));
 __print(x);
 

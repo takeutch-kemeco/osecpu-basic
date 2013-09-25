@@ -1,14 +1,14 @@
 #include "stdoscp.bas"
 #include "../samples/test_error01_inc.bas"
 
-dim a = 123;
-dim b;
+float a = 123;
+float b;
 /* c; */
-dim x;
+float x;
 x = 234;
 __print(x);
 f();
-dim b;
+float b;
 /* c; */
-dim x;
+float x;
 x = 234;

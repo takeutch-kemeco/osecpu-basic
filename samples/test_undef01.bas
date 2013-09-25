@@ -4,6 +4,6 @@
 __print(ABC);
 
 #undef ABC
-dim ABC = 234;
+float ABC = 234;
 __print(ABC);
 

@@ -9,18 +9,18 @@
  * すなわち、アドレスは内部的にはint32として受け渡しされ、使用されている。
  */
 
-dim padding[10];
-dim p;
+float padding[10];
+float p;
 
 __print(7 & 3);
 
-dim a=123;
+float a=123;
 p=&a;
 __print(p@a);
 __print(p);
 __print(p<<16);
 
-dim b;
+float b;
 b=234;
 p=&b;
 __print(p@a);

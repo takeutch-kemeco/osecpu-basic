@@ -1,6 +1,6 @@
 #include "stdoscp.bas"
 
-dim a = 4;
+float a = 4;
 __print(a >> 1);
 __print(a >> 2);
 __print(a >> 3);

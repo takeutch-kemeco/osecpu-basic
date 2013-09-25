@@ -1,10 +1,10 @@
 #include "stdoscp.bas"
 
-dim a[1000];
+float a[1000];
 a[10] = 123;
 __print(a[10]);
 
-dim b;
+float b;
 b = __peek(10 >> 16);
 __print(b);
 
@@ -29,5 +29,5 @@ __flushwin(10, 10, 100, 100);
 
 __inkey(0);
 
-dim x = __rand(100);
+float x = __rand(100);
 __print(x);

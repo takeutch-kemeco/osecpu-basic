@@ -1,17 +1,6 @@
-#include "stdoscp.bas"
+asm("junkApi_putConstString('hello world\n');");
 
-dim a;
-dim b;
-dim c;
-
-a=b=c=123;
-
-__print(a);
-__print(b);
-__print(c);
-
-a=b=c=0;
-
-__print(a);
-__print(b);
-__print(c);
+asm(
+        "junkApi_putConstString('hello ');"
+        "junkApi_putConstString('world\n');"
+);

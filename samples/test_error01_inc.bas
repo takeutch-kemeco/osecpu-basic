@@ -1,11 +1,11 @@
-dim a = 123;
-dim b;
+float a = 123;
+float b;
 /* c; */
-dim x;
+float x;
 x = 234;
 __print(x);
 //print c;
-dim b;
+float b;
 /* c; */
-dim x;
+float x;
 x = 234;
