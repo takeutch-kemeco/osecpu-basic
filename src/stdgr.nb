@@ -1,4 +1,4 @@
-/* stdgr.bas
+/* stdgr.nb
  * Copyright (C) 2013 Takeutch Kemeco
  *
  * This program is free software; you can redistribute it and/or
@@ -16,10 +16,10 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#include "matrix.bas"
+#include "matrix.nb"
 
-#ifndef __STDGR_BAS__
-#define __STDGR_BAS__
+#ifndef __STDGR_NB__
+#define __STDGR_NB__
 
 /* 三色の数値をRGBへとまとめる
  *
@@ -220,4 +220,4 @@ function __filltri(mode, x0, y0, x1, y1, x2, y2, color)
         __filltri_sl_common(mode, sx, sy, mid_x, mid_y, max_x, max_y, color, 0);
 }
 
-#endif /* __STDGR_BAS__ */
+#endif /* __STDGR_NB__ */

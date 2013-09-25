@@ -1,4 +1,4 @@
-/* math.bas
+/* math.nb
  * Copyright (C) 2013 Takeutch Kemeco
  *
  * This program is free software; you can redistribute it and/or
@@ -16,8 +16,8 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#ifndef __MATH_BAS__
-#define __MATH_BAS__
+#ifndef __MATH_NB__
+#define __MATH_NB__
 
 /* sin
  *
@@ -159,4 +159,4 @@ function __pow(a, b)
         }
 }
 
-#endif /* __MATH_BAS__ */
+#endif /* __MATH_NB__ */

@@ -1,4 +1,4 @@
-/* matrix.bas
+/* matrix.nb
  * Copyright (C) 2013 Takeutch Kemeco
  *
  * This program is free software; you can redistribute it and/or
@@ -16,8 +16,8 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#ifndef __MATRIX_BAS__
-#define __MATRIX_BAS__
+#ifndef __MATRIX_NB__
+#define __MATRIX_NB__
 
 /* 3x3単位行列
  * 単位行列 -> m0
@@ -280,4 +280,4 @@ function transpose_matrix3(m0)
         }
 }
 
-#endif /* __MATRIX_BAS__ */
+#endif /* __MATRIX_NB__ */

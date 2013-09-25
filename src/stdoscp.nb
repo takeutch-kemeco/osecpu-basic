@@ -1,4 +1,4 @@
-/* stdoscp.bas
+/* stdoscp.nb
  * Copyright (C) 2013 Takeutch Kemeco
  *
  * This program is free software; you can redistribute it and/or
@@ -16,8 +16,8 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#ifndef __STDOSCP_BAS__
-#define __STDOSCP_BAS__
+#ifndef __STDOSCP_NB__
+#define __STDOSCP_NB__
 
 /* 変数の値（数値のみ）を画面へ印字する
  *
@@ -441,4 +441,4 @@ function __rand(max)
         return ret;
 }
 
-#endif /* __STDOSCP_BAS__ */
+#endif /* __STDOSCP_NB__ */
