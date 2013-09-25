@@ -1,7 +1,7 @@
-#include "stdoscp.bas"
-#include "math.bas"
-#include "matrix.bas"
-#include "stdgr.bas"
+#include "stdoscp.nb"
+#include "math.nb"
+#include "matrix.nb"
+#include "stdgr.nb"
 
 float scw=480, sch=240;
 float pool[10000], m[3][3], v[3], rd=3.14159265358979/180;

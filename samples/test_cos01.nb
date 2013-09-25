@@ -1,4 +1,4 @@
-#include "stdoscp.bas"
+#include "stdoscp.nb"
 
 __print(0777);
 __print(0xff);

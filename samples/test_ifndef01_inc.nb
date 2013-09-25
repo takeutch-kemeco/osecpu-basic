@@ -1,6 +1,6 @@
 #ifndef __AAA__
 #define __AAA__
-#include "stdoscp.bas"
+#include "stdoscp.nb"
 
 function f(x)
 {

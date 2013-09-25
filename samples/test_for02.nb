@@ -1,4 +1,4 @@
-#include "stdoscp.bas"
+#include "stdoscp.nb"
 
 float j;
 for (j = 0; j < 10; j = j + 1) {

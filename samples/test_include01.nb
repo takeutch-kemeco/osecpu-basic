@@ -1,1 +1,1 @@
-#include "../samples/test_include01_inc.bas"
+#include "../samples/test_include01_inc.nb"

@@ -1,4 +1,4 @@
-#include "stdoscp.bas"
+#include "stdoscp.nb"
 
 float x=123;
 __print(fact(5));

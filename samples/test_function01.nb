@@ -1,4 +1,4 @@
-#include "stdoscp.bas"
+#include "stdoscp.nb"
 
 float aaa = 234;
 function a01(x,y,z)

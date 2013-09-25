@@ -1,5 +1,5 @@
-#include "stdoscp.bas"
-#include "math.bas"
+#include "stdoscp.nb"
+#include "math.nb"
 
 /* ２個単位で、各ペア同士がほぼ同じ数にならなければ異常
  */

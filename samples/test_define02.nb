@@ -1,4 +1,4 @@
-#include "stdoscp.bas"
+#include "stdoscp.nb"
 
 #define iterator for (i = 0; i < e; i = i + 1)
 

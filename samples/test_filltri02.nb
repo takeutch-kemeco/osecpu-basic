@@ -1,6 +1,6 @@
-#include "stdoscp.bas"
-#include "math.bas"
-#include "stdgr.bas"
+#include "stdoscp.nb"
+#include "math.nb"
+#include "stdgr.nb"
 
 float rm[3][3];
 float rv[3];

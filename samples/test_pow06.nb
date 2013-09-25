@@ -1,5 +1,5 @@
-#include "stdoscp.bas"
-#include "math.bas"
+#include "stdoscp.nb"
+#include "math.nb"
 
 /* 計算できてしまった場合は異常。（エラーになれば正常）
  */

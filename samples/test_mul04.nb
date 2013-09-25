@@ -1,4 +1,4 @@
-#include "stdoscp.bas"
+#include "stdoscp.nb"
 
 /* 最初と最後がほぼ-1に成らなければ異常
  */
