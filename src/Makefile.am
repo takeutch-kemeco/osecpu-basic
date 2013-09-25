@@ -1,6 +1,6 @@
-bin_PROGRAMS = osecpubasic
-osecpubasic_SOURCES = main.c \
-                      osecpubasic.bison.y osecpubasic.flex.l
+bin_PROGRAMS = onbc
+onbc_SOURCES = main.c \
+               onbc.bison.y onbc.flex.l
 
 LFLAGS = -Cf -8
 YFLAGS = -dv

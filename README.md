@@ -1,6 +1,6 @@
-## OsecpuBasic version 0.0.10
+## Osecpu-NB version 0.0.10
 
-OsecpuBasic は文法がC言語よりなBASIC言語のコンパイラーです。
+Osecpu-NB は文法がC言語よりなBASIC言語のコンパイラーです。
 
 osecpu-aska（マクロアセンブラー）によってコンパイルできるソースを出力します。
 
@@ -13,12 +13,14 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ビルド方法:
 
-・ビルドには autoconf, automake, libtool が必要です。また、flex, bison も必要です。そして gcc, libc も当然必要です。
+・ビルドには autoconf, automake, libtool が必要です。
+また、flex, bison も必要です。
+そして gcc, libc も当然必要です。
 
     ./autogen.sh --prefix=/usr
     make
 
-これで src/ 以下に osecpubasic というバイナリができます。
+これで src/ 以下に onbc というバイナリができます。(Osecpu NB Compiler)
 
 
 
@@ -26,14 +28,14 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 使用方法:
 
-・以下の方法で、BASICのソースファイルから、osecpu-aska のアセンブラコードへ変換できます。
+・以下の方法で nb のソースファイルから、osecpu-aska のアセンブラコードへ変換できます。
 
-    ./osecpubasic BASICのソースファイル.bas
+    ./onbc ソースファイル.nb
 
 これで、同名で拡張子が.askのファイルとして、カレントディレクトリ内に出力されます。
 また、明示的に出力ファイル名を指定したい場合は
 
-    ./osecpubasic BASICのソースファイル.bas 出力ファイル名.ask
+    ./onbc ソースファイル.nb 出力ファイル名.ask
 
 とすることも可能です。
 （ファイル名にパス名を含めても動作します）
@@ -52,25 +54,25 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ・添字でxを指定した場合は、確保される配列は 0 ～ x-1 までの x 個です。（c言語に近いです。一般的なBASICとは異なるかもしれません）
 
-・dimを宣言の意味で使います。スカラー変数でも dim で宣言します。
+・float を宣言の意味で使います。
 
 ・なお、配列宣言時に限り、配列の添字には数値リテラルしか指定できません（変数による添字範囲指定はできません）。また、長さが 0 の配列も未サポートです。
 
-    dim a;
-    dim b[10];
-    dim c[1][2][3][4][5];
+    float a;
+    float b[10];
+    float c[1][2][3][4][5];
 
 ・宣言はカンマで区切って複数を連続させることも可能です
 
-    dim a;
-    dim b;
-    dim c;
+    float a;
+    float b;
+    float c;
     
-    dim a, b, c;
+    float a, b, c;
 
 ・スカラー変数に限っては、宣言時に同時に = で初期値を代入することも可能です。
 
-    dim a = 1, b, c = 3;
+    float a = 1, b, c = 3;
 
 
 
@@ -82,13 +84,13 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ・数は全て固定小数点型で扱われます。（符号1bit、整数15bit, 小数16bit）
 
-    dim a;
+    float a;
     a = 10;
 
-    dim b[100];
+    float b[100];
     b[a] = -3.14;
 
-    dim c[100][100];
+    float c[100][100];
     c[a][a] = 123.456;
  
 
@@ -140,7 +142,7 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ・具体的にはc言語のそれと同じ書式です:
 
-    dim a = 0;
+    float a = 0;
     
     if (a <= 10)
         a = a + 1;
@@ -179,7 +181,7 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ・具体的な例は以下のようになります。どちらもc言語と似た書式です:
 
-    dim a;
+    float a;
     while (1)
         print a;
     
@@ -191,9 +193,9 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
     for (a = 0; a < 10; a = a + 1)
         print a;
     
-    dim j;
+    float j;
     for (j = 0; j < 10; j = j + 1) {
-        dim i;
+        float i;
         for (i = 0; i < 10; i = i + 1) {
             print (j * 10) + i;
         }
@@ -309,27 +311,27 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ・変数のアドレスを取得する場合は、演算子 & を用います:
 
-    dim a;
-    dim p = &a;
+    float a;
+    float p = &a;
 
 ・アドレスは、数値リテラルを >> 16 した値なので、これを直接指定することもできます:
 
     /* アドレス 123 ワード を指定 */
-    dim p = (123 >> 16)
+    float p = (123 >> 16)
 
 ・アドレスから値を読み出すには演算子 @ を用いて、既存の型をアタッチして行います:
 
-    dim a[100];
-    dim p = &a[50]; /* これで p には a[50] の位置を指すアドレスが入る */
+    float a[100];
+    float p = &a[50]; /* これで p には a[50] の位置を指すアドレスが入る */
     
-    dim v[3]; /* アタッチする際に用いる型を、あらかじめ用意しておく */
+    float v[3]; /* アタッチする際に用いる型を、あらかじめ用意しておく */
     
     /* p へ v[3] をアタッチして、値を読み書きできる
      * この場合は a[50] ～ a[52] までを、v[0] ～ v[2] の3次ベクトルとみなして扱える
      */
-    dim p@v[0] = 0;
-    dim p@v[1] = 1;
-    dim p@v[2] = 2;
+    float p@v[0] = 0;
+    float p@v[1] = 1;
+    float p@v[2] = 2;
 
 
 
@@ -369,7 +371,7 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
         "junkApi_putConstString('world\n');"
     );
     
-    dim x = 1;
+    float x = 1;
     asm("fixL" = x);
     asm(x = "fixA");
     
@@ -425,8 +427,8 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
     #define iterator for (i = 0; i < e; i = i + 1)
     
-    dim i;
-    dim e = 10;
+    float i;
+    float e = 10;
     iterator {
         print i;
     }
@@ -489,7 +491,7 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 stdoscp.bas
 
-・osecpubasic のプリセット関数を、外部ライブラリーとして置き換えたものです。
+・かつての osecpubasic のプリセット関数を、外部ライブラリーとして置き換えたものです。
 主に osecpu の junkApi_* をそのまま呼んでる類の関数をまとめてあります。
 
 ・使い方の具体的な例は以下のようになります:
@@ -504,14 +506,14 @@ stdoscp.bas
 
 math.bas
 
-・osecpubasic のプリセット関数を、外部ライブラリーとして置き換えたものです。
+・かつての osecpubasic のプリセット関数を、外部ライブラリーとして置き換えたものです。
 主に数学ライブラリー関連の関数をまとめてあります。
 
 ・使い方の具体的な例は以下のようになります:
 
     /* math.bas へのパスが通ってる状態で */
     #include "math.bas"
-    dim a = __sin(1.23);
+    float a = __sin(1.23);
 
 ・サポートする関数や、その使用方法に関しては math.bas のソースを直接読んでください。
 

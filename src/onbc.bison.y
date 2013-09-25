@@ -1,4 +1,4 @@
-/* osecpubasic.bison.y
+/* onbc.bison.y
  * Copyright (C) 2013 Takeutch Kemeco
  *
  * This program is free software; you can redistribute it and/or

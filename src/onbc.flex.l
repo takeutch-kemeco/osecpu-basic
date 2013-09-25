@@ -1,4 +1,4 @@
-/* osecpubasic.flex.l
+/* onbc.flex.l
  * Copyright (C) 2013 Takeutch Kemeco
  *
  * This program is free software; you can redistribute it and/or
@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include "osecpubasic.bison.h"
+#include "onbc.bison.h"
 
 /* 現在のプロセスを示すフラグ
  */

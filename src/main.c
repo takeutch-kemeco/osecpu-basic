@@ -30,7 +30,7 @@ extern FILE* yyaskB;
 
 static void print_usage(void)
 {
-        printf("使用法: %s 入力ファイル.bas [出力ファイル.ask]\n"
+        printf("使用法: %s 入力ファイル.nb [出力ファイル.ask]\n"
                "\n"
                "%s version %s\n"
                "Copyright(C) 2013 Takeutch Kemeco\n"
@@ -43,14 +43,15 @@ static void print_usage(void)
                "\n"
                "repository: <https://github.com/takeutch-kemeco/osecpu-basic>\n"
                "bug report: <%s>\n",
-               PACKAGE_NAME,
+               "onbc",
                PACKAGE_NAME, VERSION,
                PACKAGE_BUGREPORT);
 }
 
 static void print_file_open_err(const char* s)
 {
-        printf("ファイル %s のオープンでエラーが発生しました。中止します。\n", s);
+        printf("file err: ファイル %s のオープンに失敗しました\n", s);
+        exit(EXIT_FAILURE);
 }
 
 static FILE* open_in_file(const char* in_path)
@@ -58,8 +59,6 @@ static FILE* open_in_file(const char* in_path)
         FILE* fp = fopen(in_path, "rt");
         if (fp == NULL) {
                 print_file_open_err(in_path);
-                print_usage();
-                exit(EXIT_FAILURE);
         }
 
         return fp;
@@ -70,8 +69,6 @@ static FILE* open_null_out_file(void)
         FILE* fp = fopen("/dev/null", "w");
         if (fp == NULL) {
                 print_file_open_err("/dev/null");
-                print_usage();
-                exit(EXIT_FAILURE);
         }
 
         return fp;
@@ -82,8 +79,6 @@ static FILE* open_out_file(const char* out_path)
         FILE* fp = fopen(out_path, "wt");
         if (fp == NULL) {
                 print_file_open_err(out_path);
-                print_usage();
-                exit(EXIT_FAILURE);
         }
 
         return fp;
@@ -102,16 +97,15 @@ static int path_to_filename(char* dst, char* src)
         strcpy(dst, head);
 }
 
-static int swap_filename_extention_bas_to_ask(char* a)
+static int swap_filename_extention_nb_to_ask(char* a)
 {
         size_t len = strlen(a);
-        if (strcat(a + len - 3, "bas") == 0) {
-                printf("読み込もうとしてるソースファイルの拡張子が bas ではありません\n");
-                print_usage();
+        if (strcmp(a + len - 3, ".nb") != 0) {
+                printf("file err: 読み込もうとしてるソースファイルの拡張子が .nb ではありません\n");
                 exit(EXIT_FAILURE);
         }
 
-        strcpy(a + len - 3, "ask");
+        strcpy(a + len - 3, ".ask");
 }
 
 int main(int argc, char** argv)
@@ -122,7 +116,7 @@ int main(int argc, char** argv)
         switch (argc) {
         case 2:
                 path_to_filename(out_path, in_path);
-                swap_filename_extention_bas_to_ask(out_path);
+                swap_filename_extention_nb_to_ask(out_path);
                 break;
 
         case 3:
@@ -136,7 +130,7 @@ int main(int argc, char** argv)
 
         yyin = open_in_file(in_path);
         yyout = open_null_out_file();
-        yyaskA = open_out_file("osecpubasic.tmp.0");
+        yyaskA = open_out_file("onbc.tmp.0");
 
         start_pre_process(in_path);
         while (yylex() != 0) {
@@ -153,7 +147,7 @@ int main(int argc, char** argv)
         fclose(yyin);
 
 #ifndef DISABLE_TUNE
-        yyin = open_in_file("osecpubasic.tmp.0");
+        yyin = open_in_file("onbc.tmp.0");
         yyaskB = open_out_file(out_path);
 
         start_tune_process();
