@@ -229,11 +229,12 @@ static void dec_cur_scope_depth(void)
 
 /* 普遍的(コンパイル時点に確定する)変数スペック
  */
+#define VAR_DIM_MAX 0x100
 struct Var {
         char iden[IDENLIST_STR_LEN];
         int32_t base_ptr;       /* ベースアドレス */
         int32_t total_len;      /* 配列変数全体の長さ */
-        int32_t unit_len[0xff]; /* 各配列次元の長さ */
+        int32_t unit_len[VAR_DIM_MAX];  /* 各配列次元の長さ */
         int32_t dim_len;        /* 配列の次元数 */
         int32_t is_local;       /* この変数がローカルならば非0、グローバルならば0となる */
         int32_t specifier;      /* この変数の型、および型クラスを示すフラグ */
@@ -330,6 +331,9 @@ static struct Var* varlist_search(const char* iden)
  */
 static void varlist_add_common(const char* iden, int32_t* unit_len, const int32_t dim_len)
 {
+        if (dim_len >= VAR_DIM_MAX)
+                yyerror("syntax err: 配列の次元が高すぎます");
+
         struct Var* cur = varlist + varlist_head;
         struct Var* prev = varlist + varlist_head - 1;
 
@@ -413,6 +417,9 @@ static struct Var* structmemberspec_new(const char* iden,
                                         int32_t* unit_len,
                                         const int32_t dim_len)
 {
+        if (dim_len >= VAR_DIM_MAX)
+                yyerror("syntax err: 配列の次元が高すぎます");
+
         struct Var* member = malloc(sizeof(*member));
 
         strcpy(member->iden, iden);
@@ -1468,6 +1475,9 @@ static void __initializer_local(const char* iden,
                                 int32_t* unit_len,
                                 const int32_t dim_len)
 {
+        if (dim_len >= VAR_DIM_MAX)
+                yyerror("syntax err: 配列の次元が高すぎます");
+
         /* これはコンパイル時の変数状態を設定するにすぎない。
          * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
          */
