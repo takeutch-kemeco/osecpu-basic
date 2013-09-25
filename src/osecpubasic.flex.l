@@ -518,8 +518,6 @@ static int32_t cur_ifdef_skip_depth;
 <main_process>"read"    return(__STATE_READ);
 <main_process>"data"    return(__STATE_DATA);
 
-<main_process>"dim"     return(__STATE_DIM);
-
 <main_process>"void"    return(__TYPE_VOID);
 <main_process>"char"    return(__TYPE_CHAR);
 <main_process>"short"   return(__TYPE_SHORT);

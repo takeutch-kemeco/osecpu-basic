@@ -148,6 +148,7 @@ static void pA_nl(const char* fmt, ...)
 #define TYPE_UNSIGNED   (1 << 8)
 #define TYPE_STRUCT     (1 << 9)
 #define TYPE_ENUM       (1 << 10)
+#define TYPE_POINTER    (1 << 11)
 
 /* 型ルール
  */
@@ -248,7 +249,14 @@ struct VarHandle {
         int32_t index_len;      /* index の個数。スカラーならば0 */
 };
 
+/* 変数スペックのリストコンテナ
+ */
 #define VARLIST_LEN 0x1000
+struct VarList {
+        struct Var* var[VARLIST_LEN];
+        int32_t varlist_len;
+};
+
 static struct Var varlist[VARLIST_LEN];
 
 /* varlist の現在の先頭から数えて最初の空位置 */
@@ -329,7 +337,10 @@ static struct Var* varlist_search(const char* iden)
  *
  * varlist_add() および varlist_add_local() の共通ルーチンを抜き出したもの。
  */
-static void varlist_add_common(const char* iden, int32_t* unit_len, const int32_t dim_len)
+static void varlist_add_common(const char* iden,
+                               int32_t* unit_len,
+                               const int32_t dim_len,
+                               const int32_t specifier)
 {
         if (dim_len >= VAR_DIM_MAX)
                 yyerror("syntax err: 配列の次元が高すぎます");
@@ -352,6 +363,7 @@ static void varlist_add_common(const char* iden, int32_t* unit_len, const int32_
         cur->total_len = total_len;
         cur->dim_len = dim_len;
         cur->is_local = (cur_scope_depth >= 1) ? 1 : 0;
+        cur->specifier = specifier;
 
         varlist_head++;
 
@@ -371,21 +383,24 @@ static void varlist_add_common(const char* iden, int32_t* unit_len, const int32_
  *
  * col_len, row_len に 1 未満の数を指定した場合は syntax err となる。
  */
-static void varlist_add_local(const char* str, int32_t* unit_len, const int32_t dim_len)
+static void varlist_add_local(const char* str,
+                              int32_t* unit_len,
+                              const int32_t dim_len,
+                              const int32_t specifier)
 {
         if (varlist_search_local(str) != NULL)
                 return;
 
-        varlist_add_common(str, unit_len, dim_len);
+        varlist_add_common(str, unit_len, dim_len, specifier);
 }
 
 /* 変数リストの現在の最後の変数を、新しいスコープの先頭とみなして、それの base_ptr に0をセットする
  *
  * 新しいスコープ内にて、新たにローカル変数 a, b, c を宣言する場合の例:
- * varlist_add_local("a", u, l); // とりあえず a を宣言する
- * varlist_set_scope_head(); // これでヒープの最後の変数である a の base_ptr へ 0 がセットされる
- * varlist_add_local("b", u, l); // その後 b, c は普通に宣言していけばいい
- * varlist_add_local("c", u, l);
+ * varlist_add_local("a", unit, len, TYPE_INT); // とりあえず a を宣言する
+ * varlist_set_scope_head();                    // これでヒープの最後の変数である a の base_ptr へ 0 がセットされる
+ * varlist_add_local("b", unit, len, TYPE_INT); // その後 b, c は普通に宣言していけばいい
+ * varlist_add_local("c", unit, len, TYPE_INT);
  */
 static void varlist_set_scope_head(void)
 {
@@ -415,7 +430,8 @@ struct StructSpec {
  */
 static struct Var* structmemberspec_new(const char* iden,
                                         int32_t* unit_len,
-                                        const int32_t dim_len)
+                                        const int32_t dim_len,
+                                        const int32_t specifier)
 {
         if (dim_len >= VAR_DIM_MAX)
                 yyerror("syntax err: 配列の次元が高すぎます");
@@ -433,6 +449,7 @@ static struct Var* structmemberspec_new(const char* iden,
 
         member->dim_len = dim_len;
         member->total_len = total_len;
+        member->specifier = specifier;
 
         return member;
 }
@@ -1471,9 +1488,11 @@ static void __func_logical_rshift(void)
 
 /* ローカル変数のインスタンス生成
  */
-static void __initializer_local(const char* iden,
-                                int32_t* unit_len,
-                                const int32_t dim_len)
+static void  __initializer_local(struct VarHandle* vh,
+                                 const char* iden,
+                                 int32_t* unit_len,
+                                 const int32_t dim_len,
+                                 const int32_t specifier)
 {
         if (dim_len >= VAR_DIM_MAX)
                 yyerror("syntax err: 配列の次元が高すぎます");
@@ -1481,13 +1500,16 @@ static void __initializer_local(const char* iden,
         /* これはコンパイル時の変数状態を設定するにすぎない。
          * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
          */
-        varlist_add_local(iden, unit_len, dim_len);
-        struct Var* var = varlist_search_local(iden);
+        varlist_add_local(iden, unit_len, dim_len, specifier);
+
+        vh->var = varlist_search_local(iden);
+        vh->is_direct = 1;      /* 直接参照に設定 */
+        vh->index_len = 0;
 
         /* 実際の動作時にメモリー確保するルーチンはこちら側
          */
-        if (var->is_local)
-                pA("stack_head = %d + stack_frame;", var->base_ptr + var->total_len);
+        if (vh->var->is_local)
+                pA("stack_head = %d + stack_frame;", vh->var->base_ptr + vh->var->total_len);
 }
 
 /* 変数インスタンスの具象アドレス取得関連
@@ -1638,7 +1660,7 @@ static void __define_user_function_begin(const char* iden,
          * その後、それのオフセットに 0 をセットする（コンパイル時）
          */
         const char stack_prev_frame_iden[] = "@stack_prev_frame";
-        varlist_add_local(stack_prev_frame_iden, NULL, 0);
+        varlist_add_local(stack_prev_frame_iden, NULL, 0, TYPE_FLOAT);
         varlist_set_scope_head();
 
         /* スタック上に格納された引数順序と対応した順序となるように、ローカル変数を作成していく。
@@ -1649,7 +1671,7 @@ static void __define_user_function_begin(const char* iden,
                 char iden[0x1000];
                 idenlist_pop(iden);
 
-                varlist_add_local(iden, NULL, 0);
+                varlist_add_local(iden, NULL, 0, TYPE_FLOAT);
 
                 /* 変数のスペックを得る。（コンパイル時） */
                 struct Var* var = varlist_search_local(iden);
@@ -1946,7 +1968,7 @@ void translate_ec(struct EC* ec)
         float fval;
         char sval[0x1000];
         int32_t ival_list[0x400];
-        struct Var* varptr;
+        struct VarList* varlistptr;
         struct VarHandle* varhandleptr;
         struct StructSpec* structspecptr;
         struct StructMemberSpec* structmemberspecptr;
@@ -1972,7 +1994,6 @@ void translate_ec(struct EC* ec)
 
 %token __OPE_LOGICAL_OR __OPE_LOGICAL_AND
 
-%token __STATE_DIM
 %token __TYPE_VOID
 %token __TYPE_CHAR __TYPE_SHORT __TYPE_INT __TYPE_LONG
 %token __TYPE_FLOAT __TYPE_DOUBLE
@@ -2009,6 +2030,8 @@ void translate_ec(struct EC* ec)
 %type <sval> __CONST_STRING const_strings
 %type <sval> __IDENTIFIER __LABEL __DEFINE_LABEL
 
+%type <ival> type_specifier type_specifier_unit
+
 %type <sval> read_variable
 
 %type <ec> expression const_variable operation
@@ -2016,15 +2039,17 @@ void translate_ec(struct EC* ec)
 %type <ival_list> selection_if selection_if_v
 
 %type <sval> iteration_while iteration_for
-%type <sval> initializer
+
+%type <varhandleptr> initializer
 %type <ival_list> initializer_param
+
 %type <sval> assignment
 %type <sval> declaration_list declaration
 %type <sval> define_function
 
 %type <sval> define_struct
 %type <structspecptr> initializer_struct_member_list
-%type <varptr> initializer_struct_member
+%type <varlistptr> initializer_struct_member
 
 %type <varhandleptr> var_identifier
 %type <ival> expression_list identifier_list
@@ -2136,6 +2161,43 @@ expression_list
         }
         ;
 
+type_specifier
+        : type_specifier_unit
+        | type_specifier_unit type_specifier {
+                $$ = $1 | $2;
+        }
+        ;
+
+type_specifier_unit
+        : __TYPE_VOID {
+                $$ = TYPE_VOID;
+        }
+        | __TYPE_CHAR {
+                $$ = TYPE_CHAR;
+        }
+        | __TYPE_SHORT {
+                $$ = TYPE_SHORT;
+        }
+        | __TYPE_INT {
+                $$ = TYPE_INT;
+        }
+        | __TYPE_LONG {
+                $$ = TYPE_LONG;
+        }
+        | __TYPE_FLOAT {
+                $$ = TYPE_FLOAT;
+        }
+        | __TYPE_DOUBLE {
+                $$ = TYPE_DOUBLE;
+        }
+        | __TYPE_SIGNED {
+                $$ = TYPE_SIGNED;
+        }
+        | __TYPE_UNSIGNED {
+                $$ = TYPE_UNSIGNED;
+        }
+        ;
+
 initializer_param
         : {
                 $$[0] = 0;
@@ -2156,27 +2218,24 @@ initializer_param
         ;
 
 initializer
-        : __STATE_DIM __IDENTIFIER initializer_param {
-                __initializer_local($2, &($3[1]), $3[0]);
-                strcpy($$, $2);
-        }
-        | initializer __OPE_COMMA __IDENTIFIER initializer_param {
-                __initializer_local($3, &($4[1]), $4[0]);
-                strcpy($$, $3);
-        }
-        | initializer __OPE_SUBST expression {
+        : type_specifier __IDENTIFIER initializer_param {
                 struct VarHandle* vh = malloc(sizeof(*vh));
 
-                vh->var = varlist_search($1);
-                if (vh->var == NULL)
-                        yyerror("syntax err: 未定義の変数を参照しようとしました");
+                __initializer_local(vh, $2, &($3[1]), $3[0], $1);
 
-                vh->is_direct = 1;         /* 直接参照に設定 */
-                vh->index_len = 0;
+                $$ = vh;
+        }
+        | initializer __OPE_COMMA __IDENTIFIER initializer_param {
+                struct VarHandle* vh = malloc(sizeof(*vh));
+
+                __initializer_local(vh, $3, &($4[1]), $4[0], $1->var->specifier);
+
+                $$ = vh;
+        }
+        | initializer __OPE_SUBST expression {
+                struct VarHandle* vh = $1;
 
                 __assignment_variable(vh);
-
-                free(vh);
 
                 /* initializer は終了時点でスタックが +-0 である必要があるので、
                  * __assignment_variable() によるプッシュを捨てる。
@@ -2604,11 +2663,18 @@ define_function
         ;
 
 initializer_struct_member
-        : __STATE_DIM __IDENTIFIER initializer_param __DECL_END {
-                $$ = structmemberspec_new($2, &($3[1]), $3[0]);
+        : type_specifier __IDENTIFIER initializer_param {
+                struct VarList* vl = malloc(sizeof(*vl));
+                vl->var[0] = structmemberspec_new($2, &($3[1]), $3[0], $1);
+                vl->varlist_len = 1;
+
+                $$ = vl;
         }
-        | initializer_struct_member __OPE_COMMA __IDENTIFIER initializer_param __DECL_END {
-                $$ = structmemberspec_new($3, &($4[1]), $4[0]);
+        | initializer_struct_member __OPE_COMMA __IDENTIFIER initializer_param {
+                const int32_t specifier = $1->var[0]->specifier;
+                $1->var[$1->varlist_len] = structmemberspec_new($3, &($4[1]), $4[0], specifier);
+
+                $$ = $1;
         }
         ;
 
@@ -2616,14 +2682,27 @@ initializer_struct_member_list
         : {
                 $$ = structspec_new();
         }
-        | initializer_struct_member {
+        | initializer_struct_member __DECL_END {
                 struct StructSpec* spec = structspec_new();
-                structspec_add_member(spec, $1);
+
+                int32_t i;
+                for (i = 0; i < $1->varlist_len; i++) {
+                        structspec_add_member(spec, $1->var[i]);
+                }
+
+                free($1);
+
                 $$ = spec;
         }
-        | initializer_struct_member initializer_struct_member_list {
-                structspec_add_member($2, $1);
-                $$ = $2;
+        | initializer_struct_member_list initializer_struct_member __DECL_END {
+                int32_t i;
+                for (i = 0; i < $2->varlist_len; i++) {
+                        structspec_add_member($1, $2->var[i]);
+                }
+
+                free($2);
+
+                $$ = $1;
         }
         ;
 
