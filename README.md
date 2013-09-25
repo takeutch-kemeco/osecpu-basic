@@ -341,7 +341,7 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ・廃止しました。
 
-・代わりに申し訳程度に3x3行列用のライブラリー #include "matrix.bas" を追加してあります。
+・代わりに申し訳程度に3x3行列用のライブラリー #include "matrix.nb" を追加してあります。
 
 ***
 
@@ -393,20 +393,20 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ・使い方の具体的な例は以下のようになります:
 
-    #include "test.bas"
+    #include "test.nb"
 
 ・お互いを入れ子にしてるような場合を、特に検出するようなコードはありませんが、実際は 16 段を越えてしまうのでエラーとなります:
 
-    /* ファイル testA.bas */
-    #include "testB.bas"
+    /* ファイル testA.nb */
+    #include "testB.nb"
 
-    /* ファイル testB.bas */
-    #include "testA.bas"
+    /* ファイル testB.nb */
+    #include "testA.nb"
 
-    /* ファイル testC.bas */
-    #include "testA.bas"
+    /* ファイル testC.nb */
+    #include "testA.nb"
 
-上記の例で testC.bas をコンパイルすると、入れ子制限の16段を越えた為のエラーとなります。
+上記の例で testC.nb をコンパイルすると、入れ子制限の16段を越えた為のエラーとなります。
 （循環参照を検出してのエラーとはなりません） 
 
 ***
@@ -489,53 +489,53 @@ osecpu-aska（マクロアセンブラー）によってコンパイルできる
 
 ***
 
-stdoscp.bas
+stdoscp.nb
 
 ・かつての osecpubasic のプリセット関数を、外部ライブラリーとして置き換えたものです。
 主に osecpu の junkApi_* をそのまま呼んでる類の関数をまとめてあります。
 
 ・使い方の具体的な例は以下のようになります:
 
-    /* stdoscp.bas へのパスが通ってる状態で */
-    #include "stdoscp.bas"
+    /* stdoscp.nb へのパスが通ってる状態で */
+    #include "stdoscp.nb"
     __print(123);
 
-・サポートする関数や、その使用方法に関しては stdoscp.bas のソースを直接読んでください。
+・サポートする関数や、その使用方法に関しては stdoscp.nb のソースを直接読んでください。
 
 ***
 
-math.bas
+math.nb
 
 ・かつての osecpubasic のプリセット関数を、外部ライブラリーとして置き換えたものです。
 主に数学ライブラリー関連の関数をまとめてあります。
 
 ・使い方の具体的な例は以下のようになります:
 
-    /* math.bas へのパスが通ってる状態で */
-    #include "math.bas"
+    /* math.nb へのパスが通ってる状態で */
+    #include "math.nb"
     float a = __sin(1.23);
 
-・サポートする関数や、その使用方法に関しては math.bas のソースを直接読んでください。
+・サポートする関数や、その使用方法に関しては math.nb のソースを直接読んでください。
 
 ***
 
-matrix.bas
+matrix.nb
 
 ・主に行列演算関連のライブラリーです。（現状は3x3行列専用の素朴で単純な演算のみです）
 
-・サポートする関数や、その使用方法に関しては matrix.bas のソースを直接読んでください。
+・サポートする関数や、その使用方法に関しては matrix.nb のソースを直接読んでください。
 
 ***
 
-stdgr.bas
+stdgr.nb
 
 ・主にグラフィック描画関連のライブラリーです。
 
 ・使い方の具体的な例は以下のようになります:
 
-    #include "math.bas"
-    #include "stdgr.bas"
+    #include "math.nb"
+    #include "stdgr.nb"
     __filltri(0, 10, 10, 20, 20, 10, 20, __torgb(255, 255, 255));
 
-・サポートする関数や、その使用方法に関しては stdgr.bas のソースを直接読んでください。
+・サポートする関数や、その使用方法に関しては stdgr.nb のソースを直接読んでください。
 
