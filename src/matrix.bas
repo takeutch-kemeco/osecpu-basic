@@ -24,7 +24,7 @@
  */
 function idn_matrix3(m0)
 {
-        dim ma[3][3];
+        float ma[3][3];
         m0@ma[0][0] = 1; m0@ma[0][1] = 0; m0@ma[0][2] = 0;
         m0@ma[1][0] = 0; m0@ma[1][1] = 1; m0@ma[1][2] = 0;
         m0@ma[2][0] = 0; m0@ma[2][1] = 0; m0@ma[2][2] = 1;
@@ -35,11 +35,11 @@ function idn_matrix3(m0)
  */
 function scale_matrix3(m0, scale)
 {
-        dim ma[3][3];
+        float ma[3][3];
 
-        dim j;
+        float j;
         for (j = 0; j < 3; j = j + 1) {
-                dim i;
+                float i;
                 for (i = 0; i < 3; i = i + 1) {
                         m0@ma[j][i] = scale * m0@ma[j][i];
                 }
@@ -51,9 +51,9 @@ function scale_matrix3(m0, scale)
  */
 function scale_vector3(v0, scale)
 {
-        dim va[3];
+        float va[3];
 
-        dim i;
+        float i;
         for (i = 0; i < 3; i = i + 1)
                 v0@va[i] = scale * v0@va[i];
 }
@@ -63,9 +63,9 @@ function scale_vector3(v0, scale)
  */
 function add_vector3(v0, v1, v2)
 {
-        dim va[3];
+        float va[3];
 
-        dim i;
+        float i;
         for (i = 0; i < 3; i = i + 1)
                 v0@va[i] = v1@va[i] + v2@va[i];
 }
@@ -75,9 +75,9 @@ function add_vector3(v0, v1, v2)
  */
 function sub_vector3(v0, v1, v2)
 {
-        dim va[3];
+        float va[3];
 
-        dim i;
+        float i;
         for (i = 0; i < 3; i = i + 1)
                 v0@va[i] = v1@va[i] - v2@va[i];
 }
@@ -87,11 +87,11 @@ function sub_vector3(v0, v1, v2)
  */
 function mul_matrix3(m0, m1, m2)
 {
-        dim ma[3][3];
+        float ma[3][3];
 
-        dim j;
+        float j;
         for (j = 0; j < 3; j = j + 1) {
-                dim i;
+                float i;
                 for (i = 0; i < 3; i = i + 1) {
                         m0@ma[j][i] = m1@ma[j][0] * m2@ma[0][i] +
                                       m1@ma[j][1] * m2@ma[1][i] +
@@ -105,10 +105,10 @@ function mul_matrix3(m0, m1, m2)
  */
 function mul_m3v3(v0, m0, v1)
 {
-        dim ma[3][3];
-        dim va[3];
+        float ma[3][3];
+        float va[3];
 
-        dim j;
+        float j;
         for (j = 0; j < 3; j = j + 1) {
                 v0@va[j] = m0@ma[j][0] * v1@va[0] +
                            m0@ma[j][1] * v1@va[1] +
@@ -121,10 +121,10 @@ function mul_m3v3(v0, m0, v1)
  */
 function mul_v3m3(v0, m0, v1)
 {
-        dim ma[3][3];
-        dim va[3];
+        float ma[3][3];
+        float va[3];
 
-        dim i;
+        float i;
         for (i = 0; i < 3; i = i + 1) {
                 v0@va[i] = m0@ma[0][i] * v1@va[0] +
                            m0@ma[1][i] * v1@va[1] +
@@ -137,8 +137,8 @@ function mul_v3m3(v0, m0, v1)
  */
 function rot_matrix3(m, v)
 {
-        dim mx[3][3], my[3][3], mz[3][3], mt[3][3];
-        dim va[3];
+        float mx[3][3], my[3][3], mz[3][3], mt[3][3];
+        float va[3];
         rot_x_matrix3(&mx, v@va[0]);
         rot_y_matrix3(&my, v@va[1]);
         rot_z_matrix3(&mz, v@va[2]);
@@ -151,9 +151,9 @@ function rot_matrix3(m, v)
  */
 function rot_x_matrix3(m, r)
 {
-        dim st = __sin(r);
-        dim ct = __cos(r);
-        dim a[3][3];
+        float st = __sin(r);
+        float ct = __cos(r);
+        float a[3][3];
         idn_matrix3(m);
         m@a[1][1] = ct;
         m@a[1][2] = -st;
@@ -165,9 +165,9 @@ function rot_x_matrix3(m, r)
  */
 function rot_y_matrix3(m, r)
 {
-        dim st = __sin(r);
-        dim ct = __cos(r);
-        dim a[3][3];
+        float st = __sin(r);
+        float ct = __cos(r);
+        float a[3][3];
         idn_matrix3(m);
         m@a[0][0] = ct;
         m@a[0][2] = st;
@@ -179,9 +179,9 @@ function rot_y_matrix3(m, r)
  */
 function rot_z_matrix3(m, r)
 {
-        dim st = __sin(r);
-        dim ct = __cos(r);
-        dim a[3][3];
+        float st = __sin(r);
+        float ct = __cos(r);
+        float a[3][3];
         idn_matrix3(m);
         m@a[0][0] = ct;
         m@a[0][1] = -st;
@@ -193,11 +193,11 @@ function rot_z_matrix3(m, r)
  */
 function print_matrix3(m)
 {
-        dim ma[3][3];
+        float ma[3][3];
 
-        dim j;
+        float j;
         for (j = 0; j < 3; j = j + 1) {
-                dim i;
+                float i;
                 for (i = 0; i < 3; i = i + 1) {
                         __print(m@ma[j][i]);
                 }
@@ -209,10 +209,10 @@ function print_matrix3(m)
  */
 function inner_product_vector3(v1, v2)
 {
-        dim va[3];
-        dim tmp = 0;
+        float va[3];
+        float tmp = 0;
 
-        dim i;
+        float i;
         for (i = 0; i < 3; i = i + 1)
                 tmp = tmp + (v1@va[i] * v2@va[i]);
 
@@ -224,7 +224,7 @@ function inner_product_vector3(v1, v2)
  */
 function cross_product_vector3(v0, v1, v2)
 {
-        dim va[3];
+        float va[3];
 
         v0@va[0] = v1@va[1] * v2@va[2] - v1@va[2] * v2@va[1];
         v0@va[1] = v1@va[2] * v2@va[0] - v1@va[0] * v2@va[2];
@@ -236,11 +236,11 @@ function cross_product_vector3(v0, v1, v2)
  */
 function copy_matrix3(m0, m1)
 {
-        dim ma[3][3];
+        float ma[3][3];
 
-        dim j;
+        float j;
         for (j = 0; j < 3; j = j + 1) {
-                dim i;
+                float i;
                 for (i = 0; i < 3; i = i + 1) {
                         m0@ma[j][i] = m1@ma[j][i];
                 }
@@ -252,11 +252,11 @@ function copy_matrix3(m0, m1)
  */
 function set_scalar_matrix3(m0, scalar)
 {
-        dim ma[3][3];
+        float ma[3][3];
 
-        dim j;
+        float j;
         for (j = 0; j < 3; j = j + 1) {
-                dim i;
+                float i;
                 for (i = 0; i < 3; i = i + 1) {
                         m0@ma[j][i] = scalar;
                 }
@@ -267,13 +267,13 @@ function set_scalar_matrix3(m0, scalar)
  */
 function transpose_matrix3(m0)
 {
-        dim ma[3][3];
+        float ma[3][3];
 
-        dim j;
+        float j;
         for (j = 0; j < 3; j = j + 1) {
-                dim i;
+                float i;
                 for (i = j; i < 3; i = i + 1) {
-                        dim tmp = m0@ma[j][i];
+                        float tmp = m0@ma[j][i];
                         m0@ma[j][i] = m0@ma[i][j];
                         m0@ma[i][j] = tmp;
                 }

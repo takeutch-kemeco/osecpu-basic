@@ -83,7 +83,7 @@ function __print(num)
  */
 function __peek(address)
 {
-        dim ret;
+        float ret;
 
         asm("fixL" = address);
         asm("PALMEM0(fixA, T_SINT32, mem_ptr, fixL);");
@@ -409,7 +409,7 @@ function __drawline(mode, x0, y0, x1, y1, color)
  */
 function __inkey(mode)
 {
-        dim ret;
+        float ret;
 
         asm("fixT" = mode);
         asm("fixT >>= 16;");
@@ -429,7 +429,7 @@ function __inkey(mode)
  */
 function __rand(max)
 {
-        dim ret;
+        float ret;
 
         asm("fixL" = max);
         asm("fixL >>= 16;");

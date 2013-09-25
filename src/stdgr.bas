@@ -81,21 +81,21 @@ function __search_min2(a, b)
  */
 function __search_minmidmax3(a, b, c)
 {
-        dim max = __search_max3(a, b, c);
+        float max = __search_max3(a, b, c);
         if (max == 0) {
-                dim min = __search_min2(b, c);
+                float min = __search_min2(b, c);
                 if (min == 0)
                         return (0 << 4) | (2 << 2) | (1 << 0);
 
                 return (0 << 4) | (1 << 2) | (2 << 0);
         } else if (max == 1) {
-                dim min = __search_min2(a, c);
+                float min = __search_min2(a, c);
                 if (min == 0)
                         return (1 << 4) | (2 << 2) | (0 << 0);
 
                 return (1 << 4) | (0 << 2) | (2 << 0);
         } else {
-                dim min = __search_min2(a, b);
+                float min = __search_min2(a, b);
                 if (min == 0)
                         return (2 << 4) | (1 << 2) | (0 << 0);
 
@@ -119,8 +119,8 @@ function __search_minmidmax3(a, b, c)
  */
 function __filltri_sl_common(mode, x0, y0, x1, y1, x2, y2, color, type)
 {
-        dim ac_dx = (x2 - x0) / (y2 - y0);
-        dim bc_dx = (x2 - x1) / (y2 - y1);
+        float ac_dx = (x2 - x0) / (y2 - y0);
+        float bc_dx = (x2 - x1) / (y2 - y1);
 
         if (type == 0) {
                 while (y0 <= y2) {
@@ -161,11 +161,11 @@ function __filltri(mode, x0, y0, x1, y1, x2, y2, color)
         /* 頂点をmin,mid,max順に再配置
          */
 
-        dim order = __search_minmidmax3(y0, y1, y2);
+        float order = __search_minmidmax3(y0, y1, y2);
 
-        dim max_x, max_y;
-        dim mid_x, mid_y;
-        dim min_x, min_y;
+        float max_x, max_y;
+        float mid_x, mid_y;
+        float min_x, min_y;
 
         /* 012 */
         if (order == 6) {
@@ -208,8 +208,8 @@ function __filltri(mode, x0, y0, x1, y1, x2, y2, color)
 
         /* min,max間を midYで分割した場合のsx,syを得る
          */
-        dim sx = min_x + (((max_x - min_x) / (max_y - min_y)) * (mid_y - min_y));
-        dim sy = mid_y;
+        float sx = min_x + (((max_x - min_x) / (max_y - min_y)) * (mid_y - min_y));
+        float sy = mid_y;
 
         /* 三角形 s,mid,min の描画 */
         __filltri_sl_common(mode, sx, sy, mid_x, mid_y, min_x, min_y, color, 1);

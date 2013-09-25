@@ -28,11 +28,11 @@
  */
 function __sin(a)
 {
-        dim pi = 3.14159265358979;
-        dim pi_2 = 3.14159265358979 * 2;
-        dim pi_h = 3.14159265358979 / 2;
+        float pi = 3.14159265358979;
+        float pi_2 = 3.14159265358979 * 2;
+        float pi_h = 3.14159265358979 / 2;
 
-        dim b = a % pi_2;
+        float b = a % pi_2;
         if ((b >= 0) & (b < pi_h))
                 a = b;
         else if ((b >= pi_h) & (b < pi))
@@ -59,8 +59,8 @@ function __sin(a)
  */
 function __cos(a)
 {
-        dim pi_2 = 3.14159265358979 * 2;
-        dim pi_h = 3.14159265358979 / 2;
+        float pi_2 = 3.14159265358979 * 2;
+        float pi_h = 3.14159265358979 / 2;
 
         return __sin((a % pi_2) + pi_h);
 }
@@ -90,8 +90,8 @@ function __tan(a)
  */
 function __sqrt(x)
 {
-        dim xn = x / 2;
-        dim i;
+        float xn = x / 2;
+        float i;
         for (i = 0; i < 8; i = i + 1)
                 xn = xn - ((xn * xn) - x) / (2 * xn);
 
@@ -102,9 +102,9 @@ function __sqrt(x)
  */
 function __pow_p(a, b)
 {
-        dim s = 1;
-        dim t = a;
-        dim i;
+        float s = 1;
+        float t = a;
+        float i;
         for (i = 0; i < 15; i = i + 1) {
                 if (b & (1 << i))
                         s = s * t;
