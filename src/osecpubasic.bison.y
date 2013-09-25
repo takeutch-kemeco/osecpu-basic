@@ -459,16 +459,24 @@ static void structspec_ptrlist_add(struct StructSpec* spec)
 /* 変数スペックリスト関連
  */
 
-#define VAR_STR_LEN IDENLIST_STR_LEN
+/* 普遍的(コンパイル時点に確定する)変数スペック
+ */
 struct Var {
-        char str[VAR_STR_LEN];
+        char iden[IDENLIST_STR_LEN];
         int32_t base_ptr;       /* ベースアドレス */
-        int32_t array_len;      /* 配列全体の長さ */
-        int32_t col_len;        /* 行の長さ */
-        int32_t row_len;        /* 列の長さ */
+        int32_t total_len;      /* 配列変数全体の長さ */
+        int32_t unit_len[0xff]; /* 各配列次元の長さ */
+        int32_t dim_len;        /* 配列の次元数 */
         int32_t is_local;       /* この変数がローカルならば非0、グローバルならば0となる */
-        int32_t is_direct;      /* この変数が直接参照ならば非0、間接参照ならば0となる */
         int32_t specifier;      /* この変数の型、および型クラスを示すフラグ */
+};
+
+/* 普遍的な変数スペックと、その変数への動的なアクセス方法をパックしたハンドル
+ */
+struct VarHandle {
+        struct Var* var;
+        int32_t is_direct;      /* この変数が直接参照ならば非0、間接参照ならば0となる */
+        int32_t index_len;      /* index の個数。スカラーならば0 */
 };
 
 #define VARLIST_LEN 0x1000
@@ -515,11 +523,11 @@ static void varlist_scope_pop(void)
  *
  * varlist_search()とvarlist_search_local()の共通ルーチンを抜き出したもの。
  */
-static struct Var* varlist_search_common(const char* str, const int32_t varlist_bottom)
+static struct Var* varlist_search_common(const char* iden, const int32_t varlist_bottom)
 {
         int32_t i = varlist_head;
         while (i-->varlist_bottom) {
-                if (strcmp(str, varlist[i].str) == 0)
+                if (strcmp(iden, varlist[i].iden) == 0)
                         return &(varlist[i]);
         }
 
@@ -530,80 +538,82 @@ static struct Var* varlist_search_common(const char* str, const int32_t varlist_
  * 確認する順序は最後尾側から開始して、現在のスコープ側へと向かう方向。
  * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
  */
-static struct Var* varlist_search_local(const char* str)
+static struct Var* varlist_search_local(const char* iden)
 {
-        return varlist_search_common(str, varlist_scope[varlist_scope_head]);
+        return varlist_search_common(iden, varlist_scope[varlist_scope_head]);
 }
 
 /* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）からvarlistの先頭まで確認してくる。
  * 確認する順序は最後尾側から開始して、varlistの先頭側へと向かう方向。
  * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
  */
-static struct Var* varlist_search(const char* str)
+static struct Var* varlist_search(const char* iden)
 {
-        return varlist_search_common(str, 0);
+        return varlist_search_common(iden, 0);
 }
 
 /* 変数リストに新たに変数を無条件に追加する。
  * 既に同名の変数が存在するかの確認は行わない。常に追加する。
- * row_len : この変数の行（たて方向、y方向）の長さを指定する。 スカラーまたは１次元配列の場合は 1 でなければならない。
- * col_len : この変数の列（よこ方向、x方向）の長さを指定する。 スカラーならば 1 でなければならない。
+ * unit_len: この変数の配列の各要素の長さを指定する。
+ * dim_len: この変数の次元数を指定する。 スカラーならば0。
  * これらの値はint32型。（fix32型ではないので注意)
- *
- * col_len, row_len に 1 未満の数を指定した場合は syntax err となる。
  *
  * varlist_add() および varlist_add_local() の共通ルーチンを抜き出したもの。
  */
-static void varlist_add_common(const char* str, const int32_t row_len, const int32_t col_len)
+static void varlist_add_common(const char* iden, int32_t* unit_len, const int32_t dim_len)
 {
-        if (row_len <= 0)
-                yyerror("syntax err: 配列の行（たて方向、y方向）サイズに0を指定しました");
-
-        if (col_len <= 0)
-                yyerror("syntax err: 配列の列（よこ方向、x方向）サイズに0を指定しました");
-
         struct Var* cur = varlist + varlist_head;
         struct Var* prev = varlist + varlist_head - 1;
 
-        strcpy(cur->str, str);
-        cur->col_len = col_len;
-        cur->row_len = row_len;
-        cur->array_len = col_len * row_len;
-        cur->base_ptr = (varlist_head == 0) ? 0 : prev->base_ptr + prev->array_len;
+        int32_t total_len = 1;
+        int32_t i;
+        for (i = 0; i < dim_len; i++) {
+                if (unit_len[i] <= 0)
+                        yyerror("syntax err: 配列サイズに0以下を指定しました");
+
+                cur->unit_len[i] = unit_len[i];
+                total_len *= unit_len[i];
+        }
+
+        strcpy(cur->iden, iden);
+        cur->base_ptr = (varlist_head == 0) ? 0 : prev->base_ptr + prev->total_len;
+        cur->total_len = total_len;
+        cur->dim_len = dim_len;
         cur->is_local = (cur_scope_depth >= 1) ? 1 : 0;
-        cur->is_direct = 1;     /* デフォルトでは直接参照 */
 
         varlist_head++;
 
 #ifdef DEBUG_VARLIST
-        printf("col_len[%d], row_len[%d], array_len[%d], base_ptr[%d], is_local[%d]\n",
-               cur->col_len, cur->row_len, cur->array_len, cur->base_ptr, cur->is_local);
+        for (i = 0; i < dim_len; i++) {
+                printf("unit_len%d[%d], ", cur->unit_len[i]);
+        }
+        printf("total_len[%d], base_ptr[%d]\n", cur->total_len, cur->base_ptr);
 #endif /* DEBUG_VARLIST */
 }
 
 /* 変数リストに新たにローカル変数を追加する。
  * 現在のスコープ内に重複する同名のローカル変数が存在した場合は何もしない。
- * row_len : この変数の行（たて方向、y方向）の長さを指定する。 スカラーまたは１次元配列の場合は 1 でなければならない。
- * col_len : この変数の列（よこ方向、x方向）の長さを指定する。 スカラーならば 1 でなければならない。
+ * unit_len: この変数の配列の各要素の長さを指定する。
+ * dim_len: この変数の次元数を指定する。 スカラーならば0。
  * これらの値はint32型。（fix32型ではないので注意)
  *
  * col_len, row_len に 1 未満の数を指定した場合は syntax err となる。
  */
-static void varlist_add_local(const char* str, const int32_t row_len, const int32_t col_len)
+static void varlist_add_local(const char* str, int32_t* unit_len, const int32_t dim_len)
 {
         if (varlist_search_local(str) != NULL)
                 return;
 
-        varlist_add_common(str, row_len, col_len);
+        varlist_add_common(str, unit_len, dim_len);
 }
 
 /* 変数リストの現在の最後の変数を、新しいスコープの先頭とみなして、それの base_ptr に0をセットする
  *
  * 新しいスコープ内にて、新たにローカル変数 a, b, c を宣言する場合の例:
- * varlist_add_local("a", 1, 1); // とりあえず a を宣言する
+ * varlist_add_local("a", u, l); // とりあえず a を宣言する
  * varlist_set_scope_head(); // これでヒープの最後の変数である a の base_ptr へ 0 がセットされる
- * varlist_add_local("b", 1, 1); // その後 b, c は普通に宣言していけばいい
- * varlist_add_local("c", 1, 1);
+ * varlist_add_local("b", u, l); // その後 b, c は普通に宣言していけばいい
+ * varlist_add_local("c", u, l);
  */
 static void varlist_set_scope_head(void)
 {
@@ -1487,146 +1497,69 @@ static void __func_logical_rshift(void)
 /* ローカル変数のインスタンス生成
  */
 static void __initializer_local(const char* iden,
-                                const int32_t row_len,
-                                const int32_t col_len)
+                                int32_t* unit_len,
+                                const int32_t dim_len)
 {
         /* これはコンパイル時の変数状態を設定するにすぎない。
          * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
          */
-        varlist_add_local(iden, row_len, col_len);
+        varlist_add_local(iden, unit_len, dim_len);
         struct Var* var = varlist_search_local(iden);
 
         /* 実際の動作時にメモリー確保するルーチンはこちら側
          */
         if (var->is_local)
-                pA("stack_head = %d + stack_frame;", var->base_ptr + var->array_len);
+                pA("stack_head = %d + stack_frame;", var->base_ptr + var->total_len);
 }
 
 /* 変数インスタンスの具象アドレス取得関連
- * これは struct Var が指す変数の、実際のメモリー上のアドレスを heap_base へ取得する。
+ * これは struct VarHandle が指す変数の、実際のメモリー上のアドレスを heap_base へ取得する。
  * この heap_base へ読み書きすることで、変数への読み書きとなる。
  */
 
-/* スカラー変数の具象アドレスを heap_base に得る
+/* 変数インスタンスの任意インデックスの具象アドレスを heap_base に得る
+ *
+ * dim: スタックに積んだ添字の個数。(スカラーなら0)
  */
-static void __get_variable_scaler_concrete_address(struct Var* var)
+static void __get_variable_concrete_address(struct VarHandle* vh)
 {
+        pA("heap_offset = 0;");
+
+        int32_t unit_size = vh->var->total_len;
+        int32_t i;
+        for (i = 0; i < vh->index_len; i++) {
+                pop_stack("stack_socket");
+                pA("stack_socket >>= 16;");
+
+                unit_size /= vh->var->unit_len[i];
+                pA("heap_offset += %d * stack_socket;", unit_size);
+        }
+
         /* 直接参照か、間接参照かに応じて、スタックからポップし
          * heap_baseへアドレスをセットする（コンパイル時）
          */
-        if (var->is_direct) {
-                if (var->is_local) {
-                        pA("heap_base = %d + stack_frame;", var->base_ptr);
+        if (vh->is_direct) {
+                if (vh->var->is_local) {
+                        pA("heap_base = %d + stack_frame;", vh->var->base_ptr);
                 } else {
-                        pA("heap_base = %d;", var->base_ptr);
+                        pA("heap_base = %d;", vh->var->base_ptr);
                 }
         } else {
                 pop_stack("heap_base");
         }
 
-#ifdef DEBUG_VARIABLE
-        pA("junkApi_putConstString('\\n__get_variable_scaler_concrete_address(), ');");
-
-        if (var->is_local)
-                pA("junkApi_putConstString('is_local ');");
-        else
-                pA("junkApi_putConstString('is_global ');");
-
-        if (var->is_direct)
-                pA("junkApi_putConstString('is_direct ');");
-        else
-                pA("junkApi_putConstString('is_indirect ');");
-
-        debug_stack();
-        debug_heap();
-#endif /* DEBUG_VARIABLE */
-}
-
-/* 配列変数インスタンスの任意インデックスの具象アドレスを heap_base に得る
- */
-static void __get_variable_array_concrete_address(struct Var* var, const int32_t dim)
-{
-        /* 変数がスカラーな場合はエラー */
-        if (var->row_len == 1 && var->col_len == 1)
-                yyerror("syntax err: スカラー変数へ添字による指定をしました");
-
-        /* 配列の次元に対して、添字の次元が異なる場合にエラーとする
-        */
-        /* 変数が1次元配列なのに、添字の次元がそれとは異なる場合 */
-        if (var->row_len == 1 && dim != 1)
-                yyerror("syntax err: 1次元配列に対して、異なる次元の添字を指定しました");
-
-        /* 変数が2次元配列なのに、添字の次元がそれとは異なる場合 */
-        else if (var->row_len >= 2 && dim != 2)
-                yyerror("syntax err: 2次元配列に対して、異なる次元の添字を指定しました");
-
-        /* 配列の次元によって分岐（コンパイル時）
-         */
-        /* １次元配列の場合 */
-        if (var->row_len == 1) {
-                /* 先に添字をポップしておく */
-                pop_stack("heap_offset");
-
-                /* 直接参照か、間接参照かに応じて、スタックからポップし
-                 * heap_baseへアドレスをセットする（コンパイル時）
-                 */
-                if (var->is_direct) {
-                        if (var->is_local) {
-                                pA("heap_base = %d + stack_frame;", var->base_ptr);
-                        } else {
-                                pA("heap_base = %d;", var->base_ptr);
-                        }
-                } else {
-                        pop_stack("heap_base");
-                }
-
-                /* heap_base へオフセットを足す */
-                pA("heap_base += heap_offset >> 16;");
-
-        /* 2次元配列の場合 */
-        } else if (var->row_len >= 2) {
-                /* 先に添字をポップしておく
-                 */
-
-                /* これは[行, 列]の列 */
-                pop_stack("heap_offset");
-
-                /* これは[行, 列]の行。
-                 * これと変数の列サイズと乗算した値を更に足すことで、変数の先頭からのオフセット位置
-                 */
-                pop_stack("stack_socket");
-                pA("heap_offset += stack_socket * %d;", var->col_len);
-
-                /* 直接参照か、間接参照かに応じて、スタックからポップし
-                 * heap_baseへアドレスをセットする（コンパイル時）
-                 */
-                if (var->is_direct) {
-                        if (var->is_local) {
-                                pA("heap_base = %d + stack_frame;", var->base_ptr);
-                        } else {
-                                pA("heap_base = %d;", var->base_ptr);
-                        }
-                } else {
-                        pop_stack("heap_base");
-                }
-
-                /* heap_base へオフセットを足す */
-                pA("heap_base += heap_offset >> 16;");
-
-        /* 1,2次元以外の場合はシステムエラー */
-        } else {
-                yyerror("system err: __OPE_ADDRESS read_variable, col_len の値が不正です");
-        }
+        /* heap_base へオフセットを足す */
+        pA("heap_base += heap_offset;");
 
 #ifdef DEBUG_VARIABLE
         pA("junkApi_putConstString('\\n__get_variable_array_concrete_address(), ');");
 
-        if (var->is_local)
+        if (vh->var->is_local)
                 pA("junkApi_putConstString('is_local ');");
         else
                 pA("junkApi_putConstString('is_global ');");
 
-        if (var->is_direct)
+        if (vh->is_direct)
                 pA("junkApi_putConstString('is_direct ');");
         else
                 pA("junkApi_putConstString('is_indirect ');");
@@ -1634,26 +1567,6 @@ static void __get_variable_array_concrete_address(struct Var* var, const int32_t
         debug_stack();
         debug_heap();
 #endif /* DEBUG_VARIABLE */
-}
-
-/* スカラー変数、または配列変数インスタンスの任意インデックスの具象アドレスを heap_base に得る
- *
- * dim へは配列インデックスの個数を渡す。（スカラーの場合は0を渡す）
- */
-static void __get_variable_concrete_address(struct Var* var, const int32_t dim)
-{
-        switch (dim) {
-        case 0:
-                __get_variable_scaler_concrete_address(var);
-                break;
-
-        case 1 ... 2:
-                __get_variable_array_concrete_address(var, dim);
-                break;
-
-        default:
-                yyerror("system err: __get_variable_concrete_address(), dim");
-        }
 }
 
 /* 変数への代入関連
@@ -1661,19 +1574,17 @@ static void __get_variable_concrete_address(struct Var* var, const int32_t dim)
 
 /* 配列変数中の、任意インデックス番目の要素へ、値を代入する。
  *
- * dim へは添字の次元を渡す。（スカラー変数の場合は0を渡す）
- *
  * 値はあらかじめスタックにプッシュされてる前提。
  *     スカラーならば "値" の順、
  *     １次元配列ならば "添字, 値" の順
  *     2次元配列ならば "行添字, 列添字, 値" の順
  * また、間接参照の場合はスタックに "間接参照アドレス, 添字群, 値" の順でプッシュされてる前提。
  */
-static void __assignment_variable(struct Var* var, const int32_t dim)
+static void __assignment_variable(struct VarHandle* vh)
 {
         /* 書き込む値を読んでおく */
         pop_stack("heap_socket");
-        __get_variable_concrete_address(var, dim);
+        __get_variable_concrete_address(vh);
         write_mem("heap_socket", "heap_base");
 
         /* 変数へ書き込んだ値をスタックへもプッシュしておく
@@ -1685,17 +1596,17 @@ static void __assignment_variable(struct Var* var, const int32_t dim)
 /* 変数リード関連
  */
 
-static void __read_variable_ptr(struct Var* var, const int32_t dim)
+static void __read_variable_ptr(struct VarHandle* vh)
 {
-        __get_variable_concrete_address(var, dim);
+        __get_variable_concrete_address(vh);
 
         /* heap_base自体を（アドレス自体を）スタックにプッシュする */
         push_stack("heap_base");
 }
 
-static void __read_variable(struct Var* var, const int32_t dim)
+static void __read_variable(struct VarHandle* vh)
 {
-        __get_variable_concrete_address(var, dim);
+        __get_variable_concrete_address(vh);
 
         /* アドレスから読んで結果をスタックへプッシュ
          */
@@ -1749,7 +1660,7 @@ static void __define_user_function_begin(const char* iden,
          * その後、それのオフセットに 0 をセットする（コンパイル時）
          */
         const char stack_prev_frame_iden[] = "@stack_prev_frame";
-        varlist_add_local(stack_prev_frame_iden, 1, 1);
+        varlist_add_local(stack_prev_frame_iden, NULL, 0);
         varlist_set_scope_head();
 
         /* スタック上に格納された引数順序と対応した順序となるように、ローカル変数を作成していく。
@@ -1760,7 +1671,7 @@ static void __define_user_function_begin(const char* iden,
                 char iden[0x1000];
                 idenlist_pop(iden);
 
-                varlist_add_local(iden, 1, 1);
+                varlist_add_local(iden, NULL, 0);
 
                 /* 変数のスペックを得る。（コンパイル時） */
                 struct Var* var = varlist_search_local(iden);
@@ -2057,7 +1968,7 @@ void translate_ec(struct EC* ec)
         float fval;
         char sval[0x1000];
         int32_t ival_list[0x400];
-        struct Var* varptr;
+        struct VarHandle* varhandleptr;
         struct StructSpec* structspecptr;
         struct StructMemberSpec* structmemberspecptr;
         struct EC* ec;
@@ -2136,7 +2047,7 @@ void translate_ec(struct EC* ec)
 %type <structspecptr> initializer_struct_member_list
 %type <structmemberspecptr> initializer_struct_member
 
-%type <varptr> var_identifier
+%type <varhandleptr> var_identifier
 %type <ival> expression_list identifier_list
 
 %type <ival> __declaration_specifiers
@@ -2248,35 +2159,45 @@ expression_list
 
 initializer_param
         : {
-                $$[0] = 1;
-                $$[1] = 1;
+                $$[0] = 0;
         }
         | __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
-                $$[0] = $2;
-                $$[1] = 1;
-        }
-        | __ARRAY_LB __CONST_INTEGER __ARRAY_RB
-          __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
-                $$[0] = $5;
+                $$[0] = 1;
                 $$[1] = $2;
+        }
+        | initializer_param __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
+                int32_t head = $1[0] + 1;
+                int32_t i;
+                for (i = 0; i < head; i++)
+                        $$[i] = $1[i];
+
+                $$[0] = head;
+                $$[head] = $3;
         }
         ;
 
 initializer
         : __STATE_DIM __IDENTIFIER initializer_param {
-                __initializer_local($2, $3[1], $3[0]);
+                __initializer_local($2, &($3[1]), $3[0]);
                 strcpy($$, $2);
         }
         | initializer __OPE_COMMA __IDENTIFIER initializer_param {
-                __initializer_local($3, $4[1], $4[0]);
+                __initializer_local($3, &($4[1]), $4[0]);
                 strcpy($$, $3);
         }
         | initializer __OPE_SUBST expression {
-                struct Var* var = varlist_search($1);
-                if (var == NULL)
-                        yyerror("system err: 変数のインスタンス生成に失敗しました");
+                struct VarHandle* vh = malloc(sizeof(*vh));
 
-                __assignment_variable(var, 0);
+                vh->var = varlist_search($1);
+                if (vh->var == NULL)
+                        yyerror("syntax err: 未定義の変数を参照しようとしました");
+
+                vh->is_direct = 1;         /* 直接参照に設定 */
+                vh->index_len = 0;
+
+                __assignment_variable(vh);
+
+                free(vh);
 
                 /* initializer は終了時点でスタックが +-0 である必要があるので、
                  * __assignment_variable() によるプッシュを捨てる。
@@ -2287,34 +2208,38 @@ initializer
 
 var_identifier
         : expression __OPE_ATTACH __IDENTIFIER {
-                struct Var* var = varlist_search($3);
-                if (var == NULL)
+                struct VarHandle* vh = malloc(sizeof(*vh));
+
+                vh->var = varlist_search($3);
+                if (vh->var == NULL)
                         yyerror("syntax err: 未定義の変数を参照しようとしました");
 
-                var->is_direct = 0;     /* 間接参照に設定 */
-                $$ = var;
+                vh->is_direct = 0;         /* 間接参照に設定 */
+                vh->index_len = 0;
+
+                $$ = vh;
         }
         | __IDENTIFIER {
-                struct Var* var = varlist_search($1);
-                if (var == NULL)
+                struct VarHandle* vh = malloc(sizeof(*vh));
+
+                vh->var = varlist_search($1);
+                if (vh->var == NULL)
                         yyerror("syntax err: 未定義の変数を参照しようとしました");
 
-                var->is_direct = 1;     /* 直接参照に設定 */
-                $$ = var;
+                vh->is_direct = 1;         /* 直接参照に設定 */
+                vh->index_len = 0;
+
+                $$ = vh;
+        }
+        | var_identifier __ARRAY_LB expression __ARRAY_RB {
+                $1->index_len++;
+                $$ = $1;
         }
         ;
 
 assignment
         : var_identifier __OPE_SUBST expression {
-                __assignment_variable($1, 0);
-        }
-        | var_identifier __ARRAY_LB expression __ARRAY_RB __OPE_SUBST expression {
-                __assignment_variable($1, 1);
-        }
-        | var_identifier
-          __ARRAY_LB expression __ARRAY_RB
-          __ARRAY_LB expression __ARRAY_RB __OPE_SUBST expression {
-                __assignment_variable($1, 2);
+                __assignment_variable($1);
         }
         ;
 
@@ -2507,28 +2432,10 @@ comparison
 
 read_variable
         : __OPE_AND var_identifier %prec __OPE_ADDRESS {
-                __read_variable_ptr($2, 0);
-        }
-        | __OPE_AND var_identifier __ARRAY_LB expression __ARRAY_RB
-          %prec __OPE_ADDRESS {
-                __read_variable_ptr($2, 1);
-        }
-        | __OPE_AND var_identifier
-          __ARRAY_LB expression __ARRAY_RB
-          __ARRAY_LB expression __ARRAY_RB
-          %prec __OPE_ADDRESS {
-                __read_variable_ptr($2, 2);
+                __read_variable_ptr($2);
         }
         | var_identifier {
-                __read_variable($1, 0);
-        }
-        | var_identifier __ARRAY_LB expression __ARRAY_RB {
-                __read_variable($1, 1);
-        }
-        | var_identifier
-          __ARRAY_LB expression __ARRAY_RB
-          __ARRAY_LB expression __ARRAY_RB {
-                __read_variable($1, 2);
+                __read_variable($1);
         }
         | __IDENTIFIER __LB {
                 /* 現在の stack_frame をプッシュする。
@@ -2767,22 +2674,7 @@ inline_assembler_statement
         }
         | __STATE_ASM __LB var_identifier __OPE_SUBST const_strings __RB __DECL_END {
                 push_stack($5);
-                __assignment_variable($3, 0);
-        }
-        | __STATE_ASM __LB
-          var_identifier
-          __ARRAY_LB expression __ARRAY_RB
-          __OPE_SUBST const_strings __RB __DECL_END {
-                push_stack($8);
-                __assignment_variable($3, 1);
-        }
-        | __STATE_ASM __LB
-          var_identifier
-          __ARRAY_LB expression __ARRAY_RB
-          __ARRAY_LB expression __ARRAY_RB
-          __OPE_SUBST const_strings __RB __DECL_END {
-                push_stack($11);
-                __assignment_variable($3, 2);
+                __assignment_variable($3);
         }
         ;
 
