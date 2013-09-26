@@ -460,8 +460,8 @@ static struct Var* structmemberspec_new(const char* iden,
 static void structmemberspec_print(struct Var* member,
                                    const char* tab)
 {
-        printf("%sStructMemberSpec: iden[%s], dim_len[%d], indirect_len[%d]",
-               tab, member->iden, member->dim_len, member->indirect_len);
+        printf("%sStructMemberSpec: iden[%s], indirect_len[%d], dim_len[%d],",
+               tab, member->iden, member->indirect_len, member->dim_len);
 
         int32_t i;
         for (i = 0; i < member->dim_len; i++) {
@@ -2673,16 +2673,16 @@ define_function
         ;
 
 initializer_struct_member
-        : type_specifier __IDENTIFIER initializer_param {
+        : type_specifier pointer __IDENTIFIER initializer_param {
                 struct VarList* vl = malloc(sizeof(*vl));
-                vl->var[0] = structmemberspec_new($2, &($3[1]), $3[0], 0, $1);
+                vl->var[0] = structmemberspec_new($3, &($4[1]), $4[0], $2, $1);
                 vl->varlist_len = 1;
 
                 $$ = vl;
         }
-        | initializer_struct_member __OPE_COMMA __IDENTIFIER initializer_param {
+        | initializer_struct_member __OPE_COMMA pointer __IDENTIFIER initializer_param {
                 const int32_t specifier = $1->var[0]->specifier;
-                $1->var[$1->varlist_len] = structmemberspec_new($3, &($4[1]), $4[0], 0, specifier);
+                $1->var[$1->varlist_len] = structmemberspec_new($4, &($5[1]), $5[0], $3, specifier);
 
                 $$ = $1;
         }
