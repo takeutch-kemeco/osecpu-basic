@@ -1783,7 +1783,7 @@ static void __define_user_function_end(const int32_t skip_label)
 #define EC_OPE_INV              29      /* ~ */
 #define EC_OPE_NOT              11      /* ! */
 #define EC_OPE_EQ               12      /* == */
-#define EC_OPT_NE               13      /* != */
+#define EC_OPE_NE               13      /* != */
 #define EC_OPE_LT               14      /* < */
 #define EC_OPE_GT               15      /* > */
 #define EC_OPE_LE               16      /* <= */
@@ -1854,7 +1854,35 @@ void translate_ec(struct EC* ec)
         if (ec->type_expression == 0)
                 return;
 
-        if (ec->type_expression == EC_CONSTANT) {
+        if (ec->type_expression == EC_COMPARISON) {
+                if (ec->type_operator == EC_OPE_EQ) {
+                        read_eoe_arg();
+                        pA("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                        push_stack("stack_socket");
+                } else if (ec->type_operator == EC_OPE_NE) {
+                        read_eoe_arg();
+                        pA("if (fixL != fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                        push_stack("stack_socket");
+                } else if (ec->type_operator == EC_OPE_LT) {
+                        read_eoe_arg();
+                        pA("if (fixL < fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                        push_stack("stack_socket");
+                } else if (ec->type_operator == EC_OPE_LE) {
+                        read_eoe_arg();
+                        pA("if (fixL <= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                        push_stack("stack_socket");
+                } else if (ec->type_operator == EC_OPE_GT) {
+                        read_eoe_arg();
+                        pA("if (fixL > fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                        push_stack("stack_socket");
+                } else if (ec->type_operator == EC_OPE_GE) {
+                        read_eoe_arg();
+                        pA("if (fixL >= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
+                        push_stack("stack_socket");
+                } else {
+                        yyerror("system err: translate_ec(), EC_COMPARISON");
+                }
+        } else if (ec->type_expression == EC_CONSTANT) {
                 if (ec->type_specifier == (TYPE_SIGNED | TYPE_INT)) {
                         pA("stack_socket = %d;", ec->const_int);
                         push_stack("stack_socket");
@@ -2015,7 +2043,7 @@ void translate_ec(struct EC* ec)
 %token __STATE_ASM
 %token __STATE_FUNCTION
 
-%left  __OPE_COMPARISON __OPE_NOT_COMPARISON __OPE_ISSMALL __OPE_ISSMALL_COMP __OPE_ISLARGE __OPE_ISLARGE_COMP
+%left  __OPE_EQ __OPE_NE __OPE_LT __OPE_LE __OPE_GT __OPE_GE
 %left  __OPE_ADD __OPE_SUB
 %left  __OPE_MUL __OPE_DIV __OPE_MOD
 %left  __OPE_OR __OPE_AND __OPE_XOR __OPE_INVERT __OPE_NOT
@@ -2039,7 +2067,7 @@ void translate_ec(struct EC* ec)
 
 %type <sval> read_variable
 
-%type <ec> expression const_variable operation
+%type <ec> expression const_variable operation comparison
 
 %type <ival_list> selection_if selection_if_v
 
@@ -2146,6 +2174,7 @@ expression
                 $$ = new_ec();
         }
         | comparison {
+                translate_ec($1);
                 $$ = new_ec();
         }
         ;
@@ -2457,41 +2486,59 @@ operation
         ;
 
 comparison
-        : expression __OPE_COMPARISON expression {
-                read_eoe_arg();
-
-                pA("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                push_stack("stack_socket");
+        : expression __OPE_EQ expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_COMPARISON;
+                ec->type_operator = EC_OPE_EQ;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
-        | expression __OPE_NOT_COMPARISON expression {
-                read_eoe_arg();
-
-                pA("if (fixL != fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                push_stack("stack_socket");
+        | expression __OPE_NE expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_COMPARISON;
+                ec->type_operator = EC_OPE_NE;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
-        | expression __OPE_ISSMALL expression {
-                read_eoe_arg();
-
-                pA("if (fixL < fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                push_stack("stack_socket");
+        | expression __OPE_LT expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_COMPARISON;
+                ec->type_operator = EC_OPE_LT;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
-        | expression __OPE_ISSMALL_COMP expression {
-                read_eoe_arg();
-
-                pA("if (fixL <= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                push_stack("stack_socket");
+        | expression __OPE_LE expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_COMPARISON;
+                ec->type_operator = EC_OPE_LE;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
-        | expression __OPE_ISLARGE expression {
-                read_eoe_arg();
-
-                pA("if (fixL > fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                push_stack("stack_socket");
+        | expression __OPE_GT expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_COMPARISON;
+                ec->type_operator = EC_OPE_GT;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
-        | expression __OPE_ISLARGE_COMP expression {
-                read_eoe_arg();
-
-                pA("if (fixL >= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                push_stack("stack_socket");
+        | expression __OPE_GE expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_COMPARISON;
+                ec->type_operator = EC_OPE_GE;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         ;
 
@@ -3063,16 +3110,16 @@ __AND_expression
 
 __equality_expression
         : __relational_expression
-        | __equality_expression __OPE_COMPARISON __relational_expression
-        | __equality_expression __OPE_NOT_COMPARISON __relational_expression
+        | __equality_expression __OPE_EQ __relational_expression
+        | __equality_expression __OPE_NE __relational_expression
         ;
 
 __relational_expression
         : __shift_expression
-        | __relational_expression __OPE_ISSMALL __shift_expression
-        | __relational_expression __OPE_ISLARGE __shift_expression
-        | __relational_expression __OPE_ISSMALL_COMP __shift_expression
-        | __relational_expression __OPE_ISLARGE_COMP __shift_expression
+        | __relational_expression __OPE_LT __shift_expression
+        | __relational_expression __OPE_GT __shift_expression
+        | __relational_expression __OPE_LE __shift_expression
+        | __relational_expression __OPE_GE __shift_expression
         ;
 
 __shift_expression

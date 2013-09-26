@@ -484,14 +484,14 @@ static int32_t cur_ifdef_skip_depth;
 <main_process>"++"      return(__OPE_INC);
 <main_process>"--"      return(__OPE_DEC);
 
-<main_process>"=="      return(__OPE_COMPARISON);
-<main_process>"!="      return(__OPE_NOT_COMPARISON);
+<main_process>"=="      return(__OPE_EQ);
+<main_process>"!="      return(__OPE_NE);
 
-<main_process>"<"       return(__OPE_ISSMALL);
-<main_process>"<="      return(__OPE_ISSMALL_COMP);
+<main_process>"<"       return(__OPE_LT);
+<main_process>"<="      return(__OPE_LE);
 
-<main_process>">"       return(__OPE_ISLARGE);
-<main_process>">="      return(__OPE_ISLARGE_COMP);
+<main_process>">"       return(__OPE_GT);
+<main_process>">="      return(__OPE_GE);
 
 <main_process>"("       return(__LB);
 <main_process>")"       return(__RB);
