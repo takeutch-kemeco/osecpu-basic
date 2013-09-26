@@ -1766,7 +1766,7 @@ static void __define_user_function_end(const int32_t skip_label)
 #define EC_CAST                 6       /* 型変換 */
 #define EC_UNARY                7       /* 前置演算子による演算 */
 #define EC_POSTFIX              8       /* 後置演算子による演算 */
-#define EC_CONSTANT             9       /* 定数 */
+#define EC_PRIMARY              9       /* 定数もしくは変数参照 */
 
 /* EC の演算子を示すフラグ
  */
@@ -1799,6 +1799,7 @@ static void __define_user_function_end(const int32_t skip_label)
 #define EC_OPE_FUNCTION         26      /* f() による関数コール */
 #define EC_OPE_DIRECT_STRUCT    27      /* . による構造体メンバーへの直接アクセス */
 #define EC_OPE_INDIRECT_STRUCT  28      /* -> による構造体メンバーへの間接アクセス */
+#define EC_OPE_VARIABLE         29      /* 変数アクセス */
 
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
@@ -1814,6 +1815,7 @@ static void __define_user_function_end(const int32_t skip_label)
 #define EC_CHILD_MAX 32
 struct EC {
         char iden[IDENLIST_STR_LEN];
+        struct VarHandle* vh;
         uint32_t const_int;
         double const_float;
         uint32_t type_specifier;
@@ -1882,15 +1884,24 @@ void translate_ec(struct EC* ec)
                 } else {
                         yyerror("system err: translate_ec(), EC_COMPARISON");
                 }
-        } else if (ec->type_expression == EC_CONSTANT) {
-                if (ec->type_specifier == (TYPE_SIGNED | TYPE_INT)) {
+        } else if (ec->type_expression == EC_PRIMARY) {
+                if (ec->type_operator == EC_OPE_VARIABLE) {
+                        ec->vh = malloc(sizeof(*(ec->vh)));
+
+                        ec->vh->var = varlist_search(ec->iden);
+                        if (ec->vh->var == NULL)
+                                yyerror("syntax err: 未定義の変数を参照しようとしました");
+
+                        ec->vh->index_len = 0;
+                        ec->vh->indirect_len = 0;
+                } else if (ec->type_specifier == (TYPE_SIGNED | TYPE_INT)) {
                         pA("stack_socket = %d;", ec->const_int);
                         push_stack("stack_socket");
                 } else if (ec->type_specifier == TYPE_FLOAT) {
                         pA("stack_socket = %d;", ec->const_int); /* 実際は固定小数なのでint */
                         push_stack("stack_socket");
                 } else {
-                        yyerror("system err: translate_ec(), EC_CONSTANT");
+                        yyerror("system err: translate_ec(), EC_PRIMARY");
                 }
         } else if (ec->type_expression == EC_CALC) {
                 if (ec->type_operator == EC_OPE_ADD) {
@@ -1985,8 +1996,23 @@ void translate_ec(struct EC* ec)
                         pop_stack("fixL");
                         __func_minus();
                         push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_POINTER) {
+                        translate_ec(ec->child_ptr[0]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+                        ec->vh->indirect_len++;
                 } else {
                         yyerror("system err: translate_ec(), EC_UNARY");
+                }
+        } else if (ec->type_expression == EC_POSTFIX) {
+                if (ec->type_operator == EC_OPE_ARRAY) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+                        ec->vh->index_len++;
+                } else {
+                        yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
         } else {
                 yyerror("system err: translate_ec()");
@@ -2080,7 +2106,7 @@ void translate_ec(struct EC* ec)
 %type <structspecptr> initializer_struct_member_list
 %type <varlistptr> initializer_struct_member
 
-%type <varhandleptr> var_identifier
+%type <ec> var_identifier
 %type <ival> expression_list identifier_list
 
 %type <ival> __declaration_specifiers
@@ -2289,24 +2315,29 @@ initializer
 
 var_identifier
         : __IDENTIFIER {
-                struct VarHandle* vh = malloc(sizeof(*vh));
-
-                vh->var = varlist_search($1);
-                if (vh->var == NULL)
-                        yyerror("syntax err: 未定義の変数を参照しようとしました");
-
-                vh->index_len = 0;
-                vh->indirect_len = 0;
-
-                $$ = vh;
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_PRIMARY;
+                ec->type_operator = EC_OPE_VARIABLE;
+                strcpy(ec->iden, $1);
+                ec->child_len = 0;
+                $$ = ec;
         }
-        | pointer var_identifier {
-                $2->indirect_len = $1;
-                $$ = $2;
+        | __OPE_MUL var_identifier %prec __OPE_POINTER {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_UNARY;
+                ec->type_operator = EC_OPE_POINTER;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
         }
         | var_identifier __ARRAY_LB expression __ARRAY_RB {
-                $1->index_len++;
-                $$ = $1;
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_POSTFIX;
+                ec->type_operator = EC_OPE_ARRAY;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         ;
 
@@ -2323,24 +2354,27 @@ call_function
 
 read_variable
         : __OPE_AND var_identifier %prec __OPE_ADDRESS {
-                __read_variable_ptr($2);
+                translate_ec($2);
+                __read_variable_ptr($2->vh);
         }
         | var_identifier {
-                __read_variable($1);
+                translate_ec($1);
+                __read_variable($1->vh);
         }
         | call_function
         ;
 
 assignment
         : var_identifier __OPE_SUBST expression {
-                __assignment_variable($1);
+                translate_ec($1);
+                __assignment_variable($1->vh);
         }
         ;
 
 const_variable
         : __CONST_INTEGER {
                 struct EC* ec = new_ec();
-                ec->type_expression = EC_CONSTANT;
+                ec->type_expression = EC_PRIMARY;
                 ec->type_specifier = TYPE_SIGNED | TYPE_INT;
                 ec->type_qualifier = TYPE_CONST;
                 ec->const_int = $1 << 16;
@@ -2348,7 +2382,7 @@ const_variable
         }
         | __CONST_FLOAT {
                 struct EC* ec = new_ec();
-                ec->type_expression = EC_CONSTANT;
+                ec->type_expression = EC_PRIMARY;
                 ec->type_specifier = TYPE_FLOAT;
                 ec->type_qualifier = TYPE_CONST;
 
@@ -2788,8 +2822,9 @@ inline_assembler_statement
                 pop_stack($3);
         }
         | __STATE_ASM __LB var_identifier __OPE_SUBST const_strings __RB __DECL_END {
+                translate_ec($3);
                 push_stack($5);
-                __assignment_variable($3);
+                __assignment_variable($3->vh);
         }
         ;
 
