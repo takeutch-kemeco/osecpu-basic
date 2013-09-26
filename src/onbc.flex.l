@@ -394,7 +394,13 @@ static int32_t cur_ifdef_skip_depth;
 <pre_process>"function" BEGIN(pre_process_function);
 <pre_process_function>[_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext); BEGIN(pre_process);}
 
-<pre_process>^[*][_a-zA-Z][_0-9a-zA-Z]* {labellist_add(yytext);}
+<pre_process>^[_a-zA-Z][_0-9a-zA-Z]*[:] {
+        char tmp[0x1000];
+        strcpy(tmp, yytext);
+        tmp[yyleng - 1] = '\0';
+        labellist_add(tmp);
+}
+
 <pre_process>. {}
 
 <pre_process>"#include" BEGIN(pre_process_include);
@@ -570,8 +576,11 @@ static int32_t cur_ifdef_skip_depth;
         }
 }
 
-<main_process>^[*][_a-zA-Z][_0-9a-zA-Z]* {strcpy(yylval.sval, yytext); return(__DEFINE_LABEL);}
-<main_process>[*][_a-zA-Z][_0-9a-zA-Z]* {strcpy(yylval.sval, yytext); return(__LABEL);}
+<main_process>^[_a-zA-Z][_0-9a-zA-Z]*[:] {
+        strcpy(yylval.sval, yytext);
+        yylval.sval[yyleng - 1] = '\0';
+        return(__DEFINE_LABEL);
+}
 
 <main_process>. {}
 

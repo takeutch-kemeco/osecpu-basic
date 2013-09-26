@@ -2023,7 +2023,7 @@ void translate_ec(struct EC* ec)
 %left  __OPE_COMMA __OPE_COLON __OPE_DOT __OPE_ARROW __OPE_VALEN
 %token __OPE_PLUS __OPE_MINUS
 %token __OPE_ADDRESS __OPE_POINTER
-%token __LB __RB __DECL_END __IDENTIFIER __LABEL __DEFINE_LABEL __EOF
+%token __LB __RB __DECL_END __IDENTIFIER __DEFINE_LABEL __EOF
 %token __ARRAY_LB __ARRAY_RB
 %token __BLOCK_LB __BLOCK_RB
 %token __CONST_STRING __CONST_FLOAT __CONST_INTEGER __CONST_CHAR
@@ -2032,7 +2032,7 @@ void translate_ec(struct EC* ec)
 %type <fval> __CONST_FLOAT
 %type <sval> __CONST_CHAR
 %type <sval> __CONST_STRING const_strings
-%type <sval> __IDENTIFIER __LABEL __DEFINE_LABEL
+%type <sval> __IDENTIFIER __DEFINE_LABEL
 
 %type <ival> type_specifier type_specifier_unit
 %type <ival> pointer
@@ -2622,13 +2622,13 @@ iteration_for
         }
 
 labeled_statement
-        : __DEFINE_LABEL __DECL_END {
+        : __DEFINE_LABEL {
                 pA("LB(1, %d);", labellist_search($1));
         }
         ;
 
 jump_statement
-        : __STATE_GOTO __LABEL __DECL_END {
+        : __STATE_GOTO __IDENTIFIER __DECL_END {
                 pA("PLIMM(P3F, %d);", labellist_search($2));
         }
         | __STATE_RETURN expression __DECL_END {

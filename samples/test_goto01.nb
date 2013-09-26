@@ -1,0 +1,10 @@
+#include "stdoscp.nb"
+
+float i = 0;
+
+label01:
+        __print(i);
+        i = i + 1;
+        if (i < 10)
+                goto label01;
+
