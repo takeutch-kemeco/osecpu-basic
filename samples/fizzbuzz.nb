@@ -1,0 +1,44 @@
+#include "stdoscp.nb"
+
+function fizz(a)
+{
+        if ((a % 3) == 0) {
+                asm("junkApi_putConstString('fizz');");
+                return 1;
+        }
+
+        return 0;
+}
+
+function buzz(a)
+{
+        if ((a % 5) == 0) {
+                asm("junkApi_putConstString('buzz');");
+                return 1;
+        }
+
+        return 0;
+}
+
+function space()
+{
+        asm("junkApi_putConstString(' ');");
+}
+
+function num(a)
+{
+        __print(a);
+}
+
+function main()
+{
+        float i;
+        for (i = 1; i <= 100; i = i + 1) {
+                if (!(fizz(i) | buzz(i)))
+                        num(i);
+                else
+                        space();
+        }
+}
+
+main();

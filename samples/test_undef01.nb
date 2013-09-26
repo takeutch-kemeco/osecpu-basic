@@ -1,0 +1,7 @@
+#include "stdoscp.nb"
+
+#define A 123
+__print(A);
+
+#undef A
+__print(A);
