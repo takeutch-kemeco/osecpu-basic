@@ -9,15 +9,12 @@
  * すなわち、アドレスは内部的にはint32として受け渡しされ、使用されている。
  */
 
-//float padding[10];
-float * p;
-
-__print(7 & 3);
+float padding[10];
+float *p;
 
 float a = 123;
 p = &a;
 __print(a);
 __print(&a << 16);
 __print(p << 16);
-__print(* p);
-
+__print(*p);

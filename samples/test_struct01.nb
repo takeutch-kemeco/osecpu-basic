@@ -1,7 +1,7 @@
 struct A {
         float x;
-	float * y;
-	float * * z;
+        float * y;
+        float * * z;
 };
 
 struct Bcd {
@@ -9,10 +9,9 @@ struct Bcd {
         float yyy[10];
         float zzz[100][200];
         float ZZZ[100][200][300][400][500];
-	float * YYY[10];
-	float * * XXX;
+        float * YYY[10];
+        float * * XXX;
 };
 
 struct cDE {
 };
-
