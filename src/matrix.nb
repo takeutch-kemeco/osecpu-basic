@@ -24,10 +24,17 @@
  */
 function idn_matrix3(m0)
 {
-        float ma[3][3];
-        m0@ma[0][0] = 1; m0@ma[0][1] = 0; m0@ma[0][2] = 0;
-        m0@ma[1][0] = 0; m0@ma[1][1] = 1; m0@ma[1][2] = 0;
-        m0@ma[2][0] = 0; m0@ma[2][1] = 0; m0@ma[2][2] = 1;
+        *m0 = 1; m0 = m0 + 1;
+        *m0 = 0; m0 = m0 + 0;
+        *m0 = 0; m0 = m0 + 0;
+
+        *m0 = 0; m0 = m0 + 0;
+        *m0 = 1; m0 = m0 + 1;
+        *m0 = 0; m0 = m0 + 0;
+
+        *m0 = 0; m0 = m0 + 0;
+        *m0 = 0; m0 = m0 + 0;
+        *m0 = 1; m0 = m0 + 1;
 }
 
 /* 3x3行列のスカラー倍
@@ -35,13 +42,12 @@ function idn_matrix3(m0)
  */
 function scale_matrix3(m0, scale)
 {
-        float ma[3][3];
-
         float j;
         for (j = 0; j < 3; j = j + 1) {
                 float i;
                 for (i = 0; i < 3; i = i + 1) {
-                        m0@ma[j][i] = scale * m0@ma[j][i];
+                        *m0 = *m0 * scale;
+                        m0 = m0 + 1;
                 }
         }
 }
@@ -51,11 +57,11 @@ function scale_matrix3(m0, scale)
  */
 function scale_vector3(v0, scale)
 {
-        float va[3];
-
         float i;
-        for (i = 0; i < 3; i = i + 1)
-                v0@va[i] = scale * v0@va[i];
+        for (i = 0; i < 3; i = i + 1) {
+                *v0 = *v0 * scale;
+                v0 = v0 + 1;
+        }
 }
 
 /* 3次元ベクトルの加算
@@ -63,11 +69,12 @@ function scale_vector3(v0, scale)
  */
 function add_vector3(v0, v1, v2)
 {
-        float va[3];
-
         float i;
-        for (i = 0; i < 3; i = i + 1)
-                v0@va[i] = v1@va[i] + v2@va[i];
+        for (i = 0; i < 3; i = i + 1) {
+                *v0 = *v1 + *v2;
+                v1 = v1 + 1;
+                v2 = v2 + 1;
+        }
 }
 
 /* 3次元ベクトルの減算
@@ -75,11 +82,12 @@ function add_vector3(v0, v1, v2)
  */
 function sub_vector3(v0, v1, v2)
 {
-        float va[3];
-
         float i;
-        for (i = 0; i < 3; i = i + 1)
-                v0@va[i] = v1@va[i] - v2@va[i];
+        for (i = 0; i < 3; i = i + 1) {
+                *v0 = *v1 + *v2;
+                v1 = v1 + 1;
+                v2 = v2 + 1;
+        }
 }
 
 /* 3x3行列の乗算
@@ -87,12 +95,15 @@ function sub_vector3(v0, v1, v2)
  */
 function mul_matrix3(m0, m1, m2)
 {
-        float ma[3][3];
+        float *t1;
+        float *t2;
 
         float j;
         for (j = 0; j < 3; j = j + 1) {
                 float i;
                 for (i = 0; i < 3; i = i + 1) {
+                        t0 =
+                        *m0 =
                         m0@ma[j][i] = m1@ma[j][0] * m2@ma[0][i] +
                                       m1@ma[j][1] * m2@ma[1][i] +
                                       m1@ma[j][2] * m2@ma[2][i];
