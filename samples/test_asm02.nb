@@ -1,0 +1,20 @@
+#include "stdoscp.nb"
+
+function f()
+{
+        float a = 123;
+        float b;
+        a = 1;
+        __print(a);
+
+        asm("R20" = a);
+        asm("R20 += (1 << 16);");
+        asm(a = "R20");
+        __print(a);
+
+        a = 3;
+        __print(a);
+}
+
+f();
+
