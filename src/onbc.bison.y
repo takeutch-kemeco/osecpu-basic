@@ -2051,8 +2051,12 @@ void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_POSTFIX) {
                 if (ec->type_operator == EC_OPE_ARRAY) {
-                        translate_ec(ec->child_ptr[0]);
+                        /* 最初に添字expressionをスタックに積んでから、var_identifierをスタックに積む。
+                         * これによって A[x][y][z] ならばスタックに z -> y -> x の順で積めるので、
+                         * ポップして読んでいく際に、左側添字から順に(x -> y -> z の順で)値を得られる。
+                         */
                         translate_ec(ec->child_ptr[1]);
+                        translate_ec(ec->child_ptr[0]);
 
                         ec->vh = ec->child_ptr[0]->vh;
                         ec->vh->index_len++;
@@ -2332,14 +2336,14 @@ initializer_param
                 $$[0] = 1;
                 $$[1] = $2;
         }
-        | initializer_param __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
-                int32_t head = $1[0] + 1;
+        | __ARRAY_LB __CONST_INTEGER __ARRAY_RB initializer_param {
+                int32_t head = $4[0] + 1;
                 int32_t i;
                 for (i = 0; i < head; i++)
-                        $$[i] = $1[i];
+                        $$[i] = $4[i];
 
                 $$[0] = head;
-                $$[head] = $3;
+                $$[head] = $2;
         }
         ;
 
