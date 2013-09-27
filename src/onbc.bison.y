@@ -1801,6 +1801,7 @@ static void __define_user_function_end(const int32_t skip_label)
 #define EC_OPE_INDIRECT_STRUCT  28      /* -> による構造体メンバーへの間接アクセス */
 #define EC_OPE_VARIABLE         29      /* 変数アクセス */
 #define EC_OPE_SUBST            30      /* = */
+#define EC_OPE_LIST             31      /* , によって列挙されたリスト */
 
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
@@ -1813,7 +1814,7 @@ static void __define_user_function_end(const int32_t skip_label)
  * child_ptr[]: この EC をルートとして広がる枝ECへのポインター
  * child_len: child_ptr[] に登録されている枝の数
  */
-#define EC_CHILD_MAX 32
+#define EC_CHILD_MAX 0x100
 struct EC {
         char iden[IDENLIST_STR_LEN];
         struct VarHandle* vh;
@@ -1869,6 +1870,13 @@ void translate_ec(struct EC* ec)
 
                         ec->vh = ec->child_ptr[0]->vh;
                         __assignment_variable(ec->vh);
+                } else if (ec->type_operator == EC_OPE_LIST) {
+                        int32_t i;
+                        for (i = 0; i < ec->child_len; i++) {
+                                translate_ec(ec->child_ptr[i]);
+                        }
+                } else {
+                        yyerror("system err: translate_ec(), EC_ASSIGNMENT");
                 }
         } else if (ec->type_expression == EC_COMPARISON) {
                 if (ec->type_operator == EC_OPE_EQ) {
@@ -2110,7 +2118,9 @@ void translate_ec(struct EC* ec)
 %type <ival> type_specifier type_specifier_unit
 %type <ival> pointer
 
-%type <ec> expression const_variable operation comparison assignment
+%type <ec> expression expression_list
+%type <ec> var_identifier
+%type <ec> const_variable operation comparison assignment
 
 %type <ival_list> selection_if selection_if_v
 
@@ -2123,8 +2133,7 @@ void translate_ec(struct EC* ec)
 %type <structspecptr> initializer_struct_member_list
 %type <varlistptr> initializer_struct_member
 
-%type <ec> var_identifier
-%type <ival> expression_list identifier_list
+%type <ival> identifier_list
 
 %type <ival> __declaration_specifiers
 %type <ival> __storage_class_specifier __type_specifier __type_qualifier
@@ -2225,13 +2234,29 @@ expression
 
 expression_list
         : {
-                $$ = 0;
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ASSIGNMENT;
+                ec->type_operator = EC_OPE_LIST;
+                ec->child_len = 0;
+                $$ = ec;
         }
         | expression {
-                $$ = 1;
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ASSIGNMENT;
+                ec->type_operator = EC_OPE_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
         }
         | expression __OPE_COMMA expression_list {
-                $$ = 1 + $3;
+                struct EC* ec = $3;
+
+                if (ec->child_len >= EC_CHILD_MAX)
+                        yyerror("system err: expressionの列挙数が多すぎます");
+
+                ec->child_ptr[ec->child_len] = $1;
+                ec->child_len++;
+                $$ = ec;
         }
         ;
 
@@ -2366,6 +2391,7 @@ call_function
                  */
                 push_stack("stack_frame");
         } expression_list __RB {
+                translate_ec($4);
                 __call_user_function($1);
         }
         ;

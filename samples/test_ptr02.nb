@@ -12,3 +12,11 @@ __print(a[50]);
 float *p = &a[0];
 p = p + (50 >> 16);
 __print(*p);
+
+f(p);
+
+function f(*p)
+{
+	__print(*P);
+}
+
