@@ -1800,6 +1800,7 @@ static void __define_user_function_end(const int32_t skip_label)
 #define EC_OPE_DIRECT_STRUCT    27      /* . による構造体メンバーへの直接アクセス */
 #define EC_OPE_INDIRECT_STRUCT  28      /* -> による構造体メンバーへの間接アクセス */
 #define EC_OPE_VARIABLE         29      /* 変数アクセス */
+#define EC_OPE_SUBST            30      /* = */
 
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
@@ -1856,7 +1857,20 @@ void translate_ec(struct EC* ec)
         if (ec->type_expression == 0)
                 return;
 
-        if (ec->type_expression == EC_COMPARISON) {
+        if (ec->type_expression == EC_ASSIGNMENT) {
+                if (ec->type_operator == EC_OPE_VARIABLE) {
+                        translate_ec(ec->child_ptr[0]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+                        __read_variable(ec->vh);
+                } else if (ec->type_operator == EC_OPE_SUBST) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+                        __assignment_variable(ec->vh);
+                }
+        } else if (ec->type_expression == EC_COMPARISON) {
                 if (ec->type_operator == EC_OPE_EQ) {
                         read_eoe_arg();
                         pA("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
@@ -1978,7 +1992,7 @@ void translate_ec(struct EC* ec)
                         yyerror("system err: translate_ec(), EC_CALC");
                 }
         } else if (ec->type_expression == EC_UNARY) {
-               if (ec->type_operator == EC_OPE_INV) {
+                if (ec->type_operator == EC_OPE_INV) {
                         translate_ec(ec->child_ptr[0]);
 
                         pop_stack("fixL");
@@ -2001,6 +2015,11 @@ void translate_ec(struct EC* ec)
 
                         ec->vh = ec->child_ptr[0]->vh;
                         ec->vh->indirect_len++;
+                } else if (ec->type_operator == EC_OPE_ADDRESS) {
+                        translate_ec(ec->child_ptr[0]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+                        __read_variable_ptr(ec->vh);
                 } else {
                         yyerror("system err: translate_ec(), EC_UNARY");
                 }
@@ -2091,9 +2110,7 @@ void translate_ec(struct EC* ec)
 %type <ival> type_specifier type_specifier_unit
 %type <ival> pointer
 
-%type <sval> read_variable
-
-%type <ec> expression const_variable operation comparison
+%type <ec> expression const_variable operation comparison assignment
 
 %type <ival_list> selection_if selection_if_v
 
@@ -2193,14 +2210,15 @@ expression
                 translate_ec($1);
                 $$ = new_ec();
         }
-        | read_variable {
-                $$ = new_ec();
-        }
         | assignment {
+                translate_ec($1);
                 $$ = new_ec();
         }
         | comparison {
                 translate_ec($1);
+                $$ = new_ec();
+        }
+        | call_function {
                 $$ = new_ec();
         }
         ;
@@ -2352,22 +2370,31 @@ call_function
         }
         ;
 
-read_variable
-        : __OPE_AND var_identifier %prec __OPE_ADDRESS {
-                translate_ec($2);
-                __read_variable_ptr($2->vh);
-        }
-        | var_identifier {
-                translate_ec($1);
-                __read_variable($1->vh);
-        }
-        | call_function
-        ;
-
 assignment
-        : var_identifier __OPE_SUBST expression {
-                translate_ec($1);
-                __assignment_variable($1->vh);
+        : var_identifier {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ASSIGNMENT;
+                ec->type_operator = EC_OPE_VARIABLE;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | var_identifier __OPE_SUBST expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ASSIGNMENT;
+                ec->type_operator = EC_OPE_SUBST;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        | __OPE_AND var_identifier %prec __OPE_ADDRESS {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_UNARY;
+                ec->type_operator = EC_OPE_ADDRESS;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
         }
         ;
 
