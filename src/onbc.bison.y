@@ -2038,6 +2038,14 @@ void translate_ec(struct EC* ec)
 
                         ec->vh = ec->child_ptr[0]->vh;
                         ec->vh->index_len++;
+                } else if (ec->type_operator == EC_OPE_FUNCTION) {
+                        /* 現在の stack_frame をプッシュする。
+                         * そして、ここには関数終了後にはリターン値が入った状態となる。
+                         */
+                        push_stack("stack_frame");
+
+                        translate_ec(ec->child_ptr[0]);
+                        __call_user_function(ec->iden);
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
@@ -2120,7 +2128,7 @@ void translate_ec(struct EC* ec)
 
 %type <ec> expression expression_list
 %type <ec> var_identifier
-%type <ec> const_variable operation comparison assignment
+%type <ec> const_variable operation comparison assignment call_function
 
 %type <ival_list> selection_if selection_if_v
 
@@ -2213,22 +2221,18 @@ expression_statement
 expression
         : operation {
                 translate_ec($1);
-                $$ = new_ec();
         }
         | const_variable {
                 translate_ec($1);
-                $$ = new_ec();
         }
         | assignment {
                 translate_ec($1);
-                $$ = new_ec();
         }
         | comparison {
                 translate_ec($1);
-                $$ = new_ec();
         }
         | call_function {
-                $$ = new_ec();
+                translate_ec($1);
         }
         ;
 
@@ -2385,14 +2389,14 @@ var_identifier
         ;
 
 call_function
-        : __IDENTIFIER __LB {
-                /* 現在の stack_frame をプッシュする。
-                 * そして、ここには関数終了後にはリターン値が入った状態となる。
-                 */
-                push_stack("stack_frame");
-        } expression_list __RB {
-                translate_ec($4);
-                __call_user_function($1);
+        : __IDENTIFIER __LB expression_list __RB {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_POSTFIX;
+                ec->type_operator = EC_OPE_FUNCTION;
+                strcpy(ec->iden, $1);
+                ec->child_ptr[0] = $3;
+                ec->child_len = 1;
+                $$ = ec;
         }
         ;
 

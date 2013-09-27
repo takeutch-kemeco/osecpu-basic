@@ -1,19 +1,22 @@
 #include "stdoscp.nb"
 
-if (0 < 1)
+float a = 1;
+float b = 2;
+
+if (a < b)
         __print(123);
 
-if (1)
+if (a)
         __print(234);
 
-if (0) __print(-1); else __print(345);
+if (!a) __print(-1); else __print(345);
 
 if (0)
         __print(-1);
 else
         __print(456);
 
-if (1) {
+if (b - a) {
         __print(567);
 } else {
         __print(-1);
