@@ -1863,7 +1863,15 @@ void translate_ec(struct EC* ec)
                         translate_ec(ec->child_ptr[0]);
 
                         ec->vh = ec->child_ptr[0]->vh;
-                        __read_variable(ec->vh);
+
+                        /* 変数スペックと、変数アクセスでの、配列次元が同じ場合のみ値を参照する。
+                         * そうでない場合はアドレスを返す。
+                         */
+                        if (ec->vh->index_len == ec->vh->var->dim_len)
+                                __read_variable(ec->vh);
+                        else
+                                __read_variable_ptr(ec->vh);
+
                 } else if (ec->type_operator == EC_OPE_SUBST) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
