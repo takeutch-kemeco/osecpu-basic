@@ -1880,26 +1880,44 @@ void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_COMPARISON) {
                 if (ec->type_operator == EC_OPE_EQ) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
                         read_eoe_arg();
                         pA("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                         push_stack("stack_socket");
                 } else if (ec->type_operator == EC_OPE_NE) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
                         read_eoe_arg();
                         pA("if (fixL != fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                         push_stack("stack_socket");
                 } else if (ec->type_operator == EC_OPE_LT) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
                         read_eoe_arg();
                         pA("if (fixL < fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                         push_stack("stack_socket");
                 } else if (ec->type_operator == EC_OPE_LE) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
                         read_eoe_arg();
                         pA("if (fixL <= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                         push_stack("stack_socket");
                 } else if (ec->type_operator == EC_OPE_GT) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
                         read_eoe_arg();
                         pA("if (fixL > fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                         push_stack("stack_socket");
                 } else if (ec->type_operator == EC_OPE_GE) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
                         read_eoe_arg();
                         pA("if (fixL >= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
                         push_stack("stack_socket");
@@ -2211,6 +2229,8 @@ statement_list
 expression_statement
         : __DECL_END
         | expression __DECL_END {
+                translate_ec($1);
+
                 /* expression に属するステートメントは、
                  * 終了時点で”必ず”スタックへのプッシュが1個だけ余計に残ってる為、それを掃除する。
                  */
@@ -2219,21 +2239,11 @@ expression_statement
         ;
 
 expression
-        : operation {
-                translate_ec($1);
-        }
-        | const_variable {
-                translate_ec($1);
-        }
-        | assignment {
-                translate_ec($1);
-        }
-        | comparison {
-                translate_ec($1);
-        }
-        | call_function {
-                translate_ec($1);
-        }
+        : operation
+        | const_variable
+        | assignment
+        | comparison
+        | call_function
         ;
 
 expression_list
@@ -2349,6 +2359,8 @@ initializer
                 $$ = vh;
         }
         | initializer __OPE_SUBST expression {
+                translate_ec($3);
+
                 struct VarHandle* vh = $1;
 
                 __assignment_variable(vh);
@@ -2651,6 +2663,8 @@ selection_if
 
 selection_if_v
         : __STATE_IF __LB expression __RB {
+                translate_ec($3);
+
                 const int32_t else_label = cur_label_index_head++;
                 $<ival>$ = else_label;
 
@@ -2682,6 +2696,8 @@ iteration_while
                 pA("LB(0, %d);", loop_head);
 
         } expression __RB {
+                translate_ec($4);
+
                 const int32_t loop_end = cur_label_index_head++;
                 $<ival>$ = loop_end;
 
@@ -2701,6 +2717,8 @@ iteration_while
 
 iteration_for
         : __STATE_FOR __LB expression {
+                translate_ec($3);
+
                 /* スタックを掃除 */
                 pop_stack("stack_socket");
 
@@ -2718,6 +2736,8 @@ iteration_for
                 cur_label_index_head++;
 
         } expression {
+                translate_ec($7);
+
                 /* main ラベルID */
                 int32_t loop_main = cur_label_index_head;
                 cur_label_index_head++;
@@ -2742,6 +2762,8 @@ iteration_for
                 pA("LB(0, %d);", loop_pre_head);
 
         } expression __RB {
+                translate_ec($11);
+
                 /* スタックを掃除 */
                 pop_stack("stack_socket");
 
@@ -2770,6 +2792,8 @@ jump_statement
                 pA("PLIMM(P3F, %d);", labellist_search($2));
         }
         | __STATE_RETURN expression __DECL_END {
+                translate_ec($2);
+
                 pop_stack("fixA");
                 __define_user_function_return();
         }
@@ -2876,6 +2900,7 @@ inline_assembler_statement
                 pA($3);
         }
         | __STATE_ASM __LB const_strings __OPE_SUBST expression __RB __DECL_END {
+                translate_ec($5);
                 pop_stack($3);
         }
         | __STATE_ASM __LB var_identifier __OPE_SUBST const_strings __RB __DECL_END {
