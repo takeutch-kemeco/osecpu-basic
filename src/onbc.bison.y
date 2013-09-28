@@ -2198,7 +2198,9 @@ void translate_ec(struct EC* ec)
 
 %type <ec> expression expression_list
 %type <ec> var_identifier
-%type <ec> operation comparison assignment call_function
+%type <ec> operation comparison call_function
+
+%type <ec> assignment_expression
 
 %type <ec> unary_expression
 %type <ec> postfix_expression
@@ -2298,7 +2300,7 @@ expression_statement
 expression
         : operation
         | constant
-        | assignment
+        | assignment_expression
         | comparison
         | call_function
         ;
@@ -2443,7 +2445,7 @@ call_function
         }
         ;
 
-assignment
+assignment_expression
         : var_identifier {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_ASSIGNMENT;
@@ -2452,7 +2454,7 @@ assignment
                 ec->child_len = 1;
                 $$ = ec;
         }
-        | var_identifier __OPE_SUBST expression {
+        | assignment_expression __OPE_SUBST expression {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_ASSIGNMENT;
                 ec->type_operator = EC_OPE_SUBST;
@@ -2461,7 +2463,7 @@ assignment
                 ec->child_len = 2;
                 $$ = ec;
         }
-        | __OPE_AND var_identifier %prec __OPE_ADDRESS {
+        | __OPE_AND unary_expression %prec __OPE_ADDRESS {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_UNARY;
                 ec->type_operator = EC_OPE_ADDRESS;
@@ -2942,11 +2944,11 @@ inline_assembler_statement
         : __STATE_ASM __LB string __RB  __DECL_END {
                 pA($3);
         }
-        | __STATE_ASM __LB string __OPE_SUBST expression __RB __DECL_END {
+        | __STATE_ASM __LB string __OPE_SUBST assignment_expression __RB __DECL_END {
                 translate_ec($5);
                 pop_stack($3);
         }
-        | __STATE_ASM __LB var_identifier __OPE_SUBST string __RB __DECL_END {
+        | __STATE_ASM __LB unary_expression __OPE_SUBST string __RB __DECL_END {
                 translate_ec($3);
                 push_stack($5);
                 __assignment_variable($3->vh);
