@@ -1804,7 +1804,8 @@ static void __define_user_function_end(const int32_t skip_label)
 #define EC_CAST                 6       /* 型変換 */
 #define EC_UNARY                7       /* 前置演算子による演算 */
 #define EC_POSTFIX              8       /* 後置演算子による演算 */
-#define EC_PRIMARY              9       /* 定数もしくは変数参照 */
+#define EC_PRIMARY              9       /* 参照演算 */
+#define EC_CONSTANT             10      /* 定数 */
 
 /* EC の演算子を示すフラグ
  */
@@ -1891,9 +1892,6 @@ void delete_ec(struct EC* ec)
  */
 void translate_ec(struct EC* ec)
 {
-        if (ec->type_expression == 0)
-                return;
-
         if (ec->type_expression == EC_ASSIGNMENT) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
                         translate_ec(ec->child_ptr[0]);
@@ -1978,12 +1976,6 @@ void translate_ec(struct EC* ec)
 
                         ec->vh->index_len = 0;
                         ec->vh->indirect_len = 0;
-                } else if (ec->vh->var->type & TYPE_INT) {
-                        pA("stack_socket = %d;", ec->const_int);
-                        push_stack("stack_socket");
-                } else if (ec->vh->var->type & TYPE_FLOAT) {
-                        pA("stack_socket = %d;", ec->const_int); /* 実際は固定小数なのでint */
-                        push_stack("stack_socket");
                 } else {
                         yyerror("system err: translate_ec(), EC_PRIMARY");
                 }
@@ -2115,6 +2107,19 @@ void translate_ec(struct EC* ec)
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
+        } else if (ec->type_expression == EC_CONSTANT) {
+                if (ec->vh->var->type & TYPE_INT) {
+                        pA("stack_socket = %d;", ec->const_int);
+                        push_stack("stack_socket");
+                } else if (ec->vh->var->type & TYPE_CHAR) {
+                        pA("stack_socket = %d;", ec->const_int); /* 実際はint */
+                        push_stack("stack_socket");
+                } else if (ec->vh->var->type & TYPE_FLOAT) {
+                        pA("stack_socket = %d;", ec->const_int); /* 実際は固定小数なのでint */
+                        push_stack("stack_socket");
+                } else {
+                        yyerror("system err: translate_ec(), EC_CONSTANT");
+                }
         } else {
                 yyerror("system err: translate_ec()");
         }
@@ -2181,12 +2186,14 @@ void translate_ec(struct EC* ec)
 %token __LB __RB __DECL_END __IDENTIFIER __DEFINE_LABEL __EOF
 %token __ARRAY_LB __ARRAY_RB
 %token __BLOCK_LB __BLOCK_RB
-%token __CONST_STRING __CONST_FLOAT __CONST_INTEGER __CONST_CHAR
 
-%type <ival> __CONST_INTEGER
-%type <fval> __CONST_FLOAT
-%type <sval> __CONST_CHAR
-%type <sval> __CONST_STRING const_strings
+%token __INTEGER_CONSTANT __CHARACTER_CONSTANT __FLOATING_CONSTANT
+%token __STRING_CONSTANT
+
+%type <ival> __INTEGER_CONSTANT
+%type <fval> __FLOATING_CONSTANT
+%type <ival> __CHARACTER_CONSTANT
+%type <sval> __STRING_CONSTANT string
 %type <sval> __IDENTIFIER __DEFINE_LABEL
 
 %type <ival> type_specifier type_specifier_unit
@@ -2194,7 +2201,8 @@ void translate_ec(struct EC* ec)
 
 %type <ec> expression expression_list
 %type <ec> var_identifier
-%type <ec> const_variable operation comparison assignment call_function
+%type <ec> operation comparison assignment call_function
+%type <ec> constant
 
 %type <ival_list> selection_if selection_if_v
 
@@ -2288,7 +2296,7 @@ expression_statement
 
 expression
         : operation
-        | const_variable
+        | constant
         | assignment
         | comparison
         | call_function
@@ -2376,11 +2384,11 @@ initializer_param
                 $$[0] = 0;
                 $$[1] = 0;
         }
-        | __ARRAY_LB __CONST_INTEGER __ARRAY_RB {
+        | __ARRAY_LB __INTEGER_CONSTANT __ARRAY_RB {
                 $$[0] = 1;
                 $$[1] = $2;
         }
-        | __ARRAY_LB __CONST_INTEGER __ARRAY_RB initializer_param {
+        | __ARRAY_LB __INTEGER_CONSTANT __ARRAY_RB initializer_param {
                 int32_t head = $4[0] + 1;
                 int32_t i;
                 for (i = 0; i < head; i++)
@@ -2482,36 +2490,6 @@ assignment
                 ec->type_operator = EC_OPE_ADDRESS;
                 ec->child_ptr[0] = $2;
                 ec->child_len = 1;
-                $$ = ec;
-        }
-        ;
-
-const_variable
-        : __CONST_INTEGER {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_PRIMARY;
-
-                ec->vh = new_varhandle();
-                ec->vh->var = new_var();
-                ec->vh->var->type = TYPE_SIGNED | TYPE_INT | TYPE_CONST;
-
-                ec->const_int = $1 << 16;
-                $$ = ec;
-        }
-        | __CONST_FLOAT {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_PRIMARY;
-
-                ec->vh = new_varhandle();
-                ec->vh->var = new_var();
-                ec->vh->var->type = TYPE_SIGNED | TYPE_INT | TYPE_CONST;
-
-                double a;
-                double b = modf($1, &a);
-                int32_t ia = ((int32_t)a) << 16;
-                int32_t ib = ((int32_t)(0x0000ffff * b)) & 0x0000ffff;
-                ec->const_int = ia | ib; /* 実際は固定小数なのでint */
-
                 $$ = ec;
         }
         ;
@@ -2887,7 +2865,7 @@ define_function
 
 initializer_struct_member
         : type_specifier pointer __IDENTIFIER initializer_param {
-                struct VarList* vl = new_varlist();
+                struct VarList* vl = malloc(sizeof(*vl));
                 vl->var[0] = structmemberspec_new($3, &($4[1]), $4[0], $2, $1);
                 vl->varlist_len = 1;
 
@@ -2938,26 +2916,67 @@ define_struct
         }
         ;
 
-const_strings
-        : __CONST_STRING
-        | const_strings __CONST_STRING {
+string
+        : __STRING_CONSTANT
+        | string __STRING_CONSTANT {
                 strcpy($$, $1);
                 strcat($$, $2);
         }
         ;
 
 inline_assembler_statement
-        : __STATE_ASM __LB const_strings __RB  __DECL_END {
+        : __STATE_ASM __LB string __RB  __DECL_END {
                 pA($3);
         }
-        | __STATE_ASM __LB const_strings __OPE_SUBST expression __RB __DECL_END {
+        | __STATE_ASM __LB string __OPE_SUBST expression __RB __DECL_END {
                 translate_ec($5);
                 pop_stack($3);
         }
-        | __STATE_ASM __LB var_identifier __OPE_SUBST const_strings __RB __DECL_END {
+        | __STATE_ASM __LB var_identifier __OPE_SUBST string __RB __DECL_END {
                 translate_ec($3);
                 push_stack($5);
                 __assignment_variable($3->vh);
+        }
+        ;
+
+constant
+        : __INTEGER_CONSTANT {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CONSTANT;
+
+                ec->vh = new_varhandle();
+                ec->vh->var = new_var();
+                ec->vh->var->type = TYPE_SIGNED | TYPE_INT | TYPE_CONST;
+
+                ec->const_int = $1 << 16;
+                $$ = ec;
+        }
+        | __CHARACTER_CONSTANT {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CONSTANT;
+
+                ec->vh = new_varhandle();
+                ec->vh->var = new_var();
+                ec->vh->var->type = TYPE_SIGNED | TYPE_CHAR | TYPE_CONST;
+
+                ec->const_int = $1 << 16;
+                $$ = ec;
+        }
+        | __FLOATING_CONSTANT {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CONSTANT;
+
+                ec->vh = new_varhandle();
+                ec->vh->var = new_var();
+                ec->vh->var->type = TYPE_SIGNED | TYPE_FLOAT | TYPE_CONST;
+
+                double a;
+                double b = modf($1, &a);
+                int32_t ia = ((int32_t)a) << 16;
+                int32_t ib = ((int32_t)(0x0000ffff * b)) & 0x0000ffff;
+                ec->const_int = ia | ib; /* 実際は固定小数なのでint */
+
+                $$ = ec;
         }
         ;
 
@@ -3345,7 +3364,7 @@ __postfix_expression
 __primary_expression
         : __identifier
         | __constant
-        | __CONST_STRING
+        | __STRING_CONSTANT
         | __LB __expression __RB
         ;
 
@@ -3356,9 +3375,9 @@ __argument_expression_list
         ;
 
 __constant
-        : __CONST_INTEGER
-        | __CONST_CHAR
-        | __CONST_FLOAT
+        : __INTEGER_CONSTANT
+        | __CHARACTER_CONSTANT
+        | __FLOATING_CONSTANT
         | __enumeration_constant
         ;
 

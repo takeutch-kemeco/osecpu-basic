@@ -386,8 +386,8 @@ static int32_t cur_ifdef_skip_depth;
                 cur_ifdef_skip_depth--;
         }
 }
-<pre_process_ifdef_skip>"#ifdef" {printf("\nQQQQQQ\n\n"); cur_ifdef_skip_depth++;}
-<pre_process_ifdef_skip>"#ifndef" {printf("\nQQQQQQ\n\n");cur_ifdef_skip_depth++;}
+<pre_process_ifdef_skip>"#ifdef" {cur_ifdef_skip_depth++;}
+<pre_process_ifdef_skip>"#ifndef" {cur_ifdef_skip_depth++;}
 <pre_process_ifdef_skip>[\n] {linenumber++;}
 <pre_process_ifdef_skip>. {}
 
@@ -417,38 +417,38 @@ static int32_t cur_ifdef_skip_depth;
 <main_process>["][^"]*["] {
         /* const string */
         trim_const_string(yylval.sval, yytext);
-        return(__CONST_STRING);
+        return(__STRING_CONSTANT);
 }
 
 <main_process>['][^']['] {
         /* const char */
         yylval.sval[0] = yytext[0];
         yylval.sval[1] = '\0';
-        return(__CONST_CHAR);
+        return(__CHARACTER_CONSTANT);
 }
 
 <main_process>[0][0-7]+ {
         /* 8進数の場合 */
         yylval.ival = strtol(yytext, NULL, 8);
-        return(__CONST_INTEGER);
+        return(__INTEGER_CONSTANT);
 }
 
 <main_process>[0][xX][0-9a-fA-F]+ {
         /* 16進数の場合 */
         yylval.ival = strtol(yytext, NULL, 16);
-        return(__CONST_INTEGER);
+        return(__INTEGER_CONSTANT);
 }
 
 <main_process>([0]|[1-9][0-9]*) {
         /* 10進数の場合 */
         yylval.ival = strtol(yytext, NULL, 10);
-        return(__CONST_INTEGER);
+        return(__INTEGER_CONSTANT);
 }
 
 <main_process>[0-9]+[.][0-9]+ {
         /* 実数の場合 */
         yylval.fval = atof(yytext);
-        return(__CONST_FLOAT);
+        return(__FLOATING_CONSTANT);
 }
 
 <main_process>"+"       return(__OPE_ADD);
