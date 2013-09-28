@@ -1858,9 +1858,6 @@ struct EC {
         struct VarHandle* vh;
         uint32_t const_int;
         double const_float;
-        uint32_t type_specifier;
-        uint32_t type_qualifier;
-        uint32_t storage_class;
         uint32_t type_operator;
         uint32_t type_expression;
         struct EC* child_ptr[EC_CHILD_MAX];
@@ -1875,9 +1872,6 @@ struct EC* new_ec(void)
         if (ec == NULL)
                 yyerror("system err: new_ec(), malloc()");
 
-        ec->type_specifier = 0;
-        ec->type_qualifier = 0;
-        ec->storage_class = 0;
         ec->type_operator = 0;
         ec->type_expression = 0;
         ec->child_len = 0;
@@ -1984,10 +1978,10 @@ void translate_ec(struct EC* ec)
 
                         ec->vh->index_len = 0;
                         ec->vh->indirect_len = 0;
-                } else if (ec->type_specifier == (TYPE_SIGNED | TYPE_INT)) {
+                } else if (ec->vh->var->type & TYPE_INT) {
                         pA("stack_socket = %d;", ec->const_int);
                         push_stack("stack_socket");
-                } else if (ec->type_specifier == TYPE_FLOAT) {
+                } else if (ec->vh->var->type & TYPE_FLOAT) {
                         pA("stack_socket = %d;", ec->const_int); /* 実際は固定小数なのでint */
                         push_stack("stack_socket");
                 } else {
@@ -2496,16 +2490,21 @@ const_variable
         : __CONST_INTEGER {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_PRIMARY;
-                ec->type_specifier = TYPE_SIGNED | TYPE_INT;
-                ec->type_qualifier = TYPE_CONST;
+
+                ec->vh = new_varhandle();
+                ec->vh->var = new_var();
+                ec->vh->var->type = TYPE_SIGNED | TYPE_INT | TYPE_CONST;
+
                 ec->const_int = $1 << 16;
                 $$ = ec;
         }
         | __CONST_FLOAT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_PRIMARY;
-                ec->type_specifier = TYPE_FLOAT;
-                ec->type_qualifier = TYPE_CONST;
+
+                ec->vh = new_varhandle();
+                ec->vh->var = new_var();
+                ec->vh->var->type = TYPE_SIGNED | TYPE_INT | TYPE_CONST;
 
                 double a;
                 double b = modf($1, &a);
