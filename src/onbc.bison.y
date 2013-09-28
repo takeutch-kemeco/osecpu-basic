@@ -2199,6 +2199,8 @@ void translate_ec(struct EC* ec)
 %type <ec> expression expression_list
 %type <ec> var_identifier
 %type <ec> operation comparison assignment call_function
+
+%type <ec> postfix_expression
 %type <ec> primary_expression
 %type <ec> constant
 
@@ -2425,22 +2427,13 @@ initializer
         ;
 
 var_identifier
-        : primary_expression
+        : postfix_expression
         | __OPE_MUL var_identifier %prec __OPE_POINTER {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_UNARY;
                 ec->type_operator = EC_OPE_POINTER;
                 ec->child_ptr[0] = $2;
                 ec->child_len = 1;
-                $$ = ec;
-        }
-        | var_identifier __ARRAY_LB expression __ARRAY_RB {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_POSTFIX;
-                ec->type_operator = EC_OPE_ARRAY;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
                 $$ = ec;
         }
         ;
@@ -2904,6 +2897,19 @@ define_struct
         {
                 structspec_set_iden($4, $2);
                 structspec_ptrlist_add($4);
+        }
+        ;
+
+postfix_expression
+        : primary_expression
+        | postfix_expression __ARRAY_LB expression __ARRAY_RB {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_POSTFIX;
+                ec->type_operator = EC_OPE_ARRAY;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         ;
 
