@@ -2887,7 +2887,7 @@ define_function
 
 initializer_struct_member
         : type_specifier pointer __IDENTIFIER initializer_param {
-                struct VarList* vl = malloc(sizeof(*vl));
+                struct VarList* vl = new_varlist();
                 vl->var[0] = structmemberspec_new($3, &($4[1]), $4[0], $2, $1);
                 vl->varlist_len = 1;
 
