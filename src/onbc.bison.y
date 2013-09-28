@@ -1968,14 +1968,11 @@ void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
-                        ec->vh = malloc(sizeof(*(ec->vh)));
-
+                        ec->vh = new_varhandle();
                         ec->vh->var = varlist_search(ec->iden);
                         if (ec->vh->var == NULL)
                                 yyerror("syntax err: 未定義の変数を参照しようとしました");
 
-                        ec->vh->index_len = 0;
-                        ec->vh->indirect_len = 0;
                 } else {
                         yyerror("system err: translate_ec(), EC_PRIMARY");
                 }
@@ -2202,6 +2199,7 @@ void translate_ec(struct EC* ec)
 %type <ec> expression expression_list
 %type <ec> var_identifier
 %type <ec> operation comparison assignment call_function
+%type <ec> primary_expression
 %type <ec> constant
 
 %type <ival_list> selection_if selection_if_v
@@ -2427,14 +2425,7 @@ initializer
         ;
 
 var_identifier
-        : __IDENTIFIER {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_PRIMARY;
-                ec->type_operator = EC_OPE_VARIABLE;
-                strcpy(ec->iden, $1);
-                ec->child_len = 0;
-                $$ = ec;
-        }
+        : primary_expression
         | __OPE_MUL var_identifier %prec __OPE_POINTER {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_UNARY;
@@ -2914,6 +2905,18 @@ define_struct
                 structspec_set_iden($4, $2);
                 structspec_ptrlist_add($4);
         }
+        ;
+
+primary_expression
+        : __IDENTIFIER {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_PRIMARY;
+                ec->type_operator = EC_OPE_VARIABLE;
+                strcpy(ec->iden, $1);
+                ec->child_len = 0;
+                $$ = ec;
+        }
+        | constant
         ;
 
 string
