@@ -156,11 +156,14 @@ static void pA_nl(const char* fmt, ...)
 
 /* 記憶領域クラス
  */
+#define TYPE_STACK      (1 << 23)
 #define TYPE_AUTO       (1 << 24)
 #define TYPE_REGISTER   (1 << 25)
 #define TYPE_STATIC     (1 << 26)
 #define TYPE_EXTERN     (1 << 27)
 #define TYPE_TYPEDEF    (1 << 28)
+#define TYPE_LITERAL    (1 << 29)
+#define TYPE_FUNCTION   (1 << 30)
 
 /* IDENTIFIER 文字列用のスタック */
 #define IDENLIST_STR_LEN 0x100
@@ -238,6 +241,7 @@ struct Var {
         int32_t dim_len;        /* 配列の次元数 */
         int32_t indirect_len;   /* 間接参照の深さ。直接参照(非ポインター型)ならば0 */
         int32_t type;           /* specifier | qualifier | storage_class による変数属性 */
+        void* const_variable;   /* 変数が定数の場合の値 */
 };
 
 /* 普遍的な変数スペックと、その変数への動的なアクセス方法をパックしたハンドル
@@ -261,6 +265,7 @@ struct Var* new_var(void)
         var->dim_len = 0;
         var->indirect_len = 0;
         var->type = TYPE_SIGNED | TYPE_INT;     /* デフォルトは符号付きint */
+        var->const_variable = NULL;
 
         return var;
 }
@@ -1519,6 +1524,60 @@ static void __func_logical_rshift(void)
         endF();
 }
 
+/* 比較命令 == を出力する
+ * fixL >> fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_eq(void)
+{
+        pA("if (fixL == fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+}
+
+/* 比較命令 != を出力する
+ * fixL >> fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_ne(void)
+{
+        pA("if (fixL != fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+}
+
+/* 比較命令 < を出力する
+ * fixL >> fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_lt(void)
+{
+        pA("if (fixL < fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+}
+
+/* 比較命令 > を出力する
+ * fixL >> fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_gt(void)
+{
+        pA("if (fixL > fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+}
+
+/* 比較命令 <= を出力する
+ * fixL >> fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_le(void)
+{
+        pA("if (fixL <= fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+}
+
+/* 比較命令 >= を出力する
+ * fixL >> fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_ge(void)
+{
+        pA("if (fixL >= fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+}
+
 /* 変数インスタンス関連
  */
 
@@ -1638,22 +1697,65 @@ static void __assignment_variable(struct VarHandle* vh)
 /* 変数リード関連
  */
 
+static void __read_function_ptr(struct VarHandle* vh)
+{
+        if ((vh->var->type & TYPE_FUNCTION) == 0)
+                yyerror("system err: __read_function_ptr()");
+
+        /* ラベルリストに名前が存在しなければエラー */
+        if (labellist_search_unsafe(vh->var->iden) == -1)
+                yyerror("syntax err: 未定義の関数のアドレスを得ようとしました");
+
+        pA("stack_socket = %d;", labellist_search(vh->var->iden));
+        push_stack("stack_socket");
+}
+
 static void __read_variable_ptr(struct VarHandle* vh)
 {
-        __get_variable_concrete_address(vh);
+        /* 定数リテラルの場合はアドレスを読むのは不正 */
+        if (vh->var->type & TYPE_LITERAL) {
+                yyerror("syntax err: 定数リテラルのアドレスを得ようとしました");
 
-        /* heap_base自体を（アドレス自体を）スタックにプッシュする */
-        push_stack("heap_base");
+        /* 関数アドレスの場合 */
+        } else if (vh->var->type & TYPE_FUNCTION) {
+                __read_function_ptr(vh);
+
+        /* 変数アドレスの場合 */
+        } else {
+                __get_variable_concrete_address(vh);
+                push_stack("heap_base");
+        }
+}
+
+static void __read_literal(struct VarHandle* vh)
+{
+        if ((vh->var->type & TYPE_LITERAL) == 0)
+                yyerror("system err: __read_literal()");
+
+        if (vh->var->type & TYPE_INT)
+                pA("stack_socket = %d;", *((int*)(vh->var->const_variable)));
+        else if (vh->var->type & TYPE_CHAR)
+                pA("stack_socket = %d;", *((char*)(vh->var->const_variable)));
+        else if (vh->var->type & TYPE_FLOAT)
+                pA("stack_socket = %d;", *((float*)(vh->var->const_variable)));
+
+        push_stack("stack_socket");
 }
 
 static void __read_variable(struct VarHandle* vh)
 {
-        __get_variable_concrete_address(vh);
+        if (vh->var->type & TYPE_LITERAL) {
+                __read_literal(vh);
+        } else if (vh->var->type & TYPE_FUNCTION) {
+                /* 何もしない */
+        } else {
+                __get_variable_concrete_address(vh);
 
-        /* アドレスから読んで結果をスタックへプッシュ
-         */
-        read_mem("stack_socket", "heap_base");
-        push_stack("stack_socket");
+                /* アドレスから読んで結果をスタックへプッシュ
+                 */
+                read_mem("stack_socket", "heap_base");
+                push_stack("stack_socket");
+        }
 }
 
 /* ユーザー定義関数関連
@@ -1798,10 +1900,8 @@ static void __define_user_function_end(const int32_t skip_label)
 /* EC の演算種類を示すフラグ
  */
 #define EC_ASSIGNMENT           1       /* 代入 */
-#define EC_COMPARISON           2       /* 比較 */
 #define EC_CONDITIONAL          3       /* (a == b) ? x : y; 構文による分岐 */
 #define EC_CALC                 5       /* 二項演算。論理演算(a || b など)も含む */
-#define EC_CAST                 6       /* 型変換 */
 #define EC_UNARY                7       /* 前置演算子による演算 */
 #define EC_POSTFIX              8       /* 後置演算子による演算 */
 #define EC_PRIMARY              9       /* 参照演算 */
@@ -1845,9 +1945,6 @@ static void __define_user_function_end(const int32_t skip_label)
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
  *
- * type_specifier: 型
- * type_qualifier: コンパイル時の補助情報, const | volatile
- * strage_class: 記憶領域のタイプ, auto | register | static | extern | typedef
  * type_operator: 演算子
  * type_expression: 演算種類
  * child_ptr[]: この EC をルートとして広がる枝ECへのポインター
@@ -1857,8 +1954,6 @@ static void __define_user_function_end(const int32_t skip_label)
 struct EC {
         char iden[IDENLIST_STR_LEN];
         struct VarHandle* vh;
-        uint32_t const_int;
-        double const_float;
         uint32_t type_operator;
         uint32_t type_expression;
         struct EC* child_ptr[EC_CHILD_MAX];
@@ -1906,12 +2001,15 @@ void translate_ec(struct EC* ec)
                         else
                                 __read_variable_ptr(ec->vh);
 
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_SUBST) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
                         ec->vh = ec->child_ptr[0]->vh;
                         __assignment_variable(ec->vh);
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_LIST) {
                         int32_t i;
                         for (i = 0; i < ec->child_len; i++) {
@@ -1919,52 +2017,6 @@ void translate_ec(struct EC* ec)
                         }
                 } else {
                         yyerror("system err: translate_ec(), EC_ASSIGNMENT");
-                }
-        } else if (ec->type_expression == EC_COMPARISON) {
-                if (ec->type_operator == EC_OPE_EQ) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        read_eoe_arg();
-                        pA("if (fixL == fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                        push_stack("stack_socket");
-                } else if (ec->type_operator == EC_OPE_NE) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        read_eoe_arg();
-                        pA("if (fixL != fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                        push_stack("stack_socket");
-                } else if (ec->type_operator == EC_OPE_LT) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        read_eoe_arg();
-                        pA("if (fixL < fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                        push_stack("stack_socket");
-                } else if (ec->type_operator == EC_OPE_LE) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        read_eoe_arg();
-                        pA("if (fixL <= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                        push_stack("stack_socket");
-                } else if (ec->type_operator == EC_OPE_GT) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        read_eoe_arg();
-                        pA("if (fixL > fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                        push_stack("stack_socket");
-                } else if (ec->type_operator == EC_OPE_GE) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        read_eoe_arg();
-                        pA("if (fixL >= fixR) {stack_socket = 0x00010000;} else {stack_socket = 0;}");
-                        push_stack("stack_socket");
-                } else {
-                        yyerror("system err: translate_ec(), EC_COMPARISON");
                 }
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
@@ -1981,72 +2033,178 @@ void translate_ec(struct EC* ec)
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         read_eoe_arg();
                         __func_add();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_SUB) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         read_eoe_arg();
                         __func_sub();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_MUL) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         read_eoe_arg();
                         __func_mul();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_DIV) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         read_eoe_arg();
                         __func_div();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_MOD) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         read_eoe_arg();
                         __func_mod();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_OR) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         read_eoe_arg();
                         __func_or();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_AND) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         read_eoe_arg();
                         __func_and();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_XOR) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         read_eoe_arg();
                         __func_xor();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_LSHIFT) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         read_eoe_arg();
                         __func_lshift();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_RSHIFT) {
                         translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         read_eoe_arg();
                         __func_logical_rshift();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
+                } else if (ec->type_operator == EC_OPE_EQ) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+
+                        read_eoe_arg();
+                        __func_eq();
+                        push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
+                } else if (ec->type_operator == EC_OPE_NE) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+
+                        read_eoe_arg();
+                        __func_ne();
+                        push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
+                } else if (ec->type_operator == EC_OPE_LT) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+
+                        read_eoe_arg();
+                        __func_lt();
+                        push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
+                } else if (ec->type_operator == EC_OPE_LE) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+
+                        read_eoe_arg();
+                        __func_le();
+                        push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
+                } else if (ec->type_operator == EC_OPE_GT) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+
+                        read_eoe_arg();
+                        __func_gt();
+                        push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
+                } else if (ec->type_operator == EC_OPE_GE) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
+
+                        read_eoe_arg();
+                        __func_ge();
+                        push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else {
                         yyerror("system err: translate_ec(), EC_CALC");
                 }
@@ -2054,21 +2212,33 @@ void translate_ec(struct EC* ec)
                 if (ec->type_operator == EC_OPE_INV) {
                         translate_ec(ec->child_ptr[0]);
 
+                        ec->vh = ec->child_ptr[0]->vh;
+
                         pop_stack("fixL");
                         __func_invert();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_NOT) {
                         translate_ec(ec->child_ptr[0]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
 
                         pop_stack("fixL");
                         __func_not();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_SUB) {
                         translate_ec(ec->child_ptr[0]);
+
+                        ec->vh = ec->child_ptr[0]->vh;
 
                         pop_stack("fixL");
                         __func_minus();
                         push_stack("fixA");
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else if (ec->type_operator == EC_OPE_POINTER) {
                         translate_ec(ec->child_ptr[0]);
 
@@ -2079,6 +2249,8 @@ void translate_ec(struct EC* ec)
 
                         ec->vh = ec->child_ptr[0]->vh;
                         __read_variable_ptr(ec->vh);
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else {
                         yyerror("system err: translate_ec(), EC_UNARY");
                 }
@@ -2100,23 +2272,15 @@ void translate_ec(struct EC* ec)
                         push_stack("stack_frame");
 
                         translate_ec(ec->child_ptr[0]);
-                        __call_user_function(ec->iden);
+
+                        __call_user_function(ec->vh->var->iden);
+
+                        ec->vh->var->type |= TYPE_STACK;
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
         } else if (ec->type_expression == EC_CONSTANT) {
-                if (ec->vh->var->type & TYPE_INT) {
-                        pA("stack_socket = %d;", ec->const_int);
-                        push_stack("stack_socket");
-                } else if (ec->vh->var->type & TYPE_CHAR) {
-                        pA("stack_socket = %d;", ec->const_int); /* 実際はint */
-                        push_stack("stack_socket");
-                } else if (ec->vh->var->type & TYPE_FLOAT) {
-                        pA("stack_socket = %d;", ec->const_int); /* 実際は固定小数なのでint */
-                        push_stack("stack_socket");
-                } else {
-                        yyerror("system err: translate_ec(), EC_CONSTANT");
-                }
+                /* 何もしない */
         } else {
                 yyerror("system err: translate_ec()");
         }
@@ -2197,11 +2361,21 @@ void translate_ec(struct EC* ec)
 %type <ival> pointer
 
 %type <ec> expression expression_list
-%type <ec> var_identifier
-%type <ec> operation comparison call_function
-
 %type <ec> assignment_expression
 
+%type <ec> conditional_expression
+%type <ec> logical_or_expression
+%type <ec> logical_and_expression
+%type <ec> inclusive_or_expression
+%type <ec> exclusive_or_expression
+%type <ec> and_expression
+%type <ec> equality_expression
+%type <ec> relational_expression
+%type <ec> shift_expression
+%type <ec> additive_expression
+%type <ec> multiplicative_expression
+
+%type <ec> cast_expression
 %type <ec> unary_expression
 %type <ec> postfix_expression
 %type <ec> primary_expression
@@ -2298,11 +2472,7 @@ expression_statement
         ;
 
 expression
-        : operation
-        | constant
-        | assignment_expression
-        | comparison
-        | call_function
+        : assignment_expression
         ;
 
 expression_list
@@ -2429,24 +2599,8 @@ initializer
         }
         ;
 
-var_identifier
-        : unary_expression
-        ;
-
-call_function
-        : __IDENTIFIER __LB expression_list __RB {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_POSTFIX;
-                ec->type_operator = EC_OPE_FUNCTION;
-                strcpy(ec->iden, $1);
-                ec->child_ptr[0] = $3;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        ;
-
 assignment_expression
-        : var_identifier {
+        : conditional_expression {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_ASSIGNMENT;
                 ec->type_operator = EC_OPE_VARIABLE;
@@ -2454,198 +2608,10 @@ assignment_expression
                 ec->child_len = 1;
                 $$ = ec;
         }
-        | assignment_expression __OPE_SUBST expression {
+        | unary_expression __OPE_SUBST assignment_expression {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_ASSIGNMENT;
                 ec->type_operator = EC_OPE_SUBST;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | __OPE_AND unary_expression %prec __OPE_ADDRESS {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_UNARY;
-                ec->type_operator = EC_OPE_ADDRESS;
-                ec->child_ptr[0] = $2;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        ;
-
-operation
-        : expression __OPE_ADD expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CALC;
-                ec->type_operator = EC_OPE_ADD;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_SUB expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CALC;
-                ec->type_operator = EC_OPE_SUB;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_MUL expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CALC;
-                ec->type_operator = EC_OPE_MUL;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_DIV expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CALC;
-                ec->type_operator = EC_OPE_DIV;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_MOD expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CALC;
-                ec->type_operator = EC_OPE_MOD;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_OR expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CALC;
-                ec->type_operator = EC_OPE_OR;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_AND expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CALC;
-                ec->type_operator = EC_OPE_AND;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_XOR expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CALC;
-                ec->type_operator = EC_OPE_XOR;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | __OPE_INVERT expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_UNARY;
-                ec->type_operator = EC_OPE_INV;
-                ec->child_ptr[0] = $2;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        | __OPE_NOT expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_UNARY;
-                ec->type_operator = EC_OPE_NOT;
-                ec->child_ptr[0] = $2;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        | expression __OPE_LSHIFT expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CALC;
-                ec->type_operator = EC_OPE_LSHIFT;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_RSHIFT expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CALC;
-                ec->type_operator = EC_OPE_RSHIFT;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | __OPE_ADD expression %prec __OPE_PLUS {
-                $$ = $2;
-        }
-        | __OPE_SUB expression %prec __OPE_MINUS {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_UNARY;
-                ec->type_operator = EC_OPE_SUB;
-                ec->child_ptr[0] = $2;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        | __LB expression __RB {
-                $$ = $2;
-        }
-        ;
-
-comparison
-        : expression __OPE_EQ expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_COMPARISON;
-                ec->type_operator = EC_OPE_EQ;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_NE expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_COMPARISON;
-                ec->type_operator = EC_OPE_NE;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_LT expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_COMPARISON;
-                ec->type_operator = EC_OPE_LT;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_LE expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_COMPARISON;
-                ec->type_operator = EC_OPE_LE;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_GT expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_COMPARISON;
-                ec->type_operator = EC_OPE_GT;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        | expression __OPE_GE expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_COMPARISON;
-                ec->type_operator = EC_OPE_GE;
                 ec->child_ptr[0] = $1;
                 ec->child_ptr[1] = $3;
                 ec->child_len = 2;
@@ -2895,12 +2861,239 @@ define_struct
         }
         ;
 
+conditional_expression
+        : logical_or_expression
+        ;
+
+logical_or_expression
+        : logical_and_expression
+        ;
+
+logical_and_expression
+        : inclusive_or_expression
+        ;
+
+inclusive_or_expression
+        : exclusive_or_expression
+        | inclusive_or_expression __OPE_OR exclusive_or_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_OR;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+exclusive_or_expression
+        : and_expression
+        | exclusive_or_expression __OPE_XOR and_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_XOR;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+and_expression
+        : equality_expression
+        | and_expression __OPE_AND equality_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_AND;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+equality_expression
+        : relational_expression
+        | equality_expression __OPE_EQ relational_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_EQ;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        | equality_expression __OPE_NE relational_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_NE;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+relational_expression
+        : shift_expression
+        | relational_expression __OPE_LT shift_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_LT;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        | relational_expression __OPE_GT shift_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_GT;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        | relational_expression __OPE_LE shift_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_LE;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        | relational_expression __OPE_GE shift_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_GE;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+shift_expression
+        : additive_expression
+        | shift_expression __OPE_LSHIFT additive_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_LSHIFT;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        | shift_expression __OPE_RSHIFT additive_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_RSHIFT;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+additive_expression
+        : multiplicative_expression
+        | additive_expression __OPE_ADD multiplicative_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_ADD;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        | additive_expression __OPE_SUB multiplicative_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_SUB;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+multiplicative_expression
+        : cast_expression
+        | multiplicative_expression __OPE_MUL cast_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_MUL;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        | multiplicative_expression __OPE_DIV cast_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_DIV;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        | multiplicative_expression __OPE_MOD cast_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CALC;
+                ec->type_operator = EC_OPE_MOD;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+cast_expression
+        : unary_expression
+        ;
+
 unary_expression
         : postfix_expression
+        | __OPE_AND unary_expression %prec __OPE_ADDRESS {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_UNARY;
+                ec->type_operator = EC_OPE_ADDRESS;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
+        }
         | __OPE_MUL unary_expression %prec __OPE_POINTER {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_UNARY;
                 ec->type_operator = EC_OPE_POINTER;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | __OPE_ADD cast_expression %prec __OPE_PLUS {
+                $$ = $2;
+        }
+        | __OPE_SUB cast_expression %prec __OPE_MINUS {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_UNARY;
+                ec->type_operator = EC_OPE_SUB;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | __OPE_INVERT cast_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_UNARY;
+                ec->type_operator = EC_OPE_INV;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | __OPE_NOT cast_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_UNARY;
+                ec->type_operator = EC_OPE_NOT;
                 ec->child_ptr[0] = $2;
                 ec->child_len = 1;
                 $$ = ec;
@@ -2918,6 +3111,20 @@ postfix_expression
                 ec->child_len = 2;
                 $$ = ec;
         }
+        | __IDENTIFIER __LB expression_list __RB {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_POSTFIX;
+                ec->type_operator = EC_OPE_FUNCTION;
+
+                ec->vh = new_varhandle();
+                ec->vh->var = new_var();
+                ec->vh->var->type = TYPE_FUNCTION | TYPE_SIGNED | TYPE_INT;
+                strcpy(ec->vh->var->iden, $1);
+
+                ec->child_ptr[0] = $3;
+                ec->child_len = 1;
+                $$ = ec;
+        }
         ;
 
 primary_expression
@@ -2930,6 +3137,9 @@ primary_expression
                 $$ = ec;
         }
         | constant
+        | __LB expression __RB {
+                $$ = $2;
+        }
         ;
 
 string
@@ -2952,6 +3162,8 @@ inline_assembler_statement
                 translate_ec($3);
                 push_stack($5);
                 __assignment_variable($3->vh);
+
+                pop_stack_dummy();
         }
         ;
 
@@ -2962,9 +3174,11 @@ constant
 
                 ec->vh = new_varhandle();
                 ec->vh->var = new_var();
-                ec->vh->var->type = TYPE_SIGNED | TYPE_INT | TYPE_CONST;
+                ec->vh->var->type = TYPE_SIGNED | TYPE_INT | TYPE_LITERAL;
 
-                ec->const_int = $1 << 16;
+                ec->vh->var->const_variable = malloc(sizeof(int));
+                *((int*)(ec->vh->var->const_variable)) = $1 << 16;
+
                 $$ = ec;
         }
         | __CHARACTER_CONSTANT {
@@ -2973,9 +3187,11 @@ constant
 
                 ec->vh = new_varhandle();
                 ec->vh->var = new_var();
-                ec->vh->var->type = TYPE_SIGNED | TYPE_CHAR | TYPE_CONST;
+                ec->vh->var->type = TYPE_SIGNED | TYPE_CHAR |TYPE_LITERAL;
 
-                ec->const_int = $1 << 16;
+                ec->vh->var->const_variable = malloc(sizeof(int));
+                *((int*)(ec->vh->var->const_variable)) = $1 << 16;
+
                 $$ = ec;
         }
         | __FLOATING_CONSTANT {
@@ -2984,13 +3200,15 @@ constant
 
                 ec->vh = new_varhandle();
                 ec->vh->var = new_var();
-                ec->vh->var->type = TYPE_SIGNED | TYPE_FLOAT | TYPE_CONST;
+                ec->vh->var->type = TYPE_FLOAT | TYPE_LITERAL;
 
                 double a;
                 double b = modf($1, &a);
                 int32_t ia = ((int32_t)a) << 16;
                 int32_t ib = ((int32_t)(0x0000ffff * b)) & 0x0000ffff;
-                ec->const_int = ia | ib; /* 実際は固定小数なのでint */
+
+                ec->vh->var->const_variable = malloc(sizeof(int));
+                *((int*)(ec->vh->var->const_variable)) = ia | ib; /* 実際は固定小数なのでint */
 
                 $$ = ec;
         }
