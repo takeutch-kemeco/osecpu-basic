@@ -1401,37 +1401,37 @@ static void __func_minus_float(void)
 /* レガシーアキュムレーター
  */
 
-static void __func_add(void)
+static void __func_add(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         __func_add_float();
 }
 
-static void __func_sub(void)
+static void __func_sub(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         __func_sub_float();
 }
 
-static void __func_mul_inline(void)
+static void __func_mul_inline(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         __func_mul_inline_float();
 }
 
-static void __func_mul(void)
+static void __func_mul(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         __func_mul_float();
 }
 
-static void __func_div(void)
+static void __func_div(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         __func_div_float();
 }
 
-static void __func_mod(void)
+static void __func_mod(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         __func_mod_float();
 }
 
-static void __func_minus(void)
+static void __func_minus(struct VarHandle* vh0)
 {
         __func_minus_float();
 }
@@ -1440,7 +1440,7 @@ static void __func_minus(void)
  * fixL & fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_and(void)
+static void __func_and(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         pA("fixA = fixL & fixR;");
 }
@@ -1449,7 +1449,7 @@ static void __func_and(void)
  * fixL | fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_or(void)
+static void __func_or(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         pA("fixA = fixL | fixR;");
 }
@@ -1458,7 +1458,7 @@ static void __func_or(void)
  * fixL ^ fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_xor(void)
+static void __func_xor(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         pA("fixA = fixL ^ fixR;");
 }
@@ -1467,7 +1467,7 @@ static void __func_xor(void)
  * fixL -> fixA
  * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_invert(void)
+static void __func_invert(struct VarHandle* vh0)
 {
         pA("fixA = fixL ^ (-1);");
 }
@@ -1478,7 +1478,7 @@ static void __func_invert(void)
  *
  * 真（非0）ならば 0 を返し、偽(0)ならば 1 を返す。
  */
-static void __func_not(void)
+static void __func_not(struct VarHandle* vh0)
 {
         pA("if (fixL == 0) {fixA = 1 << 16;} else {fixA = 0;}");
 }
@@ -1487,7 +1487,7 @@ static void __func_not(void)
  * fixL << fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_lshift(void)
+static void __func_lshift(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         pA("fixR >>= 16;");
         pA("fixA = fixL << fixR;");
@@ -1499,7 +1499,7 @@ static void __func_lshift(void)
  *
  * 算術シフトとして動作する。
  */
-static void __func_arithmetic_rshift(void)
+static void __func_arithmetic_rshift(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         beginF();
 
@@ -1515,7 +1515,7 @@ static void __func_arithmetic_rshift(void)
  *
  * 論理シフトとして動作する。
  */
-static void __func_logical_rshift(void)
+static void __func_logical_rshift(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         beginF();
 
@@ -1529,7 +1529,7 @@ static void __func_logical_rshift(void)
  * fixL >> fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_eq(void)
+static void __func_eq(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         pA("if (fixL == fixR) {fixA = 0x00010000;} else {fixA = 0;}");
 }
@@ -1538,7 +1538,7 @@ static void __func_eq(void)
  * fixL >> fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_ne(void)
+static void __func_ne(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         pA("if (fixL != fixR) {fixA = 0x00010000;} else {fixA = 0;}");
 }
@@ -1547,7 +1547,7 @@ static void __func_ne(void)
  * fixL >> fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_lt(void)
+static void __func_lt(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         pA("if (fixL < fixR) {fixA = 0x00010000;} else {fixA = 0;}");
 }
@@ -1556,7 +1556,7 @@ static void __func_lt(void)
  * fixL >> fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_gt(void)
+static void __func_gt(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         pA("if (fixL > fixR) {fixA = 0x00010000;} else {fixA = 0;}");
 }
@@ -1565,7 +1565,7 @@ static void __func_gt(void)
  * fixL >> fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_le(void)
+static void __func_le(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         pA("if (fixL <= fixR) {fixA = 0x00010000;} else {fixA = 0;}");
 }
@@ -1574,7 +1574,7 @@ static void __func_le(void)
  * fixL >> fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
  */
-static void __func_ge(void)
+static void __func_ge(struct VarHandle* vh0, struct VarHandle* vh1)
 {
         pA("if (fixL >= fixR) {fixA = 0x00010000;} else {fixA = 0;}");
 }
@@ -2054,67 +2054,67 @@ static void translate_ec_b(struct EC* ec)
         } else if (ec->type_expression == EC_CALC) {
                 if (ec->type_operator == EC_OPE_ADD) {
                         read_eoe_arg();
-                        __func_add();
+                        __func_add(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_SUB) {
                         read_eoe_arg();
-                        __func_sub();
+                        __func_sub(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_MUL) {
                         read_eoe_arg();
-                        __func_mul();
+                        __func_mul(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_DIV) {
                         read_eoe_arg();
-                        __func_div();
+                        __func_div(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_MOD) {
                         read_eoe_arg();
-                        __func_mod();
+                        __func_mod(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_OR) {
                         read_eoe_arg();
-                        __func_or();
+                        __func_or(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_AND) {
                         read_eoe_arg();
-                        __func_and();
+                        __func_and(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_XOR) {
                         read_eoe_arg();
-                        __func_xor();
+                        __func_xor(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_LSHIFT) {
                         read_eoe_arg();
-                        __func_lshift();
+                        __func_lshift(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_RSHIFT) {
                         read_eoe_arg();
-                        __func_logical_rshift();
+                        __func_logical_rshift(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_EQ) {
                         read_eoe_arg();
-                        __func_eq();
+                        __func_eq(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_NE) {
                         read_eoe_arg();
-                        __func_ne();
+                        __func_ne(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_LT) {
                         read_eoe_arg();
-                        __func_lt();
+                        __func_lt(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_LE) {
                         read_eoe_arg();
-                        __func_le();
+                        __func_le(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_GT) {
                         read_eoe_arg();
-                        __func_gt();
+                        __func_gt(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_GE) {
                         read_eoe_arg();
-                        __func_ge();
+                        __func_ge(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                         push_stack("fixA");
                 } else {
                         yyerror("system err: translate_ec(), EC_CALC");
@@ -2122,15 +2122,15 @@ static void translate_ec_b(struct EC* ec)
         } else if (ec->type_expression == EC_UNARY) {
                 if (ec->type_operator == EC_OPE_INV) {
                         pop_stack("fixL");
-                        __func_invert();
+                        __func_invert(ec->child_ptr[0]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_NOT) {
                         pop_stack("fixL");
-                        __func_not();
+                        __func_not(ec->child_ptr[0]->vh);
                         push_stack("fixA");
                 } else if (ec->type_operator == EC_OPE_SUB) {
                         pop_stack("fixL");
-                        __func_minus();
+                        __func_minus(ec->child_ptr[0]->vh);
                         push_stack("fixA");
                 } else {
                         yyerror("system err: translate_ec(), EC_UNARY");
