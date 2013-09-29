@@ -156,7 +156,6 @@ static void pA_nl(const char* fmt, ...)
 
 /* 記憶領域クラス
  */
-#define TYPE_STACK      (1 << 23)
 #define TYPE_AUTO       (1 << 24)
 #define TYPE_REGISTER   (1 << 25)
 #define TYPE_STATIC     (1 << 26)
@@ -176,7 +175,7 @@ static int32_t idenlist_head = 0;
  * idenlist[idenlist_head]が0の場合はmallocされる。その領域が以後も使いまわされる。
  * （開放はしない。確保したまま）
  */
-void idenlist_push(const char* src)
+static void idenlist_push(const char* src)
 {
         if (idenlist_head >= IDENLIST_LEN)
                 yyerror("system err: idenlist_push()");
@@ -192,7 +191,7 @@ void idenlist_push(const char* src)
  *
  * コピー渡しなので、十分な長さが確保されたdstを渡すこと
  */
-void idenlist_pop(char* dst)
+static void idenlist_pop(char* dst)
 {
         idenlist_head--;
 
@@ -250,10 +249,11 @@ struct VarHandle {
         struct Var* var;
         int32_t index_len;      /* index の個数。スカラーならば0 */
         int32_t indirect_len;   /* 間接参照の深さ。直接参照(非ポインター型)ならば0 */
+        int32_t is_completion;  /* リードや演算を行って結果を既にスタックへ積んでる場合 */
 };
 
 /* 空のVarインスタンスを生成する */
-struct Var* new_var(void)
+static struct Var* new_var(void)
 {
         struct Var* var = malloc(sizeof(*var));
         if (var == NULL)
@@ -271,7 +271,7 @@ struct Var* new_var(void)
 }
 
 /* 空のVarHandleインスタンスを生成する */
-struct VarHandle* new_varhandle(void)
+static struct VarHandle* new_varhandle(void)
 {
         struct VarHandle* vh = malloc(sizeof(*vh));
         if (vh == NULL)
@@ -280,6 +280,7 @@ struct VarHandle* new_varhandle(void)
         vh->var = NULL;
         vh->index_len = 0;
         vh->indirect_len = 0;
+        vh->is_completion = 0;
 
         return vh;
 }
@@ -943,7 +944,7 @@ static void retF(void)
 
 /* ヒープメモリーの初期化
  */
-void init_heap(void)
+static void init_heap(void)
 {
         pA("SInt32 heap_base:R04;");
         pA("SInt32 heap_socket:R05;");
@@ -1692,6 +1693,9 @@ static void __assignment_variable(struct VarHandle* vh)
          * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
          */
         push_stack("heap_socket");
+
+        /* 書き込んでスタックにプッシュ済みのフラグ */
+        vh->is_completion = 1;
 }
 
 /* 変数リード関連
@@ -1699,6 +1703,10 @@ static void __assignment_variable(struct VarHandle* vh)
 
 static void __read_function_ptr(struct VarHandle* vh)
 {
+        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
+        if (vh->is_completion)
+                return;
+
         if ((vh->var->type & TYPE_FUNCTION) == 0)
                 yyerror("system err: __read_function_ptr()");
 
@@ -1708,10 +1716,17 @@ static void __read_function_ptr(struct VarHandle* vh)
 
         pA("stack_socket = %d;", labellist_search(vh->var->iden));
         push_stack("stack_socket");
+
+        /* リードしてスタックにプッシュ済みのフラグ */
+        vh->is_completion = 1;
 }
 
 static void __read_variable_ptr(struct VarHandle* vh)
 {
+        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
+        if (vh->is_completion)
+                return;
+
         /* 定数リテラルの場合はアドレスを読むのは不正 */
         if (vh->var->type & TYPE_LITERAL) {
                 yyerror("syntax err: 定数リテラルのアドレスを得ようとしました");
@@ -1725,10 +1740,17 @@ static void __read_variable_ptr(struct VarHandle* vh)
                 __get_variable_concrete_address(vh);
                 push_stack("heap_base");
         }
+
+        /* リードしてスタックにプッシュ済みのフラグ */
+        vh->is_completion = 1;
 }
 
 static void __read_literal(struct VarHandle* vh)
 {
+        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
+        if (vh->is_completion)
+                return;
+
         if ((vh->var->type & TYPE_LITERAL) == 0)
                 yyerror("system err: __read_literal()");
 
@@ -1740,22 +1762,41 @@ static void __read_literal(struct VarHandle* vh)
                 pA("stack_socket = %d;", *((float*)(vh->var->const_variable)));
 
         push_stack("stack_socket");
+
+        /* リードしてスタックにプッシュ済みのフラグ */
+        vh->is_completion = 1;
 }
 
 static void __read_variable(struct VarHandle* vh)
 {
+        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
+        if (vh->is_completion)
+                return;
+
+        /* 定数リテラルの場合 */
         if (vh->var->type & TYPE_LITERAL) {
                 __read_literal(vh);
+
+        /* 関数の場合 */
         } else if (vh->var->type & TYPE_FUNCTION) {
                 /* 何もしない */
-        } else {
-                __get_variable_concrete_address(vh);
 
-                /* アドレスから読んで結果をスタックへプッシュ
+        /* 変数の場合 */
+        } else {
+                /* 変数スペックと、変数アクセスでの、配列次元が同じ場合のみ値を参照する。
+                 * そうでない場合はアドレスを返す。
                  */
-                read_mem("stack_socket", "heap_base");
-                push_stack("stack_socket");
+                if (vh->index_len == vh->var->dim_len) {
+                        __get_variable_concrete_address(vh);
+                        read_mem("stack_socket", "heap_base");
+                        push_stack("stack_socket");
+                } else {
+                        __read_variable_ptr(vh);
+                }
         }
+
+        /* リードしてスタックにプッシュ済みのフラグ */
+        vh->is_completion = 1;
 }
 
 /* ユーザー定義関数関連
@@ -1962,7 +2003,7 @@ struct EC {
 
 /* 白紙のECインスタンスをメモリー領域を確保して生成
  */
-struct EC* new_ec(void)
+static struct EC* new_ec(void)
 {
         struct EC* ec = malloc(sizeof(*ec));
         if (ec == NULL)
@@ -1978,45 +2019,144 @@ struct EC* new_ec(void)
 /* メモリー領域を開放してECインスタンスを消去
  * (枝(child_ptr[])も含めての開放ではない)
  */
-void delete_ec(struct EC* ec)
+static void delete_ec(struct EC* ec)
 {
         free((void*)ec);
 }
 
-/* EC木をアセンブラへ翻訳
+/* EC木のアセンブラへの翻訳関連
  */
-void translate_ec(struct EC* ec)
+
+static void translate_ec(struct EC* ec);
+
+static void translate_ec_b(struct EC* ec)
 {
+        int32_t i;
+        for (i = 0; i < ec->child_len; i++) {
+                translate_ec(ec->child_ptr[i]);
+                __read_variable(ec->child_ptr[i]->vh);
+        }
+
+        if (ec->child_len >= 1)
+                ec->vh = ec->child_ptr[0]->vh;
+
         if (ec->type_expression == EC_ASSIGNMENT) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
+                        /* 何もしない */
+                } else if (ec->type_operator == EC_OPE_LIST) {
+                        /* 何もしない */
+                } else {
+                        yyerror("system err: translate_ec(), EC_ASSIGNMENT");
+                }
+        } else if (ec->type_expression == EC_PRIMARY) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_CALC) {
+                if (ec->type_operator == EC_OPE_ADD) {
+                        read_eoe_arg();
+                        __func_add();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_SUB) {
+                        read_eoe_arg();
+                        __func_sub();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_MUL) {
+                        read_eoe_arg();
+                        __func_mul();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_DIV) {
+                        read_eoe_arg();
+                        __func_div();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_MOD) {
+                        read_eoe_arg();
+                        __func_mod();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_OR) {
+                        read_eoe_arg();
+                        __func_or();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_AND) {
+                        read_eoe_arg();
+                        __func_and();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_XOR) {
+                        read_eoe_arg();
+                        __func_xor();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_LSHIFT) {
+                        read_eoe_arg();
+                        __func_lshift();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_RSHIFT) {
+                        read_eoe_arg();
+                        __func_logical_rshift();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_EQ) {
+                        read_eoe_arg();
+                        __func_eq();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_NE) {
+                        read_eoe_arg();
+                        __func_ne();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_LT) {
+                        read_eoe_arg();
+                        __func_lt();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_LE) {
+                        read_eoe_arg();
+                        __func_le();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_GT) {
+                        read_eoe_arg();
+                        __func_gt();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_GE) {
+                        read_eoe_arg();
+                        __func_ge();
+                        push_stack("fixA");
+                } else {
+                        yyerror("system err: translate_ec(), EC_CALC");
+                }
+        } else if (ec->type_expression == EC_UNARY) {
+                if (ec->type_operator == EC_OPE_INV) {
+                        pop_stack("fixL");
+                        __func_invert();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_NOT) {
+                        pop_stack("fixL");
+                        __func_not();
+                        push_stack("fixA");
+                } else if (ec->type_operator == EC_OPE_SUB) {
+                        pop_stack("fixL");
+                        __func_minus();
+                        push_stack("fixA");
+                } else {
+                        yyerror("system err: translate_ec(), EC_UNARY");
+                }
+        } else if (ec->type_expression == EC_POSTFIX) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_CONSTANT) {
+                /* 何もしない */
+        } else {
+                yyerror("system err: translate_ec()");
+        }
+}
+
+static void translate_ec_a(struct EC* ec)
+{
+        if (ec->type_expression == EC_ASSIGNMENT) {
+                if (ec->type_operator == EC_OPE_SUBST) {
                         translate_ec(ec->child_ptr[0]);
+                        __read_variable(ec->child_ptr[0]->vh);
 
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        /* 変数スペックと、変数アクセスでの、配列次元が同じ場合のみ値を参照する。
-                         * そうでない場合はアドレスを返す。
-                         */
-                        if (ec->vh->index_len == ec->vh->var->dim_len)
-                                __read_variable(ec->vh);
-                        else
-                                __read_variable_ptr(ec->vh);
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_SUBST) {
-                        translate_ec(ec->child_ptr[0]);
                         translate_ec(ec->child_ptr[1]);
+                        __read_variable(ec->child_ptr[1]->vh);
 
                         ec->vh = ec->child_ptr[0]->vh;
                         __assignment_variable(ec->vh);
 
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_LIST) {
-                        int32_t i;
-                        for (i = 0; i < ec->child_len; i++) {
-                                translate_ec(ec->child_ptr[i]);
-                        }
-                } else {
-                        yyerror("system err: translate_ec(), EC_ASSIGNMENT");
+                        return;
                 }
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
@@ -2025,234 +2165,22 @@ void translate_ec(struct EC* ec)
                         if (ec->vh->var == NULL)
                                 yyerror("syntax err: 未定義の変数を参照しようとしました");
 
-                } else {
-                        yyerror("system err: translate_ec(), EC_PRIMARY");
-                }
-        } else if (ec->type_expression == EC_CALC) {
-                if (ec->type_operator == EC_OPE_ADD) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_add();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_SUB) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_sub();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_MUL) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_mul();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_DIV) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_div();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_MOD) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_mod();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_OR) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_or();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_AND) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_and();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_XOR) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_xor();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_LSHIFT) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_lshift();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_RSHIFT) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_logical_rshift();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_EQ) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_eq();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_NE) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_ne();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_LT) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_lt();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_LE) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_le();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_GT) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_gt();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_GE) {
-                        translate_ec(ec->child_ptr[0]);
-                        translate_ec(ec->child_ptr[1]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        read_eoe_arg();
-                        __func_ge();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else {
-                        yyerror("system err: translate_ec(), EC_CALC");
+                        return;
                 }
         } else if (ec->type_expression == EC_UNARY) {
-                if (ec->type_operator == EC_OPE_INV) {
+                if (ec->type_operator == EC_OPE_POINTER) {
                         translate_ec(ec->child_ptr[0]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        pop_stack("fixL");
-                        __func_invert();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_NOT) {
-                        translate_ec(ec->child_ptr[0]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        pop_stack("fixL");
-                        __func_not();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_SUB) {
-                        translate_ec(ec->child_ptr[0]);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-
-                        pop_stack("fixL");
-                        __func_minus();
-                        push_stack("fixA");
-
-                        ec->vh->var->type |= TYPE_STACK;
-                } else if (ec->type_operator == EC_OPE_POINTER) {
-                        translate_ec(ec->child_ptr[0]);
-
                         ec->vh = ec->child_ptr[0]->vh;
                         ec->vh->indirect_len++;
+
+                        return;
+
                 } else if (ec->type_operator == EC_OPE_ADDRESS) {
                         translate_ec(ec->child_ptr[0]);
-
                         ec->vh = ec->child_ptr[0]->vh;
                         __read_variable_ptr(ec->vh);
 
-                        ec->vh->var->type |= TYPE_STACK;
-                } else {
-                        yyerror("system err: translate_ec(), EC_UNARY");
+                        return;
                 }
         } else if (ec->type_expression == EC_POSTFIX) {
                 if (ec->type_operator == EC_OPE_ARRAY) {
@@ -2261,10 +2189,16 @@ void translate_ec(struct EC* ec)
                          * ポップして読んでいく際に、左側添字から順に(x -> y -> z の順で)値を得られる。
                          */
                         translate_ec(ec->child_ptr[1]);
+                        __read_variable(ec->child_ptr[1]->vh);
+
                         translate_ec(ec->child_ptr[0]);
+                        __read_variable(ec->child_ptr[0]->vh);
 
                         ec->vh = ec->child_ptr[0]->vh;
                         ec->vh->index_len++;
+
+                        return;
+
                 } else if (ec->type_operator == EC_OPE_FUNCTION) {
                         /* 現在の stack_frame をプッシュする。
                          * そして、ここには関数終了後にはリターン値が入った状態となる。
@@ -2275,15 +2209,20 @@ void translate_ec(struct EC* ec)
 
                         __call_user_function(ec->vh->var->iden);
 
-                        ec->vh->var->type |= TYPE_STACK;
+                        ec->vh->is_completion = 1;
+
+                        return;
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
-        } else if (ec->type_expression == EC_CONSTANT) {
-                /* 何もしない */
-        } else {
-                yyerror("system err: translate_ec()");
         }
+
+        translate_ec_b(ec);
+}
+
+static void translate_ec(struct EC* ec)
+{
+        translate_ec_a(ec);
 }
 
 %}

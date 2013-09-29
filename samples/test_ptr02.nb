@@ -17,6 +17,6 @@ f(p);
 
 function f(*p)
 {
-	__print(*P);
+        __print(*p);
 }
 
