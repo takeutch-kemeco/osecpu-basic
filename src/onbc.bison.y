@@ -1982,6 +1982,7 @@ static void __define_user_function_end(const int32_t skip_label)
 #define EC_OPE_VARIABLE         29      /* 変数アクセス */
 #define EC_OPE_SUBST            30      /* = */
 #define EC_OPE_LIST             31      /* , によって列挙されたリスト */
+#define EC_OPE_CAST             32      /* 型変換 */
 
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
@@ -2155,6 +2156,21 @@ static void translate_ec_a(struct EC* ec)
 
                         ec->vh = ec->child_ptr[0]->vh;
                         __assignment_variable(ec->vh);
+
+                        return;
+                } else if (ec->type_operator == EC_OPE_CAST) {
+                        translate_ec(ec->child_ptr[0]);
+                        __read_variable(ec->child_ptr[0]->vh);
+
+                        const int32_t indirect_len = ec->vh->var->indirect_len;
+                        const int32_t type = ec->vh->var->type;
+
+                        *(ec->vh->var) = *(ec->child_ptr[0]->vh->var);
+                        ec->vh->var->indirect_len = indirect_len;
+                        ec->vh->var->type &= ~(TYPE_VOID | TYPE_CHAR | TYPE_INT | TYPE_SHORT |
+                                               TYPE_LONG | TYPE_FLOAT | TYPE_DOUBLE | TYPE_SIGNED |
+                                               TYPE_UNSIGNED | TYPE_STRUCT | TYPE_ENUM);
+                        ec->vh->var->type = type;
 
                         return;
                 }
@@ -2990,6 +3006,16 @@ multiplicative_expression
 
 cast_expression
         : unary_expression
+        | __LB type_specifier pointer __RB cast_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ASSIGNMENT;
+                ec->type_operator = EC_OPE_CAST;
+                ec->vh = new_varhandle();
+                ec->vh->var = new_var();
+                ec->vh->var->indirect_len = $3;
+                ec->vh->var->type = $2;
+                $$ = ec;
+        }
         ;
 
 unary_expression
