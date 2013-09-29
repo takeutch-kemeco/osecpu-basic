@@ -2197,6 +2197,17 @@ static void translate_ec_a(struct EC* ec)
                         __read_variable_ptr(ec->vh);
 
                         return;
+                } else if (ec->type_operator == EC_OPE_SIZEOF) {
+                        translate_ec(ec->child_ptr[0]);
+                        ec->vh = ec->child_ptr[0]->vh;
+                        __read_variable_ptr(ec->vh);
+
+                        pop_stack_dummy();
+
+                        pA("stack_socket = %d;", ec->vh->var->total_len);
+                        push_stack("stack_socket");
+
+                        return;
                 }
         } else if (ec->type_expression == EC_POSTFIX) {
                 if (ec->type_operator == EC_OPE_ARRAY) {
@@ -3059,6 +3070,14 @@ unary_expression
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_UNARY;
                 ec->type_operator = EC_OPE_NOT;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | __OPE_SIZEOF unary_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_UNARY;
+                ec->type_operator = EC_OPE_SIZEOF;
                 ec->child_ptr[0] = $2;
                 ec->child_len = 1;
                 $$ = ec;
