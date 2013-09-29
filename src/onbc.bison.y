@@ -250,6 +250,7 @@ struct VarHandle {
         int32_t index_len;      /* index の個数。スカラーならば0 */
         int32_t indirect_len;   /* 間接参照の深さ。直接参照(非ポインター型)ならば0 */
         int32_t is_completion;  /* リードや演算を行って結果を既にスタックへ積んでる場合 */
+        int32_t is_lvalue;      /* 左辺値として扱える場合は1。 右辺値の場合は0 */
 };
 
 /* 空のVarインスタンスを生成する */
@@ -281,6 +282,7 @@ static struct VarHandle* new_varhandle(void)
         vh->index_len = 0;
         vh->indirect_len = 0;
         vh->is_completion = 0;
+        vh->is_lvalue = 0;
 
         return vh;
 }
@@ -1396,6 +1398,52 @@ static void __func_mod_float(void)
 static void __func_minus_float(void)
 {
         pA("fixA = -fixL;");
+}
+
+/* 2項演算の場合のキャスト結果のVarHandleを生成して返す
+ */
+static struct VarHandle* varhandle_cast_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 = new_varhandle();
+        vh0->var = new_var();
+
+        /* 現時点のアクセス時での、型の実質的なindirect_len
+         */
+        const int32_t vh1_cur_indirect_len = vh1->var->indirect_len - vh1->indirect_len;
+        const int32_t vh2_cur_indirect_len = vh2->var->indirect_len - vh2->indirect_len;
+
+        if ((vh1_cur_indirect_len >= 1) && (vh2_cur_indirect_len >= 1))
+                yyerror("syntax err: ポインター型同士の二項演算は不正です");
+
+        if (vh1_cur_indirect_len >= 1) {
+                vh0->var->indirect_len = vh1_cur_indirect_len;
+        } else if (vh2_cur_indirect_len >= 1) {
+                vh0->var->indirect_len = vh2_cur_indirect_len;
+        }
+
+        /* より汎用性の高い方の型を vh0 に得る */
+        if ((vh1->var->type & TYPE_DOUBLE) || (vh2->var->type & TYPE_DOUBLE))
+                vh0->var->type |= TYPE_DOUBLE;
+        else if ((vh1->var->type & TYPE_FLOAT) || (vh2->var->type & TYPE_FLOAT))
+                vh0->var->type |= TYPE_FLOAT;
+        else if ((vh1->var->type & TYPE_INT) || (vh2->var->type & TYPE_INT))
+                vh0->var->type |= TYPE_INT;
+        else if ((vh1->var->type & TYPE_LONG) || (vh2->var->type & TYPE_LONG))
+                vh0->var->type |= TYPE_LONG;
+        else if ((vh1->var->type & TYPE_SHORT) || (vh2->var->type & TYPE_SHORT))
+                vh0->var->type |= TYPE_SHORT;
+        else if ((vh1->var->type & TYPE_CHAR) || (vh2->var->type & TYPE_CHAR))
+                vh0->var->type |= TYPE_CHAR;
+        else if ((vh1->var->type & TYPE_VOID) || (vh2->var->type & TYPE_VOID))
+                vh0->var->type |= TYPE_VOID;
+        else
+                yyerror("system err: variable type not found");
+
+        /* スタックへ積んでる値を用いる */
+        vh0->is_completion = 1;
+        vh0->is_lvalue = 0;
+
+        return vh0;
 }
 
 /* レガシーアキュムレーター
