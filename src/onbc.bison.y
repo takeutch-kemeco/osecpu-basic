@@ -1187,15 +1187,6 @@ static void __func_invert_int(void)
         pA("fixA = fixL ^ (-1);");
 }
 
-/* intのNOT命令を出力する
- * not fixL -> fixA
- * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_not_int(void)
-{
-        pA("if (fixL != 0) {fixA = 0;} else {fixA = 1;}");
-}
-
 /* intの左シフト命令を出力する
  * fixL << fixR -> fixA
  * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
@@ -1400,6 +1391,88 @@ static void __func_minus_float(void)
         pA("fixA = -fixL;");
 }
 
+/* floatのand演算命令を出力する
+ * fixL and fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_and_float(void)
+{
+        pA("fixA = fixL & fixR;");
+
+        yywarning("syntax warning: 非整数型へAND演算を行ってます");
+}
+
+/* floatのor演算命令を出力する
+ * fixL or fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_or_float(void)
+{
+        pA("fixA = fixL | fixR;");
+
+        yywarning("syntax warning: 非整数型へOR演算を行ってます");
+}
+
+/* floatのxor演算命令を出力する
+ * fixL and fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_xor_float(void)
+{
+        pA("fixA = fixL ^ fixR;");
+
+        yywarning("syntax warning: 非整数型へXOR演算を行ってます");
+}
+
+/* floatのビット反転命令を出力する
+ * ~fixL -> fixA
+ * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_invert_float(void)
+{
+        pA("fixA = fixL ^ (-1);");
+
+        yywarning("syntax warning: 非整数型へビット反転を行ってます");
+}
+
+/* floatの左シフト命令を出力する
+ * fixL << fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_lshift_float(void)
+{
+        pA("fixA = fixL << fixR;");
+
+        yywarning("syntax warning: 非整数型へ左シフト演算を行ってます");
+}
+
+/* floatの右シフト命令を出力する(算術シフト)
+ * fixL >> fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ */
+static void __func_arithmetic_rshift_float(void)
+{
+        __func_arithmetic_rshift_int();
+
+        yywarning("syntax warning: 非整数型へ算術右シフト演算を行ってます");
+}
+
+/* intの右シフト命令を出力する（論理シフト）
+ * fixL >> fixR -> fixA
+ * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+ *
+ * 論理シフトとして動作する。
+ */
+static void __func_logical_rshift_float(void)
+{
+        __func_logical_rshift_int();
+
+        yywarning("syntax warning: 非整数型へ論理右シフト演算を行ってます");
+}
+
+/* 型変換関連
+ */
+
 /* 2項演算の場合のキャスト結果のVarHandleを生成して返す
  */
 static struct VarHandle* varhandle_cast_new(struct VarHandle* vh1, struct VarHandle* vh2)
@@ -1407,7 +1480,37 @@ static struct VarHandle* varhandle_cast_new(struct VarHandle* vh1, struct VarHan
         struct VarHandle* vh0 = new_varhandle();
         vh0->var = new_var();
 
-        /* 現時点のアクセス時での、型の実質的なindirect_len
+        /* より汎用性の高い方の型を vh0 に得る。
+         * その際に、vh0は非配列型とするので、var->total_lenには型の基本サイズが入る。
+         * 現状は実質的に SInt32 型のみなので、どの型も 1 となる。(void型も1)
+         */
+        if ((vh1->var->type & TYPE_DOUBLE) || (vh2->var->type & TYPE_DOUBLE)) {
+                vh0->var->type |= TYPE_DOUBLE;
+                vh0->var->total_len = 1;
+        } else if ((vh1->var->type & TYPE_FLOAT) || (vh2->var->type & TYPE_FLOAT)) {
+                vh0->var->type |= TYPE_FLOAT;
+                vh0->var->total_len = 1;
+        } else if ((vh1->var->type & TYPE_INT) || (vh2->var->type & TYPE_INT)) {
+                vh0->var->type |= TYPE_INT;
+                vh0->var->total_len = 1;
+        } else if ((vh1->var->type & TYPE_LONG) || (vh2->var->type & TYPE_LONG)) {
+                vh0->var->type |= TYPE_LONG;
+                vh0->var->total_len = 1;
+        } else if ((vh1->var->type & TYPE_SHORT) || (vh2->var->type & TYPE_SHORT)) {
+                vh0->var->type |= TYPE_SHORT;
+                vh0->var->total_len = 1;
+        } else if ((vh1->var->type & TYPE_CHAR) || (vh2->var->type & TYPE_CHAR)) {
+                vh0->var->type |= TYPE_CHAR;
+                vh0->var->total_len = 1;
+        } else if ((vh1->var->type & TYPE_VOID) || (vh2->var->type & TYPE_VOID)) {
+                vh0->var->type |= TYPE_VOID;
+                vh0->var->total_len = 1;
+        } else {
+                yyerror("system err: varhandle_cast_new(), variable type not found");
+        }
+
+        /* 現時点のアクセス時での、型の実質的なindirect_lenを得て、
+         * どちらか一方のみがポインター型である場合に、その型を採用する。
          */
         const int32_t vh1_cur_indirect_len = vh1->var->indirect_len - vh1->indirect_len;
         const int32_t vh2_cur_indirect_len = vh2->var->indirect_len - vh2->indirect_len;
@@ -1421,210 +1524,502 @@ static struct VarHandle* varhandle_cast_new(struct VarHandle* vh1, struct VarHan
                 vh0->var->indirect_len = vh2_cur_indirect_len;
         }
 
-        /* より汎用性の高い方の型を vh0 に得る */
-        if ((vh1->var->type & TYPE_DOUBLE) || (vh2->var->type & TYPE_DOUBLE))
-                vh0->var->type |= TYPE_DOUBLE;
-        else if ((vh1->var->type & TYPE_FLOAT) || (vh2->var->type & TYPE_FLOAT))
-                vh0->var->type |= TYPE_FLOAT;
-        else if ((vh1->var->type & TYPE_INT) || (vh2->var->type & TYPE_INT))
-                vh0->var->type |= TYPE_INT;
-        else if ((vh1->var->type & TYPE_LONG) || (vh2->var->type & TYPE_LONG))
-                vh0->var->type |= TYPE_LONG;
-        else if ((vh1->var->type & TYPE_SHORT) || (vh2->var->type & TYPE_SHORT))
-                vh0->var->type |= TYPE_SHORT;
-        else if ((vh1->var->type & TYPE_CHAR) || (vh2->var->type & TYPE_CHAR))
-                vh0->var->type |= TYPE_CHAR;
-        else if ((vh1->var->type & TYPE_VOID) || (vh2->var->type & TYPE_VOID))
-                vh0->var->type |= TYPE_VOID;
-        else
-                yyerror("system err: variable type not found");
-
-        /* スタックへ積んでる値を用いる */
-        vh0->is_completion = 1;
-        vh0->is_lvalue = 0;
+        vh0->is_completion = 1; /* スタックへ積んでる値を用いる */
+        vh0->is_lvalue = 0;     /* 右辺値とする */
 
         return vh0;
 }
 
-/* レガシーアキュムレーター
+/* 任意レジスターの値を型変換する
+ */
+static void cast_regval(const char* register_name,
+                        struct VarHandle* dst_vh,
+                        struct VarHandle* src_vh)
+{
+        const int32_t dst_type = dst_vh->var->type;
+        const int32_t src_type = src_vh->var->type;
+
+        /* 参照時の型の間接参照次元を得る
+         */
+        const int32_t dst_indirect_len = dst_vh->var->indirect_len - dst_vh->indirect_len;
+        const int32_t src_indirect_len = src_vh->var->indirect_len - src_vh->indirect_len;
+
+        /* 参照時のsrc,dstがポインター型の場合
+         */
+        if (src_indirect_len >= 1 && dst_indirect_len >= 1) {
+                /* なにもしない */
+
+        /* 参照時のsrcがポインター型、dstが非ポインター型の場合 */
+        } else if (src_indirect_len >= 1 && dst_indirect_len == 0) {
+                if (dst_type & (TYPE_FLOAT | TYPE_DOUBLE))
+                        pA("%d <<= 16;", register_name); /* 整数値から固定小数値へ変換 */
+
+                yywarning("syntax warning: ポインター値を非ポインター型へ型変換しています");
+
+        /* 参照時のsrcが非ポインター型、dstがポインター型の場合 */
+        } else if (src_indirect_len == 0 && dst_indirect_len >= 1) {
+                if (src_type & (TYPE_FLOAT | TYPE_DOUBLE))
+                        pA("%d >>= 16;", register_name); /* 固定小数値から整数値へ変換 */
+
+                yywarning("syntax warning: 非ポインター値をポインター型へ型変換しています");
+
+        /* 参照時のsrc,dstが非ポインター型の場合
+         */
+        } else {
+                /* srcが小数型、dstが整数型の場合 */
+                if ((src_type & (TYPE_FLOAT | TYPE_DOUBLE)) &&
+                    (!(dst_type & (TYPE_FLOAT | TYPE_DOUBLE)))) {
+                                pA("%d >>= 16;", register_name); /* 固定小数値から整数値へ変換 */
+
+                /* srcが整数型、dstが小数型の場合
+                 */
+                } else if ((!(src_type & (TYPE_FLOAT | TYPE_DOUBLE))) &&
+                           (dst_type & (TYPE_FLOAT | TYPE_DOUBLE))) {
+                                pA("%d <<= 16;", register_name); /* 整数値から固定小数値へ変換 */
+                }
+        }
+
+        /* 参照時のdstが非ポインター型の場合 */
+        if (dst_indirect_len == 0) {
+                if (dst_type & TYPE_INT) {
+                        /* pA("%d &= 0xffffffff;", register_name); */
+                } else if (dst_type & TYPE_CHAR) {
+                        pA("%d &= 0x000000ff;", register_name);
+                } else if (dst_type & TYPE_SHORT) {
+                        pA("%d &= 0x0000ffff;", register_name);
+                } else if (dst_type & TYPE_LONG) {
+                        /* pA("%d &= 0xffffffff;", register_name); */
+                } else if (dst_type & TYPE_VOID) {
+                        /* なにもしない */
+                } else {
+                        yyerror("system err: cast_regval(), variable type not found");
+                }
+        }
+}
+
+/* 共通アキュムレーター
  */
 
-static void __func_add(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
-{
-        __func_add_float();
-}
+typedef void (*void_func)(void);
 
-static void __func_sub(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
-{
-        __func_sub_float();
-}
-
-static void __func_mul_inline(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
-{
-        __func_mul_inline_float();
-}
-
-static void __func_mul(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
-{
-        __func_mul_float();
-}
-
-static void __func_div(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
-{
-        __func_div_float();
-}
-
-static void __func_mod(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
-{
-        __func_mod_float();
-}
-
-static void __func_minus(struct VarHandle* vh0, struct VarHandle* vh1)
-{
-        __func_minus_float();
-}
-
-/* and命令を出力する
- * fixL & fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_and(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
-{
-        pA("fixA = fixL & fixR;");
-}
-
-/* or命令を出力する
- * fixL | fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_or(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
-{
-        pA("fixA = fixL | fixR;");
-}
-
-/* xor命令を出力する
- * fixL ^ fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_xor(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
-{
-        pA("fixA = fixL ^ fixR;");
-}
-
-/* ビット反転命令を出力する
- * fixL -> fixA
- * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_invert(struct VarHandle* vh0, struct VarHandle* vh1)
-{
-        pA("fixA = fixL ^ (-1);");
-}
-
-/* not命令を出力する
- * fixL -> fixA
- * 予め fixL に値をセットしておくこと。 演算結果は fixA へ出力される。
+/* x項演算の共通ルーチン
  *
- * 真（非0）ならば 0 を返し、偽(0)ならば 1 を返す。
+ * 各 __func_*() には、その型の場合における演算を行う関数を渡す。
  */
-static void __func_not(struct VarHandle* vh0, struct VarHandle* vh1)
+static void
+__varhandle_common_operation_new(struct VarHandle* vh0,
+                                 void_func __func_int,
+                                 void_func __func_char,
+                                 void_func __func_short,
+                                 void_func __func_long,
+                                 void_func __func_float,
+                                 void_func __func_double,
+                                 void_func __func_ptr)
 {
-        pA("if (fixL == 0) {fixA = 1 << 16;} else {fixA = 0;}");
+        const int32_t dst_indirect_len = vh0->var->indirect_len - vh0->indirect_len;
+
+        /* dstが非ポインター型の場合
+         */
+        if (dst_indirect_len == 0) {
+                if (vh0->var->type & TYPE_INT)
+                        __func_int();
+                else if (vh0->var->type & TYPE_CHAR)
+                        __func_char();
+                else if (vh0->var->type & TYPE_SHORT)
+                        __func_short();
+                else if (vh0->var->type & TYPE_LONG)
+                        __func_long();
+                else if (vh0->var->type & TYPE_FLOAT)
+                        __func_float();
+                else if (vh0->var->type & TYPE_DOUBLE)
+                        __func_double();
+                else if (vh0->var->type & TYPE_VOID)
+                        yyerror("syntax err: void型に対して演算を行ってます");
+                else
+                        yyerror("system err: __varhandle_binary_operation_new()");
+
+        /* dstがポインター型の場合
+         */
+        } else {
+                if (__func_ptr != NULL)
+                        __func_ptr();
+                else
+                        yyerror("syntax err: ポインター型に対して不正な演算を行ってます");
+        }
+
+        push_stack("fixA");
 }
 
-/* 左シフト命令を出力する
- * fixL << fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_lshift(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
-{
-        pA("fixR >>= 16;");
-        pA("fixA = fixL << fixR;");
-}
-
-/* 右シフト命令を出力する（算術シフト）
- * fixL >> fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+/* 二項演算の共通ルーチン
  *
- * 算術シフトとして動作する。
+ * 各 __func_*() には、その型の場合における演算を行う関数を渡す。
+ * __func_*() は fixL operator fixR -> fixA な動作を行う前提
  */
-static void __func_arithmetic_rshift(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
+static struct VarHandle*
+__varhandle_binary_operation_new(struct VarHandle* vh1,
+                                 struct VarHandle* vh2,
+                                 void_func __func_int,
+                                 void_func __func_char,
+                                 void_func __func_short,
+                                 void_func __func_long,
+                                 void_func __func_float,
+                                 void_func __func_double,
+                                 void_func __func_ptr)
 {
-        beginF();
+        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
 
-        pA("fixR >>= 16;");
-        __func_arithmetic_rshift_int();
+        pop_eoe();
+        cast_regval("fixL", vh0, vh1);
+        cast_regval("fixR", vh0, vh2);
 
-        endF();
+        __varhandle_common_operation_new(vh0,
+                                         __func_int,
+                                         __func_char,
+                                         __func_short,
+                                         __func_long,
+                                         __func_float,
+                                         __func_double,
+                                         __func_ptr);
+
+        return vh0;
 }
 
-/* 右シフト命令を出力する（論理シフト）
- * fixL >> fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
+/* 単項演算の共通ルーチン
  *
- * 論理シフトとして動作する。
+ * 各 __func_*() には、その型の場合における演算を行う関数を渡す。
+ * __func_*() は fixL -> fixA な動作を行う前提
  */
-static void __func_logical_rshift(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
+static struct VarHandle*
+__varhandle_unary_operation_new(struct VarHandle* vh1,
+                                 void_func __func_int,
+                                 void_func __func_char,
+                                 void_func __func_short,
+                                 void_func __func_long,
+                                 void_func __func_float,
+                                 void_func __func_double,
+                                 void_func __func_ptr)
 {
-        beginF();
+        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh1);
 
-        pA("fixR >>= 16;");
-        __func_logical_rshift_int();
+        pop_stack("fixL");
+        cast_regval("fixL", vh0, vh1);
 
-        endF();
+        __varhandle_common_operation_new(vh0,
+                                         __func_int,
+                                         __func_char,
+                                         __func_short,
+                                         __func_long,
+                                         __func_float,
+                                         __func_double,
+                                         __func_ptr);
+
+        return vh0;
 }
 
-/* 比較命令 == を出力する
- * fixL >> fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_eq(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
+static struct VarHandle*
+__varhandle_func_add_new(struct VarHandle* vh1, struct VarHandle* vh2)
 {
-        pA("if (fixL == fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+        struct VarHandle* vh0 =
+                __varhandle_binary_operation_new(vh1,
+                                                 vh2,
+                                                 __func_add_int,
+                                                 __func_add_int,
+                                                 __func_add_int,
+                                                 __func_add_int,
+                                                 __func_add_float,
+                                                 __func_add_float,
+                                                 __func_add_int);
+
+        return vh0;
 }
 
-/* 比較命令 != を出力する
- * fixL >> fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_ne(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
+static struct VarHandle*
+__varhandle_func_sub_new(struct VarHandle* vh1, struct VarHandle* vh2)
 {
-        pA("if (fixL != fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+        struct VarHandle* vh0 =
+                __varhandle_binary_operation_new(vh1,
+                                                 vh2,
+                                                 __func_sub_int,
+                                                 __func_sub_int,
+                                                 __func_sub_int,
+                                                 __func_sub_int,
+                                                 __func_sub_float,
+                                                 __func_sub_float,
+                                                 __func_sub_int);
+
+        return vh0;
 }
 
-/* 比較命令 < を出力する
- * fixL >> fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_lt(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
+static struct VarHandle*
+__varhandle_func_mul_new(struct VarHandle* vh1, struct VarHandle* vh2)
 {
-        pA("if (fixL < fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+        struct VarHandle* vh0 =
+                __varhandle_binary_operation_new(vh1,
+                                                 vh2,
+                                                 __func_mul_int,
+                                                 __func_mul_int,
+                                                 __func_mul_int,
+                                                 __func_mul_int,
+                                                 __func_mul_float,
+                                                 __func_mul_float,
+                                                 NULL);
+
+        return vh0;
 }
 
-/* 比較命令 > を出力する
- * fixL >> fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_gt(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
+static struct VarHandle*
+__varhandle_func_div_new(struct VarHandle* vh1, struct VarHandle* vh2)
 {
-        pA("if (fixL > fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+        struct VarHandle* vh0 =
+                __varhandle_binary_operation_new(vh1,
+                                                 vh2,
+                                                 __func_div_int,
+                                                 __func_div_int,
+                                                 __func_div_int,
+                                                 __func_div_int,
+                                                 __func_div_float,
+                                                 __func_div_float,
+                                                 NULL);
+
+        return vh0;
 }
 
-/* 比較命令 <= を出力する
- * fixL >> fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_le(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
+static struct VarHandle*
+__varhandle_func_mod_new(struct VarHandle* vh1, struct VarHandle* vh2)
 {
-        pA("if (fixL <= fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+        struct VarHandle* vh0 =
+                __varhandle_binary_operation_new(vh1,
+                                                 vh2,
+                                                 __func_mod_int,
+                                                 __func_mod_int,
+                                                 __func_mod_int,
+                                                 __func_mod_int,
+                                                 __func_mod_float,
+                                                 __func_mod_float,
+                                                 NULL);
+
+        return vh0;
 }
 
-/* 比較命令 >= を出力する
- * fixL >> fixR -> fixA
- * 予め fixL, fixR に値をセットしておくこと。 演算結果は fixA へ出力される。
- */
-static void __func_ge(struct VarHandle* vh0, struct VarHandle* vh1, struct VarHandle* vh2)
+static struct VarHandle*
+__varhandle_func_minus_new(struct VarHandle* vh1)
 {
-        pA("if (fixL >= fixR) {fixA = 0x00010000;} else {fixA = 0;}");
+        struct VarHandle* vh0 =
+                __varhandle_unary_operation_new(vh1,
+                                                __func_minus_int,
+                                                __func_minus_int,
+                                                __func_minus_int,
+                                                __func_minus_int,
+                                                __func_minus_float,
+                                                __func_minus_float,
+                                                NULL);
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_and_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 =
+                __varhandle_binary_operation_new(vh1,
+                                                 vh2,
+                                                 __func_and_int,
+                                                 __func_and_int,
+                                                 __func_and_int,
+                                                 __func_and_int,
+                                                 __func_and_float,
+                                                 __func_and_float,
+                                                 NULL);
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_or_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 =
+                __varhandle_binary_operation_new(vh1,
+                                                 vh2,
+                                                 __func_or_int,
+                                                 __func_or_int,
+                                                 __func_or_int,
+                                                 __func_or_int,
+                                                 __func_or_float,
+                                                 __func_or_float,
+                                                 NULL);
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_xor_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 =
+                __varhandle_binary_operation_new(vh1,
+                                                 vh2,
+                                                 __func_xor_int,
+                                                 __func_xor_int,
+                                                 __func_xor_int,
+                                                 __func_xor_int,
+                                                 __func_xor_float,
+                                                 __func_xor_float,
+                                                 NULL);
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_invert_new(struct VarHandle* vh1)
+{
+        struct VarHandle* vh0 =
+                __varhandle_unary_operation_new(vh1,
+                                                __func_invert_int,
+                                                __func_invert_int,
+                                                __func_invert_int,
+                                                __func_invert_int,
+                                                __func_invert_float,
+                                                __func_invert_float,
+                                                NULL);
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_lshift_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 =
+                __varhandle_binary_operation_new(vh1,
+                                                 vh2,
+                                                 __func_lshift_int,
+                                                 __func_lshift_int,
+                                                 __func_lshift_int,
+                                                 __func_lshift_int,
+                                                 __func_lshift_float,
+                                                 __func_lshift_float,
+                                                 NULL);
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_rshift_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 =
+                __varhandle_binary_operation_new(vh1,
+                                                 vh2,
+                                                 __func_logical_rshift_int,
+                                                 __func_logical_rshift_int,
+                                                 __func_logical_rshift_int,
+                                                 __func_logical_rshift_int,
+                                                 __func_logical_rshift_float,
+                                                 __func_logical_rshift_float,
+                                                 NULL);
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_not_new(struct VarHandle* vh1)
+{
+        struct VarHandle* vh0 = new_varhandle();
+
+        pop_stack("fixL");
+        cast_regval("fixL", vh0, vh1);
+
+        pA("if (fixL != 0) {fixA = 0;} else {fixA = 1;}");
+        push_stack("fixA");
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_eq_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+
+        pop_eoe();
+        cast_regval("fixL", vh0, vh1);
+        cast_regval("fixR", vh0, vh2);
+
+        pA("if (fixL == fixR) {fixA = 1;} else {fixA = 0;}");
+        push_stack("fixA");
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_ne_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+
+        pop_eoe();
+        cast_regval("fixL", vh0, vh1);
+        cast_regval("fixR", vh0, vh2);
+
+        pA("if (fixL != fixR) {fixA = 1;} else {fixA = 0;}");
+        push_stack("fixA");
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_lt_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+
+        pop_eoe();
+        cast_regval("fixL", vh0, vh1);
+        cast_regval("fixR", vh0, vh2);
+
+        pA("if (fixL < fixR) {fixA = 1;} else {fixA = 0;}");
+        push_stack("fixA");
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_gt_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+
+        pop_eoe();
+        cast_regval("fixL", vh0, vh1);
+        cast_regval("fixR", vh0, vh2);
+
+        pA("if (fixL > fixR) {fixA = 1;} else {fixA = 0;}");
+        push_stack("fixA");
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_le_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+
+        pop_eoe();
+        cast_regval("fixL", vh0, vh1);
+        cast_regval("fixR", vh0, vh2);
+
+        pA("if (fixL <= fixR) {fixA = 1;} else {fixA = 0;}");
+        push_stack("fixA");
+
+        return vh0;
+}
+
+static struct VarHandle*
+__varhandle_func_ge_new(struct VarHandle* vh1, struct VarHandle* vh2)
+{
+        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+
+        pop_eoe();
+        cast_regval("fixL", vh0, vh1);
+        cast_regval("fixR", vh0, vh2);
+
+        pA("if (fixL >= fixR) {fixA = 1;} else {fixA = 0;}");
+        push_stack("fixA");
+
+        return vh0;
 }
 
 /* 変数インスタンス関連
@@ -2101,85 +2496,47 @@ static void translate_ec_b(struct EC* ec)
                 /* 何もしない */
         } else if (ec->type_expression == EC_CALC) {
                 if (ec->type_operator == EC_OPE_ADD) {
-                        read_eoe_arg();
-                        __func_add(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_add_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_SUB) {
-                        read_eoe_arg();
-                        __func_sub(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_sub_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_MUL) {
-                        read_eoe_arg();
-                        __func_mul(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_mul_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_DIV) {
-                        read_eoe_arg();
-                        __func_div(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_div_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_MOD) {
-                        read_eoe_arg();
-                        __func_mod(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_mod_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_OR) {
-                        read_eoe_arg();
-                        __func_or(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_or_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_AND) {
-                        read_eoe_arg();
-                        __func_and(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_and_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_XOR) {
-                        read_eoe_arg();
-                        __func_xor(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_xor_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_LSHIFT) {
-                        read_eoe_arg();
-                        __func_lshift(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_lshift_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_RSHIFT) {
-                        read_eoe_arg();
-                        __func_logical_rshift(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_rshift_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_EQ) {
-                        read_eoe_arg();
-                        __func_eq(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_eq_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_NE) {
-                        read_eoe_arg();
-                        __func_ne(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_ne_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_LT) {
-                        read_eoe_arg();
-                        __func_lt(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_lt_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_LE) {
-                        read_eoe_arg();
-                        __func_le(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_le_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_GT) {
-                        read_eoe_arg();
-                        __func_gt(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_gt_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else if (ec->type_operator == EC_OPE_GE) {
-                        read_eoe_arg();
-                        __func_ge(ec->vh, ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_ge_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
                 } else {
                         yyerror("system err: translate_ec(), EC_CALC");
                 }
         } else if (ec->type_expression == EC_UNARY) {
                 if (ec->type_operator == EC_OPE_INV) {
-                        pop_stack("fixL");
-                        __func_invert(ec->vh, ec->child_ptr[0]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_invert_new(ec->child_ptr[0]->vh);
                 } else if (ec->type_operator == EC_OPE_NOT) {
-                        pop_stack("fixL");
-                        __func_not(ec->vh, ec->child_ptr[0]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_not_new(ec->child_ptr[0]->vh);
                 } else if (ec->type_operator == EC_OPE_SUB) {
-                        pop_stack("fixL");
-                        __func_minus(ec->vh, ec->child_ptr[0]->vh);
-                        push_stack("fixA");
+                        ec->vh = __varhandle_func_minus_new(ec->child_ptr[0]->vh);
                 } else {
                         yyerror("system err: translate_ec(), EC_UNARY");
                 }
