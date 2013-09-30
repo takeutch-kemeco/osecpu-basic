@@ -258,6 +258,11 @@ struct VarHandle {
  */
 static void var_print(struct Var* var)
 {
+        if (var == NULL) {
+                printf("struct Var NULL\n");
+                return;
+        }
+
         printf("struct Var, iden[%s], base_ptr[%d], total_len[%d], unit_len",
                var->iden, var->base_ptr, var->total_len);
 
@@ -280,6 +285,11 @@ static void var_print(struct Var* var)
  */
 static void varhandle_print(struct VarHandle* vh)
 {
+        if (vh == NULL) {
+                printf("struct VarHandle NULL\n");
+                return;
+        }
+
         printf("struct VarHandle, index_len[%d], indirect_len[%d], is_completion[%d], is_lvalue[%d]\n",
                vh->index_len, vh->indirect_len, vh->is_completion, vh->is_lvalue);
 
