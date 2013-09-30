@@ -253,6 +253,39 @@ struct VarHandle {
         int32_t is_lvalue;      /* 左辺値として扱える場合は1。 右辺値の場合は0 */
 };
 
+/* Varの内容を印字する
+ * 主にデバッグ用
+ */
+static void var_print(struct Var* var)
+{
+        printf("struct Var, iden[%s], base_ptr[%d], total_len[%d], unit_len",
+               var->iden, var->base_ptr, var->total_len);
+
+        int32_t i;
+        for (i = 0; i < var->dim_len; i++) {
+                printf("[%d]", var->unit_len[i]);
+        }
+
+        printf(", dim_len[%d], indirect_len[%d], type[%d]",
+               var->dim_len, var->indirect_len, var->type);
+
+        if (var->const_variable != NULL)
+                printf(" ,const_variable[%d]", *((int*)var->const_variable));
+
+        printf("\n");
+}
+
+/* VarHandleの内容を印字する
+ * 主にデバッグ用
+ */
+static void varhandle_print(struct VarHandle* vh)
+{
+        printf("struct VarHandle, index_len[%d], indirect_len[%d], is_completion[%d], is_lvalue[%d]\n",
+               vh->index_len, vh->indirect_len, vh->is_completion, vh->is_lvalue);
+
+        var_print(vh->var);
+}
+
 /* 空のVarインスタンスを生成する */
 static struct Var* new_var(void)
 {
@@ -1526,6 +1559,17 @@ static struct VarHandle* varhandle_cast_new(struct VarHandle* vh1, struct VarHan
 
         vh0->is_completion = 1; /* スタックへ積んでる値を用いる */
         vh0->is_lvalue = 0;     /* 右辺値とする */
+
+#ifdef DEBUG_VARHANDLE_CAST
+        printf("vh0, ");
+        varhandle_print(vh0);
+
+        printf("vh1, ");
+        varhandle_print(vh1);
+
+        printf("vh2, ");
+        varhandle_print(vh2);
+#endif /* DEBUG_VARHANDLE_CAST */
 
         return vh0;
 }
