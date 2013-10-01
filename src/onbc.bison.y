@@ -2572,8 +2572,6 @@ static void translate_ec_b(struct EC* ec)
         if (ec->type_expression == EC_ASSIGNMENT) {
                 if (ec->type_operator == EC_OPE_SUBST) {
                         ec->vh = __varhandle_func_assignment_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
-                } else if (ec->type_operator == EC_OPE_VARIABLE) {
-                        /* 何もしない */
                 } else if (ec->type_operator == EC_OPE_LIST) {
                         /* 何もしない */
                 } else {
@@ -2661,6 +2659,13 @@ static void translate_ec_a(struct EC* ec)
                         ec->vh->var = varlist_search(ec->iden);
                         if (ec->vh->var == NULL)
                                 yyerror("syntax err: 未定義の変数を参照しようとしました");
+
+                        if (ec->vh->var->type & TYPE_AUTO)
+                                pA("stack_socket = %d + stack_frame;", ec->vh->var->base_ptr);
+                        else
+                                pA("stack_socket = %d;", ec->vh->var->base_ptr);
+
+                        push_stack("stack_socket");
 
                         ec->vh->is_lvalue = 1; /* 左辺値とする */
 
@@ -3045,14 +3050,7 @@ initializer
         ;
 
 assignment_expression
-        : conditional_expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_ASSIGNMENT;
-                ec->type_operator = EC_OPE_VARIABLE;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
-        }
+        : conditional_expression
         | unary_expression __OPE_SUBST assignment_expression {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_ASSIGNMENT;
