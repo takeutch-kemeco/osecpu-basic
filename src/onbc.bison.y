@@ -247,7 +247,9 @@ struct Var {
  */
 struct VarHandle {
         struct Var* var;
-        int32_t index_len;      /* index の個数。スカラーならば0 */
+        int32_t index_len;      /* これまで読まれた index の個数。
+                                 * この値が Var->dim_len と同じならば添字が全て埋まった状態。
+                                 */
         int32_t indirect_len;   /* 間接参照の深さ。直接参照(非ポインター型)ならば0 */
         int32_t is_completion;  /* リードや演算を行って結果を既にスタックへ積んでる場合 */
         int32_t is_lvalue;      /* 左辺値として扱える場合は1。 右辺値の場合は0 */
@@ -2626,7 +2628,22 @@ static void translate_ec_b(struct EC* ec)
                         yyerror("system err: translate_ec(), EC_UNARY");
                 }
         } else if (ec->type_expression == EC_POSTFIX) {
-                /* 何もしない */
+                if (ec->type_operator == EC_OPE_ARRAY) {
+                        /* この時点でスタックには "変数アドレス -> 添字" の順で積まれてる前提。
+                         * fixLに変数アドレス、fixRに添字をポップする。
+                         */
+                        pop_stack("fixL");
+                        pop_stack("fixR");
+
+                        ec->vh = ec->child_ptr[0]->vh;
+                        ec->vh->var->total_len /= ec->vh->var->unit_len[ec->vh->index_len];
+                        pA("fixL += fixR * %d;", ec->vh->var->total_len);
+                        push_stack("fixL");
+
+                        ec->vh->index_len++;
+                } else {
+                        yyerror("system err: translate_ec(), EC_POSTFIX");
+                }
         } else if (ec->type_expression == EC_CONSTANT) {
                 /* 何もしない */
         } else {
@@ -2698,23 +2715,7 @@ static void translate_ec_a(struct EC* ec)
                         return;
                 }
         } else if (ec->type_expression == EC_POSTFIX) {
-                if (ec->type_operator == EC_OPE_ARRAY) {
-                        /* 最初に添字expressionをスタックに積んでから、var_identifierをスタックに積む。
-                         * これによって A[x][y][z] ならばスタックに z -> y -> x の順で積めるので、
-                         * ポップして読んでいく際に、左側添字から順に(x -> y -> z の順で)値を得られる。
-                         */
-                        translate_ec(ec->child_ptr[1]);
-                        __read_variable(ec->child_ptr[1]->vh);
-
-                        translate_ec(ec->child_ptr[0]);
-                        __read_variable(ec->child_ptr[0]->vh);
-
-                        ec->vh = ec->child_ptr[0]->vh;
-                        ec->vh->index_len++;
-
-                        return;
-
-                } else if (ec->type_operator == EC_OPE_FUNCTION) {
+                if (ec->type_operator == EC_OPE_FUNCTION) {
                         /* 現在の stack_frame をプッシュする。
                          * そして、ここには関数終了後にはリターン値が入った状態となる。
                          */
