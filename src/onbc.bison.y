@@ -2615,10 +2615,10 @@ static void translate_ec_b(struct EC* ec)
         } else if (ec->type_expression == EC_UNARY) {
                 if (ec->type_operator == EC_OPE_ADDRESS) {
                         ec->vh = ec->child_ptr[0]->vh;
-                        ec->vh->indirect_len--;
+                        ec->vh->indirect_len++;
                 } else if (ec->type_operator == EC_OPE_POINTER) {
                         ec->vh = ec->child_ptr[0]->vh;
-                        ec->vh->indirect_len++;
+                        ec->vh->indirect_len--;
                         pop_stack("fixL");
                         read_mem("fixR", "fixL");
                         push_stack("fixR");
