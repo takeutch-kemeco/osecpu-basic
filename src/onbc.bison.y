@@ -1669,6 +1669,355 @@ static void cast_regval(const char* register_name,
         }
 }
 
+/* 変数インスタンス関連
+ */
+
+/* ローカル変数のインスタンス生成
+ */
+static struct VarHandle*
+__new_varhandle_initializer_local(const char* iden,
+                                  int32_t* unit_len,
+                                  const int32_t dim_len,
+                                  const int32_t indirect_len,
+                                  const int32_t type)
+{
+        if (dim_len >= VAR_DIM_MAX)
+                yyerror("syntax err: 配列の次元が高すぎます");
+
+        /* これはコンパイル時の変数状態を設定するにすぎない。
+         * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
+         */
+        varlist_add_local(iden, unit_len, dim_len, indirect_len, type | TYPE_AUTO);
+
+        struct VarHandle* vh = new_varhandle();
+        vh->var = varlist_search_local(iden);
+
+        /* 実際の動作時にメモリー確保するルーチンはこちら側
+         */
+        if (vh->var->type & TYPE_AUTO)
+                pA("stack_head = %d + stack_frame;", vh->var->base_ptr + vh->var->total_len);
+
+        return vh;
+}
+
+/* 変数インスタンスの具象アドレス取得関連
+ * これは struct VarHandle が指す変数の、実際のメモリー上のアドレスを heap_base へ取得する。
+ * この heap_base へ読み書きすることで、変数への読み書きとなる。
+ */
+
+/* 変数インスタンスの任意インデックスの具象アドレスを heap_base に得る
+ *
+ * dim: スタックに積んだ添字の個数。(スカラーなら0)
+ */
+static void __get_variable_concrete_address(struct VarHandle* vh)
+{
+        pA("heap_offset = 0;");
+
+        int32_t unit_size = vh->var->total_len;
+        int32_t i;
+        for (i = 0; i < vh->index_len; i++) {
+                pop_stack("stack_socket");
+                pA("stack_socket >>= 16;");
+
+                unit_size /= vh->var->unit_len[i];
+                pA("heap_offset += %d * stack_socket;", unit_size);
+        }
+
+        if (vh->var->type & TYPE_AUTO)
+                pA("heap_base = %d + stack_frame;", vh->var->base_ptr);
+        else
+                pA("heap_base = %d;", vh->var->base_ptr);
+
+        pA("heap_base += heap_offset;");
+
+        /* 変数ハンドルで指定された回数だけ間接参照を行う。
+         * 変数スペックで許される間接参照回数を越える場合はコンパイルエラーとする。
+         */
+        if (vh->indirect_len > vh->var->indirect_len)
+                yyerror("syntax err: 間接参照の深さが変数宣言時のスペックを越えてます");
+
+        for (i = 0; i < vh->indirect_len; i++) {
+                read_mem("stack_socket", "heap_base");
+                pA("heap_base = stack_socket;");
+        }
+
+#ifdef DEBUG_VARIABLE
+        pA("junkApi_putConstString('\\n__get_variable_concrete_address(), ');");
+
+        if (vh->var->type & TYPE_AUTO)
+                pA("junkApi_putConstString('is_auto ');");
+        else
+                pA("junkApi_putConstString('is_global ');");
+
+        pA("junkApi_putConstString('vh->indirect_len[');");
+        pA("junkApi_putStringDec('\\1', %d, 11, 1);", vh->indirect_len);
+        pA("junkApi_putConstString('] ');");
+
+        pA("junkApi_putConstString('vh->var->indirect_len[');");
+        pA("junkApi_putStringDec('\\1', %d, 11, 1);", vh->var->indirect_len);
+        pA("junkApi_putConstString(']\\n');");
+
+        debug_stack();
+        debug_heap();
+#endif /* DEBUG_VARIABLE */
+}
+
+/* 変数への代入関連
+ */
+
+/* 配列変数中の、任意インデックス番目の要素へ、値を代入する。
+ *
+ * register_name: 書き込み元のレジスター
+ *
+ * 配列添字はあらかじめスタックにプッシュされてる前提。
+ *     スカラーならば無し、
+ *     １次元配列ならば "添字" の順
+ *     2次元配列ならば "行添字, 列添字" の順
+ */
+static void __assignment_variable(const char* register_name, struct VarHandle* vh)
+{
+        __get_variable_concrete_address(vh);
+        write_mem(register_name, "heap_base");
+}
+
+/* 変数リード関連
+ */
+
+static void __read_function_ptr(struct VarHandle* vh)
+{
+        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
+        if (vh->is_completion)
+                return;
+
+        if ((vh->var->type & TYPE_FUNCTION) == 0)
+                yyerror("system err: __read_function_ptr()");
+
+        /* ラベルリストに名前が存在しなければエラー */
+        if (labellist_search_unsafe(vh->var->iden) == -1)
+                yyerror("syntax err: 未定義の関数のアドレスを得ようとしました");
+
+        pA("stack_socket = %d;", labellist_search(vh->var->iden));
+        push_stack("stack_socket");
+
+        /* リードしてスタックにプッシュ済みのフラグ */
+        vh->is_completion = 1;
+}
+
+static void __read_variable_ptr(struct VarHandle* vh)
+{
+        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
+        if (vh->is_completion)
+                return;
+
+        /* 定数リテラルの場合はアドレスを読むのは不正 */
+        if (vh->var->type & TYPE_LITERAL) {
+                yyerror("syntax err: 定数リテラルのアドレスを得ようとしました");
+
+        /* 関数アドレスの場合 */
+        } else if (vh->var->type & TYPE_FUNCTION) {
+                __read_function_ptr(vh);
+
+        /* 変数アドレスの場合 */
+        } else {
+                __get_variable_concrete_address(vh);
+                push_stack("heap_base");
+        }
+
+        /* リードしてスタックにプッシュ済みのフラグ */
+        vh->is_completion = 1;
+}
+
+static void __read_literal(struct VarHandle* vh)
+{
+        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
+        if (vh->is_completion)
+                return;
+
+        if ((vh->var->type & TYPE_LITERAL) == 0)
+                yyerror("system err: __read_literal()");
+
+        if (vh->var->type & TYPE_INT)
+                pA("stack_socket = %d;", *((int*)(vh->var->const_variable)));
+        else if (vh->var->type & TYPE_CHAR)
+                pA("stack_socket = %d;", *((char*)(vh->var->const_variable)));
+        else if (vh->var->type & TYPE_FLOAT)
+                /* floatだが実際は固定小数なのでint型へ型変換してる */
+                pA("stack_socket = %d;", *((int*)(vh->var->const_variable)));
+
+        push_stack("stack_socket");
+
+        /* リードしてスタックにプッシュ済みのフラグ */
+        vh->is_completion = 1;
+}
+
+static void __read_variable(struct VarHandle* vh)
+{
+        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
+        if (vh->is_completion)
+                return;
+
+        /* 定数リテラルの場合 */
+        if (vh->var->type & TYPE_LITERAL) {
+                __read_literal(vh);
+
+        /* 関数の場合 */
+        } else if (vh->var->type & TYPE_FUNCTION) {
+                /* 何もしない */
+
+        /* 変数の場合 */
+        } else {
+                /* 変数スペックと、変数アクセスでの、配列次元が同じ場合のみ値を参照する。
+                 * そうでない場合はアドレスを返す。
+                 */
+                if (vh->index_len == vh->var->dim_len) {
+                        __get_variable_concrete_address(vh);
+                        read_mem("stack_socket", "heap_base");
+                        push_stack("stack_socket");
+                } else {
+                        __read_variable_ptr(vh);
+                }
+        }
+
+        /* リードしてスタックにプッシュ済みのフラグ */
+        vh->is_completion = 1;
+}
+
+/* ユーザー定義関数関連
+ */
+
+/* 関数呼び出し
+ */
+static void __call_user_function(const char* iden)
+{
+        /* ラベルリストに名前が存在しなければエラー */
+        if (labellist_search_unsafe(iden) == -1)
+                yyerror("syntax err: 未定義の関数を実行しようとしました");
+
+        pA("PLIMM(%s, %d);", CUR_RETURN_LABEL, cur_label_index_head);
+        push_labelstack();
+        pA("PLIMM(P3F, %d);", labellist_search(iden));
+        pA("LB(1, %d);", cur_label_index_head);
+        cur_label_index_head++;
+}
+
+/* 関数定義の前半部
+ * __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __BLOCK_LB
+ */
+static void __define_user_function_begin(const char* iden,
+                                         const int32_t arglen,
+                                         const int32_t skip_label)
+{
+        /* 通常フロー中ではここに到達し、その場合はこの関数定義は読み飛ばす
+         * 関数の最後位置へ skip_label 番号のラベルが存在する前提で、そこへのジャンプ命令をここに書く。
+         *
+         * すなわち __define_use_function_begin() と、同_end() の、これら関数はペアで呼ばれるが、
+         * その際に引数の skip_label には同じ値を渡す必要がある。
+         * （ペア同士ならば、引数 skip_label が同じ値である暗黙の前提）
+         */
+        pA("PLIMM(P3F, %d);", skip_label);
+
+        /* 関数呼び出し時には、この位置が関数の先頭、すなわちジャンプ先アドレスとなる */
+        pA("LB(1, %d);", labellist_search(iden));
+
+        /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時）
+         */
+        inc_cur_scope_depth();
+        varlist_scope_push();
+
+        /* ローカル変数として @stack_prev_frame を作成し、
+         * その後、それのオフセットに 0 をセットする（コンパイル時）
+         */
+        const char stack_prev_frame_iden[] = "@stack_prev_frame";
+        varlist_add_local(stack_prev_frame_iden, NULL, 0, 0, TYPE_FLOAT | TYPE_AUTO);
+        varlist_set_scope_head();
+
+        /* スタック上に格納された引数順序と対応した順序となるように、ローカル変数を作成していく。
+         * （作成したローカル変数へ値を代入する手間が省ける）
+         */
+        int32_t i;
+        for (i = 0; i < arglen; i++) {
+                char iden[0x1000];
+                idenlist_pop(iden);
+
+                varlist_add_local(iden, NULL, 0, 0, TYPE_FLOAT | TYPE_AUTO);
+
+                /* 変数のスペックを得る。（コンパイル時） */
+                struct Var* var = varlist_search_local(iden);
+                if (var == NULL)
+                        yyerror("system err: functionによる関数定義において、ローカル変数の作成に失敗しました");
+        }
+
+        /* 現在の stack_frame に stack_head - (arglen + 1) をセットする。
+         * この位置はローカル変数 @stack_prev_frame が参照する位置であり、また
+         * 関数の関数終了後には、この位置にリターン値がセットされた状態となる。
+         */
+        pA("stack_frame = stack_head - %d;", arglen + 1);
+
+#ifdef DEBUG_SCOPE
+        pA("junkApi_putConstString('inc_scope(),stack_head=');");
+        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
+        pA("junkApi_putConstString(', stack_frame=');");
+        pA("junkApi_putStringDec('\\1', stack_frame, 11, 1);");
+        pA("junkApi_putConstString('\\n');");
+#endif /* DEBUG_SCOPE */
+}
+
+/* 現在の関数からのリターン
+ * リターンさせる値をあらかじめ fixA にセットしておくこと
+ */
+static void __define_user_function_return(void)
+{
+        /* スコープを1段戻す場合の定形処理
+         */
+        /* stack_head 位置を stack_frame にする */
+        pA("stack_head = stack_frame;");
+
+        /* ローカル変数 @stack_prev_frame の値を stack_frame へセットする。
+         * その後、stack_head を stack_frame
+         */
+        read_mem("fixA1", "stack_frame");
+        pA("stack_frame = fixA1;");
+
+#ifdef DEBUG_SCOPE
+        pA("junkApi_putConstString('dec_scope(),stack_head=');");
+        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
+        pA("junkApi_putConstString(', stack_frame=');");
+        pA("junkApi_putStringDec('\\1', stack_frame, 11, 1);");
+        pA("junkApi_putConstString('\\n');");
+#endif /* DEBUG_SCOPE */
+
+        push_stack("fixA");
+
+        /* 関数呼び出し元の位置まで戻る */
+        pop_labelstack();
+        pA("PCP(P3F, %s);", CUR_RETURN_LABEL);
+}
+
+/* 関数定義の後半部
+ * declaration_list __BLOCK_RB
+ */
+static void __define_user_function_end(const int32_t skip_label)
+{
+        /* 現在の関数からのリターン
+         * プログラムフローがこの位置へ至る状態は、関数内でreturnが実行されなかった場合。
+         * しかし、関数は expression なので、終了後に"必ず"スタックが +1 された状態でなければならないので、
+         * fixAにデフォルト値として 0 をセットし、 return 0 と同様の処理となる。
+         */
+        pA("fixA = 0;");
+        __define_user_function_return();
+
+        /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
+         */
+        dec_cur_scope_depth();
+        varlist_scope_pop();
+
+        /* 通常フロー中では、この関数定義を読み飛ばし、ここへとジャンプしてくる前提
+         * また、この skip_label の値は、
+         * この関数とペアで呼ばれる関数 __define_user_function_begin() へのそれと同じ値である前提。
+         */
+        pA("LB(0, %d);", skip_label);
+}
+
 /* 共通アキュムレーター
  */
 
@@ -1761,6 +2110,7 @@ __varhandle_binary_operation_new(struct VarHandle* vh1,
  * 各 __func_*() には、その型の場合における演算を行う関数を渡す。
  * __func_*() は fixL -> fixA な動作を行う前提
  */
+
 static struct VarHandle*
 __varhandle_unary_operation_new(struct VarHandle* vh1,
                                  void_func __func_int,
@@ -2094,361 +2444,23 @@ __varhandle_func_ge_new(struct VarHandle* vh1, struct VarHandle* vh2)
         return vh0;
 }
 
-/* 変数インスタンス関連
- */
-
-/* ローカル変数のインスタンス生成
- */
 static struct VarHandle*
-__new_varhandle_initializer_local(const char* iden,
-                                  int32_t* unit_len,
-                                  const int32_t dim_len,
-                                  const int32_t indirect_len,
-                                  const int32_t type)
+__varhandle_func_assignment_new(struct VarHandle* vh1, struct VarHandle* vh2)
 {
-        if (dim_len >= VAR_DIM_MAX)
-                yyerror("syntax err: 配列の次元が高すぎます");
+        if (vh1->is_lvalue == 0)
+                yyerror("syntax err: 代入先が左辺値ではありません");
 
-        /* これはコンパイル時の変数状態を設定するにすぎない。
-         * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
-         */
-        varlist_add_local(iden, unit_len, dim_len, indirect_len, type | TYPE_AUTO);
+        if (vh2->is_completion == 0)
+                yyerror("system err: 代入値がスタックへまだ積まれていません");
 
-        struct VarHandle* vh = new_varhandle();
-        vh->var = varlist_search_local(iden);
+        /* vh0 = vh1 */
+        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh1);
 
-        /* 実際の動作時にメモリー確保するルーチンはこちら側
-         */
-        if (vh->var->type & TYPE_AUTO)
-                pA("stack_head = %d + stack_frame;", vh->var->base_ptr + vh->var->total_len);
+        pop_stack("stack_socket");
+        cast_regval("stack_socket", vh0, vh2);
+        __assignment_variable("stack_socket", vh0);
 
-        return vh;
-}
-
-/* 変数インスタンスの具象アドレス取得関連
- * これは struct VarHandle が指す変数の、実際のメモリー上のアドレスを heap_base へ取得する。
- * この heap_base へ読み書きすることで、変数への読み書きとなる。
- */
-
-/* 変数インスタンスの任意インデックスの具象アドレスを heap_base に得る
- *
- * dim: スタックに積んだ添字の個数。(スカラーなら0)
- */
-static void __get_variable_concrete_address(struct VarHandle* vh)
-{
-        pA("heap_offset = 0;");
-
-        int32_t unit_size = vh->var->total_len;
-        int32_t i;
-        for (i = 0; i < vh->index_len; i++) {
-                pop_stack("stack_socket");
-                pA("stack_socket >>= 16;");
-
-                unit_size /= vh->var->unit_len[i];
-                pA("heap_offset += %d * stack_socket;", unit_size);
-        }
-
-        if (vh->var->type & TYPE_AUTO)
-                pA("heap_base = %d + stack_frame;", vh->var->base_ptr);
-        else
-                pA("heap_base = %d;", vh->var->base_ptr);
-
-        pA("heap_base += heap_offset;");
-
-        /* 変数ハンドルで指定された回数だけ間接参照を行う。
-         * 変数スペックで許される間接参照回数を越える場合はコンパイルエラーとする。
-         */
-        if (vh->indirect_len > vh->var->indirect_len)
-                yyerror("syntax err: 間接参照の深さが変数宣言時のスペックを越えてます");
-
-        for (i = 0; i < vh->indirect_len; i++) {
-                read_mem("stack_socket", "heap_base");
-                pA("heap_base = stack_socket;");
-        }
-
-#ifdef DEBUG_VARIABLE
-        pA("junkApi_putConstString('\\n__get_variable_concrete_address(), ');");
-
-        if (vh->var->type & TYPE_AUTO)
-                pA("junkApi_putConstString('is_auto ');");
-        else
-                pA("junkApi_putConstString('is_global ');");
-
-        pA("junkApi_putConstString('vh->indirect_len[');");
-        pA("junkApi_putStringDec('\\1', %d, 11, 1);", vh->indirect_len);
-        pA("junkApi_putConstString('] ');");
-
-        pA("junkApi_putConstString('vh->var->indirect_len[');");
-        pA("junkApi_putStringDec('\\1', %d, 11, 1);", vh->var->indirect_len);
-        pA("junkApi_putConstString(']\\n');");
-
-        debug_stack();
-        debug_heap();
-#endif /* DEBUG_VARIABLE */
-}
-
-/* 変数への代入関連
- */
-
-/* 配列変数中の、任意インデックス番目の要素へ、値を代入する。
- *
- * 値はあらかじめスタックにプッシュされてる前提。
- *     スカラーならば "値" の順、
- *     １次元配列ならば "添字, 値" の順
- *     2次元配列ならば "行添字, 列添字, 値" の順
- */
-static void __assignment_variable(struct VarHandle* vh)
-{
-        /* 書き込む値を読んでおく */
-        pop_stack("heap_socket");
-        __get_variable_concrete_address(vh);
-        write_mem("heap_socket", "heap_base");
-
-        /* 変数へ書き込んだ値をスタックへもプッシュしておく
-         * （assignment は expression なので、結果を戻り値としてスタックへプッシュする必要がある為）
-         */
-        push_stack("heap_socket");
-
-        /* 書き込んでスタックにプッシュ済みのフラグ */
-        vh->is_completion = 1;
-}
-
-/* 変数リード関連
- */
-
-static void __read_function_ptr(struct VarHandle* vh)
-{
-        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
-        if (vh->is_completion)
-                return;
-
-        if ((vh->var->type & TYPE_FUNCTION) == 0)
-                yyerror("system err: __read_function_ptr()");
-
-        /* ラベルリストに名前が存在しなければエラー */
-        if (labellist_search_unsafe(vh->var->iden) == -1)
-                yyerror("syntax err: 未定義の関数のアドレスを得ようとしました");
-
-        pA("stack_socket = %d;", labellist_search(vh->var->iden));
-        push_stack("stack_socket");
-
-        /* リードしてスタックにプッシュ済みのフラグ */
-        vh->is_completion = 1;
-}
-
-static void __read_variable_ptr(struct VarHandle* vh)
-{
-        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
-        if (vh->is_completion)
-                return;
-
-        /* 定数リテラルの場合はアドレスを読むのは不正 */
-        if (vh->var->type & TYPE_LITERAL) {
-                yyerror("syntax err: 定数リテラルのアドレスを得ようとしました");
-
-        /* 関数アドレスの場合 */
-        } else if (vh->var->type & TYPE_FUNCTION) {
-                __read_function_ptr(vh);
-
-        /* 変数アドレスの場合 */
-        } else {
-                __get_variable_concrete_address(vh);
-                push_stack("heap_base");
-        }
-
-        /* リードしてスタックにプッシュ済みのフラグ */
-        vh->is_completion = 1;
-}
-
-static void __read_literal(struct VarHandle* vh)
-{
-        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
-        if (vh->is_completion)
-                return;
-
-        if ((vh->var->type & TYPE_LITERAL) == 0)
-                yyerror("system err: __read_literal()");
-
-        if (vh->var->type & TYPE_INT)
-                pA("stack_socket = %d;", *((int*)(vh->var->const_variable)));
-        else if (vh->var->type & TYPE_CHAR)
-                pA("stack_socket = %d;", *((char*)(vh->var->const_variable)));
-        else if (vh->var->type & TYPE_FLOAT)
-                /* floatだが実際は固定小数なのでint型へ型変換してる */
-                pA("stack_socket = %d;", *((int*)(vh->var->const_variable)));
-
-        push_stack("stack_socket");
-
-        /* リードしてスタックにプッシュ済みのフラグ */
-        vh->is_completion = 1;
-}
-
-static void __read_variable(struct VarHandle* vh)
-{
-        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
-        if (vh->is_completion)
-                return;
-
-        /* 定数リテラルの場合 */
-        if (vh->var->type & TYPE_LITERAL) {
-                __read_literal(vh);
-
-        /* 関数の場合 */
-        } else if (vh->var->type & TYPE_FUNCTION) {
-                /* 何もしない */
-
-        /* 変数の場合 */
-        } else {
-                /* 変数スペックと、変数アクセスでの、配列次元が同じ場合のみ値を参照する。
-                 * そうでない場合はアドレスを返す。
-                 */
-                if (vh->index_len == vh->var->dim_len) {
-                        __get_variable_concrete_address(vh);
-                        read_mem("stack_socket", "heap_base");
-                        push_stack("stack_socket");
-                } else {
-                        __read_variable_ptr(vh);
-                }
-        }
-
-        /* リードしてスタックにプッシュ済みのフラグ */
-        vh->is_completion = 1;
-}
-
-/* ユーザー定義関数関連
- */
-
-/* 関数呼び出し
- */
-static void __call_user_function(const char* iden)
-{
-        /* ラベルリストに名前が存在しなければエラー */
-        if (labellist_search_unsafe(iden) == -1)
-                yyerror("syntax err: 未定義の関数を実行しようとしました");
-
-        pA("PLIMM(%s, %d);", CUR_RETURN_LABEL, cur_label_index_head);
-        push_labelstack();
-        pA("PLIMM(P3F, %d);", labellist_search(iden));
-        pA("LB(1, %d);", cur_label_index_head);
-        cur_label_index_head++;
-}
-
-/* 関数定義の前半部
- * __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB __BLOCK_LB
- */
-static void __define_user_function_begin(const char* iden,
-                                         const int32_t arglen,
-                                         const int32_t skip_label)
-{
-        /* 通常フロー中ではここに到達し、その場合はこの関数定義は読み飛ばす
-         * 関数の最後位置へ skip_label 番号のラベルが存在する前提で、そこへのジャンプ命令をここに書く。
-         *
-         * すなわち __define_use_function_begin() と、同_end() の、これら関数はペアで呼ばれるが、
-         * その際に引数の skip_label には同じ値を渡す必要がある。
-         * （ペア同士ならば、引数 skip_label が同じ値である暗黙の前提）
-         */
-        pA("PLIMM(P3F, %d);", skip_label);
-
-        /* 関数呼び出し時には、この位置が関数の先頭、すなわちジャンプ先アドレスとなる */
-        pA("LB(1, %d);", labellist_search(iden));
-
-        /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時）
-         */
-        inc_cur_scope_depth();
-        varlist_scope_push();
-
-        /* ローカル変数として @stack_prev_frame を作成し、
-         * その後、それのオフセットに 0 をセットする（コンパイル時）
-         */
-        const char stack_prev_frame_iden[] = "@stack_prev_frame";
-        varlist_add_local(stack_prev_frame_iden, NULL, 0, 0, TYPE_FLOAT | TYPE_AUTO);
-        varlist_set_scope_head();
-
-        /* スタック上に格納された引数順序と対応した順序となるように、ローカル変数を作成していく。
-         * （作成したローカル変数へ値を代入する手間が省ける）
-         */
-        int32_t i;
-        for (i = 0; i < arglen; i++) {
-                char iden[0x1000];
-                idenlist_pop(iden);
-
-                varlist_add_local(iden, NULL, 0, 0, TYPE_FLOAT | TYPE_AUTO);
-
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search_local(iden);
-                if (var == NULL)
-                        yyerror("system err: functionによる関数定義において、ローカル変数の作成に失敗しました");
-        }
-
-        /* 現在の stack_frame に stack_head - (arglen + 1) をセットする。
-         * この位置はローカル変数 @stack_prev_frame が参照する位置であり、また
-         * 関数の関数終了後には、この位置にリターン値がセットされた状態となる。
-         */
-        pA("stack_frame = stack_head - %d;", arglen + 1);
-
-#ifdef DEBUG_SCOPE
-        pA("junkApi_putConstString('inc_scope(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
-        pA("junkApi_putConstString(', stack_frame=');");
-        pA("junkApi_putStringDec('\\1', stack_frame, 11, 1);");
-        pA("junkApi_putConstString('\\n');");
-#endif /* DEBUG_SCOPE */
-}
-
-/* 現在の関数からのリターン
- * リターンさせる値をあらかじめ fixA にセットしておくこと
- */
-static void __define_user_function_return(void)
-{
-        /* スコープを1段戻す場合の定形処理
-         */
-        /* stack_head 位置を stack_frame にする */
-        pA("stack_head = stack_frame;");
-
-        /* ローカル変数 @stack_prev_frame の値を stack_frame へセットする。
-         * その後、stack_head を stack_frame
-         */
-        read_mem("fixA1", "stack_frame");
-        pA("stack_frame = fixA1;");
-
-#ifdef DEBUG_SCOPE
-        pA("junkApi_putConstString('dec_scope(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
-        pA("junkApi_putConstString(', stack_frame=');");
-        pA("junkApi_putStringDec('\\1', stack_frame, 11, 1);");
-        pA("junkApi_putConstString('\\n');");
-#endif /* DEBUG_SCOPE */
-
-        push_stack("fixA");
-
-        /* 関数呼び出し元の位置まで戻る */
-        pop_labelstack();
-        pA("PCP(P3F, %s);", CUR_RETURN_LABEL);
-}
-
-/* 関数定義の後半部
- * declaration_list __BLOCK_RB
- */
-static void __define_user_function_end(const int32_t skip_label)
-{
-        /* 現在の関数からのリターン
-         * プログラムフローがこの位置へ至る状態は、関数内でreturnが実行されなかった場合。
-         * しかし、関数は expression なので、終了後に"必ず"スタックが +1 された状態でなければならないので、
-         * fixAにデフォルト値として 0 をセットし、 return 0 と同様の処理となる。
-         */
-        pA("fixA = 0;");
-        __define_user_function_return();
-
-        /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
-         */
-        dec_cur_scope_depth();
-        varlist_scope_pop();
-
-        /* 通常フロー中では、この関数定義を読み飛ばし、ここへとジャンプしてくる前提
-         * また、この skip_label の値は、
-         * この関数とペアで呼ばれる関数 __define_user_function_begin() へのそれと同じ値である前提。
-         */
-        pA("LB(0, %d);", skip_label);
+        return vh0;
 }
 
 /* ExpressionContainer 関連
@@ -2558,7 +2570,9 @@ static void translate_ec_b(struct EC* ec)
                 ec->vh = ec->child_ptr[0]->vh;
 
         if (ec->type_expression == EC_ASSIGNMENT) {
-                if (ec->type_operator == EC_OPE_VARIABLE) {
+                if (ec->type_operator == EC_OPE_SUBST) {
+                        ec->vh = __varhandle_func_assignment_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                } else if (ec->type_operator == EC_OPE_VARIABLE) {
                         /* 何もしない */
                 } else if (ec->type_operator == EC_OPE_LIST) {
                         /* 何もしない */
@@ -2625,26 +2639,7 @@ static void translate_ec_b(struct EC* ec)
 static void translate_ec_a(struct EC* ec)
 {
         if (ec->type_expression == EC_ASSIGNMENT) {
-                if (ec->type_operator == EC_OPE_SUBST) {
-                        translate_ec(ec->child_ptr[0]);
-                        __read_variable(ec->child_ptr[0]->vh);
-
-                        translate_ec(ec->child_ptr[1]);
-                        __read_variable(ec->child_ptr[1]->vh);
-
-                        if (ec->child_ptr[1]->vh->is_completion == 0)
-                                yyerror("system err: 代入値がスタックへまだ積まれていません");
-
-                        ec->vh = varhandle_cast_new(ec->child_ptr[0]->vh, ec->child_ptr[0]->vh);
-
-                        pop_stack("stack_socket");
-                        cast_regval("fixL", ec->vh, ec->child_ptr[1]->vh);
-                        pop_stack("stack_socket");
-
-                        __assignment_variable(ec->vh);
-
-                        return;
-                } else if (ec->type_operator == EC_OPE_CAST) {
+                if (ec->type_operator == EC_OPE_CAST) {
                         translate_ec(ec->child_ptr[0]);
                         __read_variable(ec->child_ptr[0]->vh);
 
@@ -3042,12 +3037,8 @@ initializer
 
                 struct VarHandle* vh = $1;
 
-                __assignment_variable(vh);
-
-                /* initializer は終了時点でスタックが +-0 である必要があるので、
-                 * __assignment_variable() によるプッシュを捨てる。
-                 */
-                pop_stack_dummy();
+                pop_stack("heap_socket");
+                __assignment_variable("heap_socket", vh);
         }
         ;
 
@@ -3632,10 +3623,7 @@ inline_assembler_statement
         }
         | __STATE_ASM __LB unary_expression __OPE_SUBST string __RB __DECL_END {
                 translate_ec($3);
-                push_stack($5);
-                __assignment_variable($3->vh);
-
-                pop_stack_dummy();
+                __assignment_variable($5, $3->vh);
         }
         ;
 
