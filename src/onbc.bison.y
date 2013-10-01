@@ -2454,11 +2454,11 @@ __varhandle_func_assignment_new(struct VarHandle* vh1, struct VarHandle* vh2)
                 yyerror("system err: 代入値がスタックへまだ積まれていません");
 
         /* vh0 = vh1 */
-        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh1);
+        struct VarHandle* vh0 = vh1;
 
-        pop_stack("stack_socket");
-        cast_regval("stack_socket", vh0, vh2);
-        __assignment_variable("stack_socket", vh0);
+        pop_stack("fixA");
+        cast_regval("fixA", vh0, vh2);
+        __assignment_variable("fixA", vh0);
 
         return vh0;
 }
@@ -2661,6 +2661,8 @@ static void translate_ec_a(struct EC* ec)
                         ec->vh->var = varlist_search(ec->iden);
                         if (ec->vh->var == NULL)
                                 yyerror("syntax err: 未定義の変数を参照しようとしました");
+
+                        ec->vh->is_lvalue = 1; /* 左辺値とする */
 
                         return;
                 }
