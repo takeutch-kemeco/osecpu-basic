@@ -1590,6 +1590,20 @@ static void cast_regval(const char* register_name,
                         struct VarHandle* dst_vh,
                         struct VarHandle* src_vh)
 {
+#ifdef DEBUG_CAST_REGVAL
+        printf("cast_regval(),\n");
+        printf("dst_vh, ");
+        varhandle_print(dst_vh);
+        printf("src_vh, ");
+        varhandle_print(src_vh);
+#endif /* DEBUG_CAST_REGVAL */
+
+        /* src_vh 変数において、実際の値が既にリード済み(スタックプッシュ済み)かを調べる。
+         * 未リードであった場合はエラー。
+         */
+        if (src_vh->is_completion == 0)
+                yyerror("system err: cast_regval(), src_vh");
+
         const int32_t dst_type = dst_vh->var->type;
         const int32_t src_type = src_vh->var->type;
 
@@ -1643,6 +1657,10 @@ static void cast_regval(const char* register_name,
                         pA("%d &= 0x0000ffff;", register_name);
                 } else if (dst_type & TYPE_LONG) {
                         /* pA("%d &= 0xffffffff;", register_name); */
+                } else if (dst_type & TYPE_FLOAT) {
+                        /* なにもしない */
+                } else if (dst_type & TYPE_DOUBLE) {
+                        /* なにもしない */
                 } else if (dst_type & TYPE_VOID) {
                         /* なにもしない */
                 } else {
@@ -2256,7 +2274,8 @@ static void __read_literal(struct VarHandle* vh)
         else if (vh->var->type & TYPE_CHAR)
                 pA("stack_socket = %d;", *((char*)(vh->var->const_variable)));
         else if (vh->var->type & TYPE_FLOAT)
-                pA("stack_socket = %d;", *((float*)(vh->var->const_variable)));
+                /* floatだが実際は固定小数なのでint型へ型変換してる */
+                pA("stack_socket = %d;", *((int*)(vh->var->const_variable)));
 
         push_stack("stack_socket");
 
@@ -2613,7 +2632,15 @@ static void translate_ec_a(struct EC* ec)
                         translate_ec(ec->child_ptr[1]);
                         __read_variable(ec->child_ptr[1]->vh);
 
-                        ec->vh = ec->child_ptr[0]->vh;
+                        if (ec->child_ptr[1]->vh->is_completion == 0)
+                                yyerror("system err: 代入値がスタックへまだ積まれていません");
+
+                        ec->vh = varhandle_cast_new(ec->child_ptr[0]->vh, ec->child_ptr[0]->vh);
+
+                        pop_stack("stack_socket");
+                        cast_regval("fixL", ec->vh, ec->child_ptr[1]->vh);
+                        pop_stack("stack_socket");
+
                         __assignment_variable(ec->vh);
 
                         return;
@@ -3484,6 +3511,8 @@ cast_expression
                 ec->vh->var = new_var();
                 ec->vh->var->indirect_len = $3;
                 ec->vh->var->type = $2;
+                ec->child_ptr[0] = $5;
+                ec->child_len = 1;
                 $$ = ec;
         }
         ;
@@ -3620,7 +3649,7 @@ constant
                 ec->vh->var->type = TYPE_SIGNED | TYPE_INT | TYPE_LITERAL;
 
                 ec->vh->var->const_variable = malloc(sizeof(int));
-                *((int*)(ec->vh->var->const_variable)) = $1 << 16;
+                *((int*)(ec->vh->var->const_variable)) = $1;
 
                 $$ = ec;
         }
@@ -3633,7 +3662,7 @@ constant
                 ec->vh->var->type = TYPE_SIGNED | TYPE_CHAR |TYPE_LITERAL;
 
                 ec->vh->var->const_variable = malloc(sizeof(int));
-                *((int*)(ec->vh->var->const_variable)) = $1 << 16;
+                *((int*)(ec->vh->var->const_variable)) = $1;
 
                 $$ = ec;
         }
