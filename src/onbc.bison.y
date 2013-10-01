@@ -1693,6 +1693,7 @@ __new_varhandle_initializer_local(const char* iden,
 
         struct VarHandle* vh = new_varhandle();
         vh->var = varlist_search_local(iden);
+        vh->indirect_len = vh->var->indirect_len;
 
         /* 実際の動作時にメモリー確保するルーチンはこちら側
          */
@@ -1731,12 +1732,6 @@ static void __get_variable_concrete_address(struct VarHandle* vh)
                 pA("heap_base = %d;", vh->var->base_ptr);
 
         pA("heap_base += heap_offset;");
-
-        /* 変数ハンドルで指定された回数だけ間接参照を行う。
-         * 変数スペックで許される間接参照回数を越える場合はコンパイルエラーとする。
-         */
-        if (vh->indirect_len > vh->var->indirect_len)
-                yyerror("syntax err: 間接参照の深さが変数宣言時のスペックを越えてます");
 
         for (i = 0; i < vh->indirect_len; i++) {
                 read_mem("stack_socket", "heap_base");
@@ -2618,7 +2613,16 @@ static void translate_ec_b(struct EC* ec)
                         yyerror("system err: translate_ec(), EC_CALC");
                 }
         } else if (ec->type_expression == EC_UNARY) {
-                if (ec->type_operator == EC_OPE_INV) {
+                if (ec->type_operator == EC_OPE_ADDRESS) {
+                        ec->vh = ec->child_ptr[0]->vh;
+                        ec->vh->indirect_len--;
+                } else if (ec->type_operator == EC_OPE_POINTER) {
+                        ec->vh = ec->child_ptr[0]->vh;
+                        ec->vh->indirect_len++;
+                        pop_stack("fixL");
+                        read_mem("fixR", "fixL");
+                        push_stack("fixR");
+                } else if (ec->type_operator == EC_OPE_INV) {
                         ec->vh = __varhandle_func_invert_new(ec->child_ptr[0]->vh);
                 } else if (ec->type_operator == EC_OPE_NOT) {
                         ec->vh = __varhandle_func_not_new(ec->child_ptr[0]->vh);
@@ -2689,20 +2693,7 @@ static void translate_ec_a(struct EC* ec)
                         return;
                 }
         } else if (ec->type_expression == EC_UNARY) {
-                if (ec->type_operator == EC_OPE_POINTER) {
-                        translate_ec(ec->child_ptr[0]);
-                        ec->vh = ec->child_ptr[0]->vh;
-                        ec->vh->indirect_len++;
-
-                        return;
-
-                } else if (ec->type_operator == EC_OPE_ADDRESS) {
-                        translate_ec(ec->child_ptr[0]);
-                        ec->vh = ec->child_ptr[0]->vh;
-                        __read_variable_ptr(ec->vh);
-
-                        return;
-                } else if (ec->type_operator == EC_OPE_SIZEOF) {
+                if (ec->type_operator == EC_OPE_SIZEOF) {
                         translate_ec(ec->child_ptr[0]);
                         ec->vh = ec->child_ptr[0]->vh;
                         __read_variable_ptr(ec->vh);
@@ -2728,8 +2719,6 @@ static void translate_ec_a(struct EC* ec)
                         ec->vh->is_completion = 1;
 
                         return;
-                } else {
-                        yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
         }
 
