@@ -2407,11 +2407,10 @@ static void translate_ec(struct EC* ec)
 
                         if (ec->var->type & TYPE_AUTO)
                                 pA("stack_socket = %d + stack_frame;", ec->var->base_ptr);
-                        else if ((ec->var->type & TYPE_LITERAL) == 0)
+                        else
                                 pA("stack_socket = %d;", ec->var->base_ptr);
 
                         push_stack("stack_socket");
-
                 } else {
                         yyerror("system err: translate_ec(), EC_PRIMARY");
                 }
@@ -2446,8 +2445,8 @@ static void translate_ec(struct EC* ec)
                         /* この時点でスタックには "変数アドレス -> 添字" の順で積まれてる前提。
                          * fixLに変数アドレス、fixRに添字をポップする。
                          */
-                        pop_stack("fixL");
                         pop_stack("fixR");
+                        pop_stack("fixL");
 
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
