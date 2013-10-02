@@ -234,6 +234,7 @@ static void dec_cur_scope_depth(void)
 #define VAR_DIM_MAX 0x100
 struct Var {
         char iden[IDENLIST_STR_LEN];
+        int32_t is_lvalue;      /* 左辺値として扱える場合は1。 右辺値の場合は0 */
         int32_t base_ptr;       /* ベースアドレス */
         int32_t total_len;      /* 配列変数全体の長さ */
         int32_t unit_len[VAR_DIM_MAX];  /* 各配列次元の長さ */
@@ -241,17 +242,6 @@ struct Var {
         int32_t indirect_len;   /* 間接参照の深さ。直接参照(非ポインター型)ならば0 */
         int32_t type;           /* specifier | qualifier | storage_class による変数属性 */
         void* const_variable;   /* 変数が定数の場合の値 */
-};
-
-/* 普遍的な変数スペックと、その変数への動的なアクセス方法をパックしたハンドル
- */
-struct VarHandle {
-        struct Var* var;
-        int32_t index_len;      /* これまで読まれた index の個数。
-                                 * この値が Var->dim_len と同じならば添字が全て埋まった状態。
-                                 */
-        int32_t indirect_len;   /* 間接参照の深さ。直接参照(非ポインター型)ならば0 */
-        int32_t is_lvalue;      /* 左辺値として扱える場合は1。 右辺値の場合は0 */
 };
 
 /* Varの内容を印字する
@@ -264,8 +254,8 @@ static void var_print(struct Var* var)
                 return;
         }
 
-        printf("struct Var, iden[%s], base_ptr[%d], total_len[%d], unit_len",
-               var->iden, var->base_ptr, var->total_len);
+        printf("struct Var, iden[%s], is_lvalue[%d], base_ptr[%d], total_len[%d], unit_len",
+               var->iden, var->is_lvalue, var->base_ptr, var->total_len);
 
         int32_t i;
         for (i = 0; i < var->dim_len; i++) {
@@ -281,22 +271,6 @@ static void var_print(struct Var* var)
         printf("\n");
 }
 
-/* VarHandleの内容を印字する
- * 主にデバッグ用
- */
-static void varhandle_print(struct VarHandle* vh)
-{
-        if (vh == NULL) {
-                printf("struct VarHandle NULL\n");
-                return;
-        }
-
-        printf("struct VarHandle, index_len[%d], indirect_len[%d], is_lvalue[%d]\n",
-               vh->index_len, vh->indirect_len, vh->is_lvalue);
-
-        var_print(vh->var);
-}
-
 /* 空のVarインスタンスを生成する */
 static struct Var* new_var(void)
 {
@@ -305,29 +279,15 @@ static struct Var* new_var(void)
                 yyerror("system err: new_var(), malloc()");
 
         var->iden[0] = '\0';
+        var->is_lvalue = 1; /* デフォルトは左辺値 */
         var->base_ptr = 0;
         var->total_len = 0;
         var->dim_len = 0;
         var->indirect_len = 0;
-        var->type = TYPE_SIGNED | TYPE_INT;     /* デフォルトは符号付きint */
+        var->type = TYPE_SIGNED | TYPE_INT; /* デフォルトは符号付きint */
         var->const_variable = NULL;
 
         return var;
-}
-
-/* 空のVarHandleインスタンスを生成する */
-static struct VarHandle* new_varhandle(void)
-{
-        struct VarHandle* vh = malloc(sizeof(*vh));
-        if (vh == NULL)
-                yyerror("system err: new_varhandle(), malloc()");
-
-        vh->var = NULL;
-        vh->index_len = 0;
-        vh->indirect_len = 0;
-        vh->is_lvalue = 0;
-
-        return vh;
 }
 
 /* 変数スペックのリストコンテナ
@@ -1516,69 +1476,53 @@ static void __func_logical_rshift_float(void)
 /* 型変換関連
  */
 
-/* 2項演算の場合のキャスト結果のVarHandleを生成して返す
+/* 2項演算の場合のキャスト結果のVarを生成して返す
  */
-static struct VarHandle* varhandle_cast_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var* var_cast_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 = new_varhandle();
-        vh0->var = new_var();
+        struct Var* vh0 = new_var();
 
         /* より汎用性の高い方の型を vh0 に得る。
          * その際に、vh0は非配列型とするので、var->total_lenには型の基本サイズが入る。
          * 現状は実質的に SInt32 型のみなので、どの型も 1 となる。(void型も1)
          */
-        if ((vh1->var->type & TYPE_DOUBLE) || (vh2->var->type & TYPE_DOUBLE)) {
-                vh0->var->type |= TYPE_DOUBLE;
-                vh0->var->total_len = 1;
-        } else if ((vh1->var->type & TYPE_FLOAT) || (vh2->var->type & TYPE_FLOAT)) {
-                vh0->var->type |= TYPE_FLOAT;
-                vh0->var->total_len = 1;
-        } else if ((vh1->var->type & TYPE_INT) || (vh2->var->type & TYPE_INT)) {
-                vh0->var->type |= TYPE_INT;
-                vh0->var->total_len = 1;
-        } else if ((vh1->var->type & TYPE_LONG) || (vh2->var->type & TYPE_LONG)) {
-                vh0->var->type |= TYPE_LONG;
-                vh0->var->total_len = 1;
-        } else if ((vh1->var->type & TYPE_SHORT) || (vh2->var->type & TYPE_SHORT)) {
-                vh0->var->type |= TYPE_SHORT;
-                vh0->var->total_len = 1;
-        } else if ((vh1->var->type & TYPE_CHAR) || (vh2->var->type & TYPE_CHAR)) {
-                vh0->var->type |= TYPE_CHAR;
-                vh0->var->total_len = 1;
-        } else if ((vh1->var->type & TYPE_VOID) || (vh2->var->type & TYPE_VOID)) {
-                vh0->var->type |= TYPE_VOID;
-                vh0->var->total_len = 1;
+        if ((vh1->type & TYPE_DOUBLE) || (vh2->type & TYPE_DOUBLE)) {
+                vh0->type |= TYPE_DOUBLE;
+                vh0->total_len = 1;
+        } else if ((vh1->type & TYPE_FLOAT) || (vh2->type & TYPE_FLOAT)) {
+                vh0->type |= TYPE_FLOAT;
+                vh0->total_len = 1;
+        } else if ((vh1->type & TYPE_INT) || (vh2->type & TYPE_INT)) {
+                vh0->type |= TYPE_INT;
+                vh0->total_len = 1;
+        } else if ((vh1->type & TYPE_LONG) || (vh2->type & TYPE_LONG)) {
+                vh0->type |= TYPE_LONG;
+                vh0->total_len = 1;
+        } else if ((vh1->type & TYPE_SHORT) || (vh2->type & TYPE_SHORT)) {
+                vh0->type |= TYPE_SHORT;
+                vh0->total_len = 1;
+        } else if ((vh1->type & TYPE_CHAR) || (vh2->type & TYPE_CHAR)) {
+                vh0->type |= TYPE_CHAR;
+                vh0->total_len = 1;
+        } else if ((vh1->type & TYPE_VOID) || (vh2->type & TYPE_VOID)) {
+                vh0->type |= TYPE_VOID;
+                vh0->total_len = 1;
         } else {
-                yyerror("system err: varhandle_cast_new(), variable type not found");
-        }
-
-        /* 現時点のアクセス時での、型の実質的なindirect_lenを得て、
-         * どちらか一方のみがポインター型である場合に、その型を採用する。
-         */
-        const int32_t vh1_cur_indirect_len = vh1->var->indirect_len - vh1->indirect_len;
-        const int32_t vh2_cur_indirect_len = vh2->var->indirect_len - vh2->indirect_len;
-
-        if ((vh1_cur_indirect_len >= 1) && (vh2_cur_indirect_len >= 1))
-                yyerror("syntax err: ポインター型同士の二項演算は不正です");
-
-        if (vh1_cur_indirect_len >= 1) {
-                vh0->var->indirect_len = vh1_cur_indirect_len;
-        } else if (vh2_cur_indirect_len >= 1) {
-                vh0->var->indirect_len = vh2_cur_indirect_len;
+                yyerror("system err: var_cast_new(), variable type not found");
         }
 
         vh0->is_lvalue = 0;     /* 右辺値とする */
 
-#ifdef DEBUG_VARHANDLE_CAST
+#ifdef DEBUG_VAR_CAST
         printf("vh0, ");
-        varhandle_print(vh0);
+        var_print(vh0);
 
         printf("vh1, ");
-        varhandle_print(vh1);
+        var_print(vh1);
 
         printf("vh2, ");
-        varhandle_print(vh2);
-#endif /* DEBUG_VARHANDLE_CAST */
+        var_print(vh2);
+#endif /* DEBUG_VAR_CAST */
 
         return vh0;
 }
@@ -1586,75 +1530,63 @@ static struct VarHandle* varhandle_cast_new(struct VarHandle* vh1, struct VarHan
 /* 任意レジスターの値を型変換する
  */
 static void cast_regval(const char* register_name,
-                        struct VarHandle* dst_vh,
-                        struct VarHandle* src_vh)
+                        struct Var* dst_var,
+                        struct Var* src_var)
 {
 #ifdef DEBUG_CAST_REGVAL
         printf("cast_regval(),\n");
-        printf("dst_vh, ");
-        varhandle_print(dst_vh);
-        printf("src_vh, ");
-        varhandle_print(src_vh);
+        printf("dst_var, ");
+        var_print(dst_var);
+        printf("src_var, ");
+        var_print(src_var);
 #endif /* DEBUG_CAST_REGVAL */
-
-        const int32_t dst_type = dst_vh->var->type;
-        const int32_t src_type = src_vh->var->type;
-
-        /* 参照時の型の間接参照次元を得る
-         */
-        const int32_t dst_indirect_len = dst_vh->var->indirect_len - dst_vh->indirect_len;
-        const int32_t src_indirect_len = src_vh->var->indirect_len - src_vh->indirect_len;
 
         /* 参照時のsrc,dstがポインター型の場合
          */
-        if (src_indirect_len >= 1 && dst_indirect_len >= 1) {
+        if (src_var->indirect_len >= 1 && dst_var->indirect_len >= 1) {
                 /* なにもしない */
 
         /* 参照時のsrcがポインター型、dstが非ポインター型の場合 */
-        } else if (src_indirect_len >= 1 && dst_indirect_len == 0) {
-                if (dst_type & (TYPE_FLOAT | TYPE_DOUBLE))
-                        pA("%d <<= 16;", register_name); /* 整数値から固定小数値へ変換 */
-
-                yywarning("syntax warning: ポインター値を非ポインター型へ型変換しています");
+        } else if (src_var->indirect_len >= 1 && dst_var->indirect_len == 0) {
+                if (dst_var->type & (TYPE_FLOAT | TYPE_DOUBLE))
+                        pA("%d <<= 16;", register_name); /* 整数から固定小数点数へ変換 */
 
         /* 参照時のsrcが非ポインター型、dstがポインター型の場合 */
-        } else if (src_indirect_len == 0 && dst_indirect_len >= 1) {
-                if (src_type & (TYPE_FLOAT | TYPE_DOUBLE))
-                        pA("%d >>= 16;", register_name); /* 固定小数値から整数値へ変換 */
-
-                yywarning("syntax warning: 非ポインター値をポインター型へ型変換しています");
+        } else if (src_var->indirect_len == 0 && dst_var->indirect_len >= 1) {
+                if (src_var->type & (TYPE_FLOAT | TYPE_DOUBLE))
+                        pA("%d >>= 16;", register_name); /* 固定小数点数から整数へ変換 */
 
         /* 参照時のsrc,dstが非ポインター型の場合
          */
         } else {
-                /* srcが小数型、dstが整数型の場合 */
-                if ((src_type & (TYPE_FLOAT | TYPE_DOUBLE)) &&
-                    (!(dst_type & (TYPE_FLOAT | TYPE_DOUBLE)))) {
-                                pA("%d >>= 16;", register_name); /* 固定小数値から整数値へ変換 */
+                /* srcが固定小数点数、dstが整数の場合 */
+                if ((src_var->type & (TYPE_FLOAT | TYPE_DOUBLE)) &&
+                    (!(dst_var->type & (TYPE_FLOAT | TYPE_DOUBLE)))) {
+                                pA("%d >>= 16;", register_name); /* 固定小数点数から整数へ変換 */
 
-                /* srcが整数型、dstが小数型の場合
+                /* srcが整数、dstが固定小数点数の場合
                  */
-                } else if ((!(src_type & (TYPE_FLOAT | TYPE_DOUBLE))) &&
-                           (dst_type & (TYPE_FLOAT | TYPE_DOUBLE))) {
+                } else if ((!(src_var->type & (TYPE_FLOAT | TYPE_DOUBLE))) &&
+                           (dst_var->type & (TYPE_FLOAT | TYPE_DOUBLE))) {
                                 pA("%d <<= 16;", register_name); /* 整数値から固定小数値へ変換 */
                 }
         }
 
         /* 参照時のdstが非ポインター型の場合 */
-        if (dst_indirect_len == 0) {
-                if (dst_type & TYPE_INT) {
+        if (dst_var->indirect_len == 0) {
+                if (dst_var->type & TYPE_INT) {
                         /* pA("%d &= 0xffffffff;", register_name); */
-                } else if (dst_type & TYPE_CHAR) {
+                } else if (dst_var->type & TYPE_CHAR) {
                         pA("%d &= 0x000000ff;", register_name);
-                } else if (dst_type & TYPE_SHORT) {
+                } else if (dst_var->type & TYPE_SHORT) {
                         pA("%d &= 0x0000ffff;", register_name);
-                } else if (dst_type & TYPE_LONG) {
+                } else if (dst_var->type & TYPE_LONG) {
                         /* pA("%d &= 0xffffffff;", register_name); */
-                } else if (dst_type & TYPE_FLOAT) {
+                } else if (dst_var->type & TYPE_FLOAT) {
                         /* なにもしない */
-                } else if (dst_type & TYPE_DOUBLE) {
+                } else if (dst_var->type & TYPE_DOUBLE) {
                         /* なにもしない */
-                } else if (dst_type & TYPE_VOID) {
+                } else if (dst_var->type & TYPE_VOID) {
                         /* なにもしない */
                 } else {
                         yyerror("system err: cast_regval(), variable type not found");
@@ -1667,12 +1599,12 @@ static void cast_regval(const char* register_name,
 
 /* ローカル変数のインスタンス生成
  */
-static struct VarHandle*
-__new_varhandle_initializer_local(const char* iden,
-                                  int32_t* unit_len,
-                                  const int32_t dim_len,
-                                  const int32_t indirect_len,
-                                  const int32_t type)
+static struct Var*
+__new_var_initializer_local(const char* iden,
+                            int32_t* unit_len,
+                            const int32_t dim_len,
+                            const int32_t indirect_len,
+                            const int32_t type)
 {
         if (dim_len >= VAR_DIM_MAX)
                 yyerror("syntax err: 配列の次元が高すぎます");
@@ -1682,107 +1614,36 @@ __new_varhandle_initializer_local(const char* iden,
          */
         varlist_add_local(iden, unit_len, dim_len, indirect_len, type | TYPE_AUTO);
 
-        struct VarHandle* vh = new_varhandle();
-        vh->var = varlist_search_local(iden);
-        vh->indirect_len = vh->var->indirect_len;
+        struct Var* var = varlist_search_local(iden);
 
         /* 実際の動作時にメモリー確保するルーチンはこちら側
          */
-        if (vh->var->type & TYPE_AUTO)
-                pA("stack_head = %d + stack_frame;", vh->var->base_ptr + vh->var->total_len);
+        if (var->type & TYPE_AUTO)
+                pA("stack_head = %d + stack_frame;", var->base_ptr + var->total_len);
 
-        return vh;
-}
-
-/* 変数インスタンスの具象アドレス取得関連
- * これは struct VarHandle が指す変数の、実際のメモリー上のアドレスを heap_base へ取得する。
- * この heap_base へ読み書きすることで、変数への読み書きとなる。
- */
-
-/* 変数インスタンスの任意インデックスの具象アドレスを heap_base に得る
- *
- * dim: スタックに積んだ添字の個数。(スカラーなら0)
- */
-static void __get_variable_concrete_address(struct VarHandle* vh)
-{
-        pA("heap_offset = 0;");
-
-        int32_t unit_size = vh->var->total_len;
-        int32_t i;
-        for (i = 0; i < vh->index_len; i++) {
-                pop_stack("stack_socket");
-                pA("stack_socket >>= 16;");
-
-                unit_size /= vh->var->unit_len[i];
-                pA("heap_offset += %d * stack_socket;", unit_size);
-        }
-
-        if (vh->var->type & TYPE_AUTO)
-                pA("heap_base = %d + stack_frame;", vh->var->base_ptr);
-        else
-                pA("heap_base = %d;", vh->var->base_ptr);
-
-        pA("heap_base += heap_offset;");
-
-        for (i = 0; i < vh->indirect_len; i++) {
-                read_mem("stack_socket", "heap_base");
-                pA("heap_base = stack_socket;");
-        }
-
-#ifdef DEBUG_VARIABLE
-        pA("junkApi_putConstString('\\n__get_variable_concrete_address(), ');");
-
-        if (vh->var->type & TYPE_AUTO)
-                pA("junkApi_putConstString('is_auto ');");
-        else
-                pA("junkApi_putConstString('is_global ');");
-
-        pA("junkApi_putConstString('vh->indirect_len[');");
-        pA("junkApi_putStringDec('\\1', %d, 11, 1);", vh->indirect_len);
-        pA("junkApi_putConstString('] ');");
-
-        pA("junkApi_putConstString('vh->var->indirect_len[');");
-        pA("junkApi_putStringDec('\\1', %d, 11, 1);", vh->var->indirect_len);
-        pA("junkApi_putConstString(']\\n');");
-
-        debug_stack();
-        debug_heap();
-#endif /* DEBUG_VARIABLE */
+        return var;
 }
 
 /* 変数への代入関連
  */
 
-/* 配列変数中の、任意インデックス番目の要素へ、値を代入する。
+/* スタックにあるアドレスをポップし、間接参照で値を代入し、また、値自体もプッシュする
  *
- * register_name: 書き込み元のレジスター
+ * スタックには "書き込み先アドレス -> 値" の順で積まれてる前提
  *
- * 配列添字はあらかじめスタックにプッシュされてる前提。
- *     スカラーならば無し、
- *     １次元配列ならば "添字" の順
- *     2次元配列ならば "行添字, 列添字" の順
+ * 代入先のアドレスは、添字分のシークや、スタックフレーム分の下駄の終えた状態の、
+ * 完全なアドレスがスタックに既にプッシュされている前提。
  */
-static void __assignment_variable(const char* register_name, struct VarHandle* vh)
+static void __assignment_variable(struct Var* var)
 {
-        __get_variable_concrete_address(vh);
-        write_mem(register_name, "heap_base");
+        pop_stack("fixR");
+        pop_stack("fixL");
+        write_mem("fixR", "fixL");
+        push_stack("fixR");
 }
 
 /* 変数リード関連
  */
-
-static void __read_function_ptr(struct VarHandle* vh)
-{
-        if ((vh->var->type & TYPE_FUNCTION) == 0)
-                yyerror("system err: __read_function_ptr()");
-
-        /* ラベルリストに名前が存在しなければエラー */
-        if (labellist_search_unsafe(vh->var->iden) == -1)
-                yyerror("syntax err: 未定義の関数のアドレスを得ようとしました");
-
-        pA("stack_socket = %d;", labellist_search(vh->var->iden));
-        push_stack("stack_socket");
-}
 
 /* ユーザー定義関数関連
  */
@@ -1930,38 +1791,36 @@ typedef void (*void_func)(void);
  * 各 __func_*() には、その型の場合における演算を行う関数を渡す。
  */
 static void
-__varhandle_common_operation_new(struct VarHandle* vh0,
-                                 void_func __func_int,
-                                 void_func __func_char,
-                                 void_func __func_short,
-                                 void_func __func_long,
-                                 void_func __func_float,
-                                 void_func __func_double,
-                                 void_func __func_ptr)
+__var_common_operation_new(struct Var* vh0,
+                           void_func __func_int,
+                           void_func __func_char,
+                           void_func __func_short,
+                           void_func __func_long,
+                           void_func __func_float,
+                           void_func __func_double,
+                           void_func __func_ptr)
 {
-        const int32_t dst_indirect_len = vh0->var->indirect_len - vh0->indirect_len;
-
-        /* dstが非ポインター型の場合
+        /* vh0が非ポインター型の場合
          */
-        if (dst_indirect_len == 0) {
-                if (vh0->var->type & TYPE_INT)
+        if (vh0->indirect_len == 0) {
+                if (vh0->type & TYPE_INT)
                         __func_int();
-                else if (vh0->var->type & TYPE_CHAR)
+                else if (vh0->type & TYPE_CHAR)
                         __func_char();
-                else if (vh0->var->type & TYPE_SHORT)
+                else if (vh0->type & TYPE_SHORT)
                         __func_short();
-                else if (vh0->var->type & TYPE_LONG)
+                else if (vh0->type & TYPE_LONG)
                         __func_long();
-                else if (vh0->var->type & TYPE_FLOAT)
+                else if (vh0->type & TYPE_FLOAT)
                         __func_float();
-                else if (vh0->var->type & TYPE_DOUBLE)
+                else if (vh0->type & TYPE_DOUBLE)
                         __func_double();
-                else if (vh0->var->type & TYPE_VOID)
+                else if (vh0->type & TYPE_VOID)
                         yyerror("syntax err: void型に対して演算を行ってます");
                 else
-                        yyerror("system err: __varhandle_binary_operation_new()");
+                        yyerror("system err: __var_binary_operation_new()");
 
-        /* dstがポインター型の場合
+        /* vh0がポインター型の場合
          */
         } else {
                 if (__func_ptr != NULL)
@@ -1978,31 +1837,33 @@ __varhandle_common_operation_new(struct VarHandle* vh0,
  * 各 __func_*() には、その型の場合における演算を行う関数を渡す。
  * __func_*() は fixL operator fixR -> fixA な動作を行う前提
  */
-static struct VarHandle*
-__varhandle_binary_operation_new(struct VarHandle* vh1,
-                                 struct VarHandle* vh2,
-                                 void_func __func_int,
-                                 void_func __func_char,
-                                 void_func __func_short,
-                                 void_func __func_long,
-                                 void_func __func_float,
-                                 void_func __func_double,
-                                 void_func __func_ptr)
+static struct Var*
+__var_binary_operation_new(struct Var* vh1,
+                           struct Var* vh2,
+                           void_func __func_int,
+                           void_func __func_char,
+                           void_func __func_short,
+                           void_func __func_long,
+                           void_func __func_float,
+                           void_func __func_double,
+                           void_func __func_ptr)
 {
-        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+        struct Var* vh0 = var_cast_new(vh1, vh2);
 
-        pop_eoe();
-        cast_regval("fixL", vh0, vh1);
+        pop_stack("fixR");
         cast_regval("fixR", vh0, vh2);
 
-        __varhandle_common_operation_new(vh0,
-                                         __func_int,
-                                         __func_char,
-                                         __func_short,
-                                         __func_long,
-                                         __func_float,
-                                         __func_double,
-                                         __func_ptr);
+        pop_stack("fixL");
+        cast_regval("fixL", vh0, vh1);
+
+        __var_common_operation_new(vh0,
+                                   __func_int,
+                                   __func_char,
+                                   __func_short,
+                                   __func_long,
+                                   __func_float,
+                                   __func_double,
+                                   __func_ptr);
 
         return vh0;
 }
@@ -2013,239 +1874,239 @@ __varhandle_binary_operation_new(struct VarHandle* vh1,
  * __func_*() は fixL -> fixA な動作を行う前提
  */
 
-static struct VarHandle*
-__varhandle_unary_operation_new(struct VarHandle* vh1,
-                                 void_func __func_int,
-                                 void_func __func_char,
-                                 void_func __func_short,
-                                 void_func __func_long,
-                                 void_func __func_float,
-                                 void_func __func_double,
-                                 void_func __func_ptr)
+static struct Var*
+__var_unary_operation_new(struct Var* vh1,
+                          void_func __func_int,
+                          void_func __func_char,
+                          void_func __func_short,
+                          void_func __func_long,
+                          void_func __func_float,
+                          void_func __func_double,
+                          void_func __func_ptr)
 {
-        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh1);
+        struct Var* vh0 = var_cast_new(vh1, vh1);
 
         pop_stack("fixL");
         cast_regval("fixL", vh0, vh1);
 
-        __varhandle_common_operation_new(vh0,
-                                         __func_int,
-                                         __func_char,
-                                         __func_short,
-                                         __func_long,
-                                         __func_float,
-                                         __func_double,
-                                         __func_ptr);
+        __var_common_operation_new(vh0,
+                                   __func_int,
+                                   __func_char,
+                                   __func_short,
+                                   __func_long,
+                                   __func_float,
+                                   __func_double,
+                                   __func_ptr);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_add_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_add_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 =
-                __varhandle_binary_operation_new(vh1,
-                                                 vh2,
-                                                 __func_add_int,
-                                                 __func_add_int,
-                                                 __func_add_int,
-                                                 __func_add_int,
-                                                 __func_add_float,
-                                                 __func_add_float,
-                                                 __func_add_int);
+        struct Var* vh0 =
+                __var_binary_operation_new(vh1,
+                                           vh2,
+                                           __func_add_int,
+                                           __func_add_int,
+                                           __func_add_int,
+                                           __func_add_int,
+                                           __func_add_float,
+                                           __func_add_float,
+                                           __func_add_int);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_sub_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_sub_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 =
-                __varhandle_binary_operation_new(vh1,
-                                                 vh2,
-                                                 __func_sub_int,
-                                                 __func_sub_int,
-                                                 __func_sub_int,
-                                                 __func_sub_int,
-                                                 __func_sub_float,
-                                                 __func_sub_float,
-                                                 __func_sub_int);
+        struct Var* vh0 =
+                __var_binary_operation_new(vh1,
+                                           vh2,
+                                           __func_sub_int,
+                                           __func_sub_int,
+                                           __func_sub_int,
+                                           __func_sub_int,
+                                           __func_sub_float,
+                                           __func_sub_float,
+                                           __func_sub_int);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_mul_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_mul_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 =
-                __varhandle_binary_operation_new(vh1,
-                                                 vh2,
-                                                 __func_mul_int,
-                                                 __func_mul_int,
-                                                 __func_mul_int,
-                                                 __func_mul_int,
-                                                 __func_mul_float,
-                                                 __func_mul_float,
-                                                 NULL);
+        struct Var* vh0 =
+                __var_binary_operation_new(vh1,
+                                           vh2,
+                                           __func_mul_int,
+                                           __func_mul_int,
+                                           __func_mul_int,
+                                           __func_mul_int,
+                                           __func_mul_float,
+                                           __func_mul_float,
+                                           NULL);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_div_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_div_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 =
-                __varhandle_binary_operation_new(vh1,
-                                                 vh2,
-                                                 __func_div_int,
-                                                 __func_div_int,
-                                                 __func_div_int,
-                                                 __func_div_int,
-                                                 __func_div_float,
-                                                 __func_div_float,
-                                                 NULL);
+        struct Var* vh0 =
+                __var_binary_operation_new(vh1,
+                                           vh2,
+                                           __func_div_int,
+                                           __func_div_int,
+                                           __func_div_int,
+                                           __func_div_int,
+                                           __func_div_float,
+                                           __func_div_float,
+                                           NULL);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_mod_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_mod_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 =
-                __varhandle_binary_operation_new(vh1,
-                                                 vh2,
-                                                 __func_mod_int,
-                                                 __func_mod_int,
-                                                 __func_mod_int,
-                                                 __func_mod_int,
-                                                 __func_mod_float,
-                                                 __func_mod_float,
-                                                 NULL);
+        struct Var* vh0 =
+                __var_binary_operation_new(vh1,
+                                           vh2,
+                                           __func_mod_int,
+                                           __func_mod_int,
+                                           __func_mod_int,
+                                           __func_mod_int,
+                                           __func_mod_float,
+                                           __func_mod_float,
+                                           NULL);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_minus_new(struct VarHandle* vh1)
+static struct Var*
+__var_func_minus_new(struct Var* vh1)
 {
-        struct VarHandle* vh0 =
-                __varhandle_unary_operation_new(vh1,
-                                                __func_minus_int,
-                                                __func_minus_int,
-                                                __func_minus_int,
-                                                __func_minus_int,
-                                                __func_minus_float,
-                                                __func_minus_float,
-                                                NULL);
+        struct Var* vh0 =
+                __var_unary_operation_new(vh1,
+                                          __func_minus_int,
+                                          __func_minus_int,
+                                          __func_minus_int,
+                                          __func_minus_int,
+                                          __func_minus_float,
+                                          __func_minus_float,
+                                          NULL);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_and_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_and_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 =
-                __varhandle_binary_operation_new(vh1,
-                                                 vh2,
-                                                 __func_and_int,
-                                                 __func_and_int,
-                                                 __func_and_int,
-                                                 __func_and_int,
-                                                 __func_and_float,
-                                                 __func_and_float,
-                                                 NULL);
+        struct Var* vh0 =
+                __var_binary_operation_new(vh1,
+                                           vh2,
+                                           __func_and_int,
+                                           __func_and_int,
+                                           __func_and_int,
+                                           __func_and_int,
+                                           __func_and_float,
+                                           __func_and_float,
+                                           NULL);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_or_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_or_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 =
-                __varhandle_binary_operation_new(vh1,
-                                                 vh2,
-                                                 __func_or_int,
-                                                 __func_or_int,
-                                                 __func_or_int,
-                                                 __func_or_int,
-                                                 __func_or_float,
-                                                 __func_or_float,
-                                                 NULL);
+        struct Var* vh0 =
+                __var_binary_operation_new(vh1,
+                                           vh2,
+                                           __func_or_int,
+                                           __func_or_int,
+                                           __func_or_int,
+                                           __func_or_int,
+                                           __func_or_float,
+                                           __func_or_float,
+                                           NULL);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_xor_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_xor_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 =
-                __varhandle_binary_operation_new(vh1,
-                                                 vh2,
-                                                 __func_xor_int,
-                                                 __func_xor_int,
-                                                 __func_xor_int,
-                                                 __func_xor_int,
-                                                 __func_xor_float,
-                                                 __func_xor_float,
-                                                 NULL);
+        struct Var* vh0 =
+                __var_binary_operation_new(vh1,
+                                           vh2,
+                                           __func_xor_int,
+                                           __func_xor_int,
+                                           __func_xor_int,
+                                           __func_xor_int,
+                                           __func_xor_float,
+                                           __func_xor_float,
+                                           NULL);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_invert_new(struct VarHandle* vh1)
+static struct Var*
+__var_func_invert_new(struct Var* vh1)
 {
-        struct VarHandle* vh0 =
-                __varhandle_unary_operation_new(vh1,
-                                                __func_invert_int,
-                                                __func_invert_int,
-                                                __func_invert_int,
-                                                __func_invert_int,
-                                                __func_invert_float,
-                                                __func_invert_float,
-                                                NULL);
+        struct Var* vh0 =
+                __var_unary_operation_new(vh1,
+                                          __func_invert_int,
+                                          __func_invert_int,
+                                          __func_invert_int,
+                                          __func_invert_int,
+                                          __func_invert_float,
+                                          __func_invert_float,
+                                          NULL);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_lshift_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_lshift_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 =
-                __varhandle_binary_operation_new(vh1,
-                                                 vh2,
-                                                 __func_lshift_int,
-                                                 __func_lshift_int,
-                                                 __func_lshift_int,
-                                                 __func_lshift_int,
-                                                 __func_lshift_float,
-                                                 __func_lshift_float,
-                                                 NULL);
+        struct Var* vh0 =
+                __var_binary_operation_new(vh1,
+                                           vh2,
+                                           __func_lshift_int,
+                                           __func_lshift_int,
+                                           __func_lshift_int,
+                                           __func_lshift_int,
+                                           __func_lshift_float,
+                                           __func_lshift_float,
+                                           NULL);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_rshift_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_rshift_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 =
-                __varhandle_binary_operation_new(vh1,
-                                                 vh2,
-                                                 __func_logical_rshift_int,
-                                                 __func_logical_rshift_int,
-                                                 __func_logical_rshift_int,
-                                                 __func_logical_rshift_int,
-                                                 __func_logical_rshift_float,
-                                                 __func_logical_rshift_float,
-                                                 NULL);
+        struct Var* vh0 =
+                __var_binary_operation_new(vh1,
+                                           vh2,
+                                           __func_arithmetic_rshift_int,
+                                           __func_arithmetic_rshift_int,
+                                           __func_arithmetic_rshift_int,
+                                           __func_arithmetic_rshift_int,
+                                           __func_arithmetic_rshift_float,
+                                           __func_arithmetic_rshift_float,
+                                           NULL);
 
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_not_new(struct VarHandle* vh1)
+static struct Var*
+__var_func_not_new(struct Var* vh1)
 {
-        struct VarHandle* vh0 = new_varhandle();
+        struct Var* vh0 = new_var();
 
         pop_stack("fixL");
         cast_regval("fixL", vh0, vh1);
@@ -2256,10 +2117,10 @@ __varhandle_func_not_new(struct VarHandle* vh1)
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_eq_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_eq_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+        struct Var* vh0 = var_cast_new(vh1, vh2);
 
         pop_eoe();
         cast_regval("fixL", vh0, vh1);
@@ -2271,10 +2132,10 @@ __varhandle_func_eq_new(struct VarHandle* vh1, struct VarHandle* vh2)
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_ne_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_ne_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+        struct Var* vh0 = var_cast_new(vh1, vh2);
 
         pop_eoe();
         cast_regval("fixL", vh0, vh1);
@@ -2286,10 +2147,10 @@ __varhandle_func_ne_new(struct VarHandle* vh1, struct VarHandle* vh2)
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_lt_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_lt_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+        struct Var* vh0 = var_cast_new(vh1, vh2);
 
         pop_eoe();
         cast_regval("fixL", vh0, vh1);
@@ -2301,10 +2162,10 @@ __varhandle_func_lt_new(struct VarHandle* vh1, struct VarHandle* vh2)
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_gt_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_gt_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+        struct Var* vh0 = var_cast_new(vh1, vh2);
 
         pop_eoe();
         cast_regval("fixL", vh0, vh1);
@@ -2316,10 +2177,10 @@ __varhandle_func_gt_new(struct VarHandle* vh1, struct VarHandle* vh2)
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_le_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_le_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+        struct Var* vh0 = var_cast_new(vh1, vh2);
 
         pop_eoe();
         cast_regval("fixL", vh0, vh1);
@@ -2331,10 +2192,10 @@ __varhandle_func_le_new(struct VarHandle* vh1, struct VarHandle* vh2)
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_ge_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_ge_new(struct Var* vh1, struct Var* vh2)
 {
-        struct VarHandle* vh0 = varhandle_cast_new(vh1, vh2);
+        struct Var* vh0 = var_cast_new(vh1, vh2);
 
         pop_eoe();
         cast_regval("fixL", vh0, vh1);
@@ -2346,14 +2207,14 @@ __varhandle_func_ge_new(struct VarHandle* vh1, struct VarHandle* vh2)
         return vh0;
 }
 
-static struct VarHandle*
-__varhandle_func_assignment_new(struct VarHandle* vh1, struct VarHandle* vh2)
+static struct Var*
+__var_func_assignment_new(struct Var* vh1, struct Var* vh2)
 {
         if (vh1->is_lvalue == 0)
                 yyerror("syntax err: 代入先が左辺値ではありません");
 
         /* vh0 = vh1 */
-        struct VarHandle* vh0 = vh1;
+        struct Var* vh0 = vh1;
 
         pop_stack("fixR");
         pop_stack("fixL");
@@ -2426,7 +2287,7 @@ __varhandle_func_assignment_new(struct VarHandle* vh1, struct VarHandle* vh2)
 #define EC_CHILD_MAX 0x100
 struct EC {
         char iden[IDENLIST_STR_LEN];
-        struct VarHandle* vh;
+        struct Var* var;
         uint32_t type_operator;
         uint32_t type_expression;
         struct EC* child_ptr[EC_CHILD_MAX];
@@ -2467,21 +2328,21 @@ static void translate_ec(struct EC* ec)
         }
 
         if (ec->child_len >= 1)
-                ec->vh = ec->child_ptr[0]->vh;
+                ec->var = ec->child_ptr[0]->var;
 
         if (ec->type_expression == EC_ASSIGNMENT) {
                 if (ec->type_operator == EC_OPE_SUBST) {
-                        ec->vh = __varhandle_func_assignment_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_assignment_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_CAST) {
-                        const int32_t indirect_len = ec->vh->var->indirect_len;
-                        const int32_t type = ec->vh->var->type;
+                        const int32_t indirect_len = ec->var->indirect_len;
+                        const int32_t type = ec->var->type;
 
-                        *(ec->vh->var) = *(ec->child_ptr[0]->vh->var);
-                        ec->vh->var->indirect_len = indirect_len;
-                        ec->vh->var->type &= ~(TYPE_VOID | TYPE_CHAR | TYPE_INT | TYPE_SHORT |
+                        *(ec->var) = *(ec->child_ptr[0]->var);
+                        ec->var->indirect_len = indirect_len;
+                        ec->var->type &= ~(TYPE_VOID | TYPE_CHAR | TYPE_INT | TYPE_SHORT |
                                                TYPE_LONG | TYPE_FLOAT | TYPE_DOUBLE | TYPE_SIGNED |
                                                TYPE_UNSIGNED | TYPE_STRUCT | TYPE_ENUM);
-                        ec->vh->var->type = type;
+                        ec->var->type = type;
                 } else if (ec->type_operator == EC_OPE_LIST) {
                         /* 何もしない */
                 } else {
@@ -2489,76 +2350,76 @@ static void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_CALC) {
                 if (ec->type_operator == EC_OPE_ADD) {
-                        ec->vh = __varhandle_func_add_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_add_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_SUB) {
-                        ec->vh = __varhandle_func_sub_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_sub_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_MUL) {
-                        ec->vh = __varhandle_func_mul_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_mul_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_DIV) {
-                        ec->vh = __varhandle_func_div_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_div_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_MOD) {
-                        ec->vh = __varhandle_func_mod_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_mod_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_OR) {
-                        ec->vh = __varhandle_func_or_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_or_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_AND) {
-                        ec->vh = __varhandle_func_and_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_and_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_XOR) {
-                        ec->vh = __varhandle_func_xor_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_xor_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_LSHIFT) {
-                        ec->vh = __varhandle_func_lshift_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_lshift_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_RSHIFT) {
-                        ec->vh = __varhandle_func_rshift_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_rshift_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_EQ) {
-                        ec->vh = __varhandle_func_eq_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_eq_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_NE) {
-                        ec->vh = __varhandle_func_ne_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_ne_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_LT) {
-                        ec->vh = __varhandle_func_lt_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_lt_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_LE) {
-                        ec->vh = __varhandle_func_le_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_le_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_GT) {
-                        ec->vh = __varhandle_func_gt_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_gt_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else if (ec->type_operator == EC_OPE_GE) {
-                        ec->vh = __varhandle_func_ge_new(ec->child_ptr[0]->vh, ec->child_ptr[1]->vh);
+                        ec->var = __var_func_ge_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
                 } else {
                         yyerror("system err: translate_ec(), EC_CALC");
                 }
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
-                        ec->vh = new_varhandle();
-                        ec->vh->var = varlist_search(ec->iden);
-                        if (ec->vh->var == NULL)
+                        ec->var = new_var();
+                        ec->var = varlist_search(ec->iden);
+                        if (ec->var == NULL)
                                 yyerror("syntax err: 未定義の変数を参照しようとしました");
 
-                        if (ec->vh->var->type & TYPE_AUTO)
-                                pA("stack_socket = %d + stack_frame;", ec->vh->var->base_ptr);
+                        if (ec->var->type & TYPE_AUTO)
+                                pA("stack_socket = %d + stack_frame;", ec->var->base_ptr);
                         else
-                                pA("stack_socket = %d;", ec->vh->var->base_ptr);
+                                pA("stack_socket = %d;", ec->var->base_ptr);
 
                         push_stack("stack_socket");
-                        ec->vh->is_lvalue = 1; /* 左辺値とする */
+                        ec->var->is_lvalue = 1; /* 左辺値とする */
                 } else {
                         yyerror("system err: translate_ec(), EC_PRIMARY");
                 }
         } else if (ec->type_expression == EC_UNARY) {
                 if (ec->type_operator == EC_OPE_ADDRESS) {
-                        ec->vh = ec->child_ptr[0]->vh;
-                        ec->vh->indirect_len++;
+                        ec->var = ec->child_ptr[0]->var;
+                        ec->var->indirect_len++;
                 } else if (ec->type_operator == EC_OPE_POINTER) {
-                        ec->vh = ec->child_ptr[0]->vh;
-                        ec->vh->indirect_len--;
+                        ec->var = ec->child_ptr[0]->var;
+                        ec->var->indirect_len--;
                         pop_stack("fixL");
                         read_mem("fixR", "fixL");
                         push_stack("fixR");
                 } else if (ec->type_operator == EC_OPE_INV) {
-                        ec->vh = __varhandle_func_invert_new(ec->child_ptr[0]->vh);
+                        ec->var = __var_func_invert_new(ec->child_ptr[0]->var);
                 } else if (ec->type_operator == EC_OPE_NOT) {
-                        ec->vh = __varhandle_func_not_new(ec->child_ptr[0]->vh);
+                        ec->var = __var_func_not_new(ec->child_ptr[0]->var);
                 } else if (ec->type_operator == EC_OPE_SUB) {
-                        ec->vh = __varhandle_func_minus_new(ec->child_ptr[0]->vh);
+                        ec->var = __var_func_minus_new(ec->child_ptr[0]->var);
                 } else if (ec->type_operator == EC_OPE_SIZEOF) {
-                        ec->vh = ec->child_ptr[0]->vh;
-                        pA("stack_socket = %d;", ec->vh->var->total_len);
+                        ec->var = ec->child_ptr[0]->var;
+                        pA("stack_socket = %d;", ec->var->total_len);
                         push_stack("stack_socket");
                 } else {
                         yyerror("system err: translate_ec(), EC_UNARY");
@@ -2571,12 +2432,12 @@ static void translate_ec(struct EC* ec)
                         pop_stack("fixL");
                         pop_stack("fixR");
 
-                        ec->vh = ec->child_ptr[0]->vh;
-                        ec->vh->var->total_len /= ec->vh->var->unit_len[ec->vh->index_len];
-                        pA("fixL += fixR * %d;", ec->vh->var->total_len);
+                        ec->var = ec->child_ptr[0]->var;
+                        ec->var->total_len /= ec->var->unit_len[ec->var->dim_len];
+                        pA("fixL += fixR * %d;", ec->var->total_len);
                         push_stack("fixL");
 
-                        ec->vh->index_len++;
+                        ec->var->dim_len++;
                 } else if (ec->type_operator == EC_OPE_FUNCTION) {
                         /* 現在の stack_frame をプッシュする。
                          * そして、ここには関数終了後にはリターン値が入った状態となる。
@@ -2585,12 +2446,12 @@ static void translate_ec(struct EC* ec)
 
                         translate_ec(ec->child_ptr[0]);
 
-                        __call_user_function(ec->vh->var->iden);
+                        __call_user_function(ec->var->iden);
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
         } else if (ec->type_expression == EC_CONSTANT) {
-                pA("stack_socket = %d;", *((int*)(ec->vh->var->const_variable)));
+                pA("stack_socket = %d;", *((int*)(ec->var->const_variable)));
                 push_stack("stack_socket");
         } else {
                 yyerror("system err: translate_ec()");
@@ -2605,7 +2466,7 @@ static void translate_ec(struct EC* ec)
         char sval[0x1000];
         int32_t ival_list[0x400];
         struct VarList* varlistptr;
-        struct VarHandle* varhandleptr;
+        struct Var* varptr;
         struct StructSpec* structspecptr;
         struct StructMemberSpec* structmemberspecptr;
         struct EC* ec;
@@ -2696,7 +2557,7 @@ static void translate_ec(struct EC* ec)
 
 %type <sval> iteration_while iteration_for
 
-%type <varhandleptr> initializer
+%type <varptr> initializer
 %type <ival_list> initializer_param
 
 %type <sval> define_struct
@@ -2885,24 +2746,23 @@ initializer_param
 
 initializer
         : type_specifier pointer __IDENTIFIER initializer_param {
-                struct VarHandle* vh =
-                        __new_varhandle_initializer_local($3, &($4[1]), $4[0], $2, $1);
+                struct Var* var =
+                        __new_var_initializer_local($3, &($4[1]), $4[0], $2, $1);
 
-                $$ = vh;
+                $$ = var;
         }
         | initializer __OPE_COMMA pointer __IDENTIFIER initializer_param {
-                struct VarHandle* vh =
-                        __new_varhandle_initializer_local($4, &($5[1]), $5[0], $3, $1->var->type);
+                struct Var* var =
+                        __new_var_initializer_local($4, &($5[1]), $5[0], $3, $1->type);
 
-                $$ = vh;
+                $$ = var;
         }
         | initializer __OPE_SUBST expression {
                 translate_ec($3);
 
-                struct VarHandle* vh = $1;
+                struct Var* var = $1;
 
-                pop_stack("heap_socket");
-                __assignment_variable("heap_socket", vh);
+                __assignment_variable(var);
         }
         ;
 
@@ -3355,10 +3215,10 @@ cast_expression
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_ASSIGNMENT;
                 ec->type_operator = EC_OPE_CAST;
-                ec->vh = new_varhandle();
-                ec->vh->var = new_var();
-                ec->vh->var->indirect_len = $3;
-                ec->vh->var->type = $2;
+                ec->var = new_var();
+                ec->var = new_var();
+                ec->var->indirect_len = $3;
+                ec->var->type = $2;
                 ec->child_ptr[0] = $5;
                 ec->child_len = 1;
                 $$ = ec;
@@ -3436,10 +3296,10 @@ postfix_expression
                 ec->type_expression = EC_POSTFIX;
                 ec->type_operator = EC_OPE_FUNCTION;
 
-                ec->vh = new_varhandle();
-                ec->vh->var = new_var();
-                ec->vh->var->type = TYPE_FUNCTION | TYPE_SIGNED | TYPE_INT;
-                strcpy(ec->vh->var->iden, $1);
+                ec->var = new_var();
+                ec->var = new_var();
+                ec->var->type = TYPE_FUNCTION | TYPE_SIGNED | TYPE_INT;
+                strcpy(ec->var->iden, $1);
 
                 ec->child_ptr[0] = $3;
                 ec->child_len = 1;
@@ -3491,12 +3351,12 @@ constant
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
 
-                ec->vh = new_varhandle();
-                ec->vh->var = new_var();
-                ec->vh->var->type = TYPE_SIGNED | TYPE_INT | TYPE_LITERAL;
+                ec->var = new_var();
+                ec->var = new_var();
+                ec->var->type = TYPE_SIGNED | TYPE_INT | TYPE_LITERAL;
 
-                ec->vh->var->const_variable = malloc(sizeof(int));
-                *((int*)(ec->vh->var->const_variable)) = $1;
+                ec->var->const_variable = malloc(sizeof(int));
+                *((int*)(ec->var->const_variable)) = $1;
 
                 $$ = ec;
         }
@@ -3504,12 +3364,12 @@ constant
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
 
-                ec->vh = new_varhandle();
-                ec->vh->var = new_var();
-                ec->vh->var->type = TYPE_SIGNED | TYPE_CHAR |TYPE_LITERAL;
+                ec->var = new_var();
+                ec->var = new_var();
+                ec->var->type = TYPE_SIGNED | TYPE_CHAR |TYPE_LITERAL;
 
-                ec->vh->var->const_variable = malloc(sizeof(int));
-                *((int*)(ec->vh->var->const_variable)) = $1;
+                ec->var->const_variable = malloc(sizeof(int));
+                *((int*)(ec->var->const_variable)) = $1;
 
                 $$ = ec;
         }
@@ -3517,17 +3377,17 @@ constant
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
 
-                ec->vh = new_varhandle();
-                ec->vh->var = new_var();
-                ec->vh->var->type = TYPE_FLOAT | TYPE_LITERAL;
+                ec->var = new_var();
+                ec->var = new_var();
+                ec->var->type = TYPE_FLOAT | TYPE_LITERAL;
 
                 double a;
                 double b = modf($1, &a);
                 int32_t ia = ((int32_t)a) << 16;
                 int32_t ib = ((int32_t)(0x0000ffff * b)) & 0x0000ffff;
 
-                ec->vh->var->const_variable = malloc(sizeof(int));
-                *((int*)(ec->vh->var->const_variable)) = ia | ib; /* 実際は固定小数なのでint */
+                ec->var->const_variable = malloc(sizeof(int));
+                *((int*)(ec->var->const_variable)) = ia | ib; /* 実際は固定小数なのでint */
 
                 $$ = ec;
         }
