@@ -248,10 +248,12 @@ struct Var {
  */
 static int32_t var_is_lvalue(struct Var* var)
 {
-        /* 配列の添字が完了し、かつ、間接参照次元が0の場合は左辺値となる。
+        /* 配列の添字が完了し、かつ、間接参照次元が0で、かつ定数リテラルでは無い場合は左辺値となる。
          * それ以外は右辺値となる。
          */
-        if ((var->dim_len == 0) && (var->indirect_len == 0))
+        if ((var->dim_len == 0) &&
+            (var->indirect_len == 0) &&
+            ((var->type & TYPE_LITERAL) == 0))
                 return 1;
         else
                 return 0;
