@@ -251,7 +251,6 @@ struct VarHandle {
                                  * この値が Var->dim_len と同じならば添字が全て埋まった状態。
                                  */
         int32_t indirect_len;   /* 間接参照の深さ。直接参照(非ポインター型)ならば0 */
-        int32_t is_completion;  /* リードや演算を行って結果を既にスタックへ積んでる場合 */
         int32_t is_lvalue;      /* 左辺値として扱える場合は1。 右辺値の場合は0 */
 };
 
@@ -292,8 +291,8 @@ static void varhandle_print(struct VarHandle* vh)
                 return;
         }
 
-        printf("struct VarHandle, index_len[%d], indirect_len[%d], is_completion[%d], is_lvalue[%d]\n",
-               vh->index_len, vh->indirect_len, vh->is_completion, vh->is_lvalue);
+        printf("struct VarHandle, index_len[%d], indirect_len[%d], is_lvalue[%d]\n",
+               vh->index_len, vh->indirect_len, vh->is_lvalue);
 
         var_print(vh->var);
 }
@@ -326,7 +325,6 @@ static struct VarHandle* new_varhandle(void)
         vh->var = NULL;
         vh->index_len = 0;
         vh->indirect_len = 0;
-        vh->is_completion = 0;
         vh->is_lvalue = 0;
 
         return vh;
@@ -1569,7 +1567,6 @@ static struct VarHandle* varhandle_cast_new(struct VarHandle* vh1, struct VarHan
                 vh0->var->indirect_len = vh2_cur_indirect_len;
         }
 
-        vh0->is_completion = 1; /* スタックへ積んでる値を用いる */
         vh0->is_lvalue = 0;     /* 右辺値とする */
 
 #ifdef DEBUG_VARHANDLE_CAST
@@ -1599,12 +1596,6 @@ static void cast_regval(const char* register_name,
         printf("src_vh, ");
         varhandle_print(src_vh);
 #endif /* DEBUG_CAST_REGVAL */
-
-        /* src_vh 変数において、実際の値が既にリード済み(スタックプッシュ済み)かを調べる。
-         * 未リードであった場合はエラー。
-         */
-        if (src_vh->is_completion == 0)
-                yyerror("system err: cast_regval(), src_vh");
 
         const int32_t dst_type = dst_vh->var->type;
         const int32_t src_type = src_vh->var->type;
@@ -1782,10 +1773,6 @@ static void __assignment_variable(const char* register_name, struct VarHandle* v
 
 static void __read_function_ptr(struct VarHandle* vh)
 {
-        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
-        if (vh->is_completion)
-                return;
-
         if ((vh->var->type & TYPE_FUNCTION) == 0)
                 yyerror("system err: __read_function_ptr()");
 
@@ -1795,17 +1782,10 @@ static void __read_function_ptr(struct VarHandle* vh)
 
         pA("stack_socket = %d;", labellist_search(vh->var->iden));
         push_stack("stack_socket");
-
-        /* リードしてスタックにプッシュ済みのフラグ */
-        vh->is_completion = 1;
 }
 
 static void __read_variable_ptr(struct VarHandle* vh)
 {
-        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
-        if (vh->is_completion)
-                return;
-
         /* 定数リテラルの場合はアドレスを読むのは不正 */
         if (vh->var->type & TYPE_LITERAL) {
                 yyerror("syntax err: 定数リテラルのアドレスを得ようとしました");
@@ -1819,17 +1799,10 @@ static void __read_variable_ptr(struct VarHandle* vh)
                 __get_variable_concrete_address(vh);
                 push_stack("heap_base");
         }
-
-        /* リードしてスタックにプッシュ済みのフラグ */
-        vh->is_completion = 1;
 }
 
 static void __read_literal(struct VarHandle* vh)
 {
-        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
-        if (vh->is_completion)
-                return;
-
         if ((vh->var->type & TYPE_LITERAL) == 0)
                 yyerror("system err: __read_literal()");
 
@@ -1842,17 +1815,10 @@ static void __read_literal(struct VarHandle* vh)
                 pA("stack_socket = %d;", *((int*)(vh->var->const_variable)));
 
         push_stack("stack_socket");
-
-        /* リードしてスタックにプッシュ済みのフラグ */
-        vh->is_completion = 1;
 }
 
 static void __read_variable(struct VarHandle* vh)
 {
-        /* 既にリードしてスタックにプッシュ済みの場合は何もしない */
-        if (vh->is_completion)
-                return;
-
         /* 定数リテラルの場合 */
         if (vh->var->type & TYPE_LITERAL) {
                 __read_literal(vh);
@@ -1874,9 +1840,6 @@ static void __read_variable(struct VarHandle* vh)
                         __read_variable_ptr(vh);
                 }
         }
-
-        /* リードしてスタックにプッシュ済みのフラグ */
-        vh->is_completion = 1;
 }
 
 /* ユーザー定義関数関連
@@ -2447,15 +2410,16 @@ __varhandle_func_assignment_new(struct VarHandle* vh1, struct VarHandle* vh2)
         if (vh1->is_lvalue == 0)
                 yyerror("syntax err: 代入先が左辺値ではありません");
 
-        if (vh2->is_completion == 0)
-                yyerror("system err: 代入値がスタックへまだ積まれていません");
-
         /* vh0 = vh1 */
         struct VarHandle* vh0 = vh1;
 
-        pop_stack("fixA");
-        cast_regval("fixA", vh0, vh2);
-        __assignment_variable("fixA", vh0);
+        pop_stack("fixR");
+        pop_stack("fixL");
+
+        cast_regval("fixR", vh0, vh2);
+        write_mem("fixR", "fixL");
+
+        push_stack("fixR");
 
         return vh0;
 }
@@ -2715,8 +2679,6 @@ static void translate_ec_a(struct EC* ec)
                         translate_ec(ec->child_ptr[0]);
 
                         __call_user_function(ec->vh->var->iden);
-
-                        ec->vh->is_completion = 1;
 
                         return;
                 }
