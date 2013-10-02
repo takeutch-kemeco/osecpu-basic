@@ -3571,11 +3571,13 @@ inline_assembler_statement
         }
         | __STATE_ASM __LB string __OPE_SUBST assignment_expression __RB __DECL_END {
                 translate_ec($5);
-                pop_stack($3);
+                pop_stack("stack_socket");
+                read_mem($3, "stack_socket");
         }
         | __STATE_ASM __LB unary_expression __OPE_SUBST string __RB __DECL_END {
                 translate_ec($3);
-                __assignment_variable($5, $3->vh);
+                pop_stack("stack_socket");
+                write_mem($5, "stack_socket");
         }
         ;
 
