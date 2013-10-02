@@ -2251,6 +2251,7 @@ __var_func_assignment_new(struct Var* vh1, struct Var* vh2)
 #define EC_POSTFIX              8       /* 後置演算子による演算 */
 #define EC_PRIMARY              9       /* 参照演算 */
 #define EC_CONSTANT             10      /* 定数 */
+#define EC_CAST                 11      /* 型変換 */
 
 /* EC の演算子を示すフラグ
  */
@@ -2287,6 +2288,7 @@ __var_func_assignment_new(struct Var* vh1, struct Var* vh2)
 #define EC_OPE_SUBST            30      /* = */
 #define EC_OPE_LIST             31      /* , によって列挙されたリスト */
 #define EC_OPE_CAST             32      /* 型変換 */
+#define EC_OPE_REALIZE          33      /* 定数化 */
 
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
@@ -2346,16 +2348,6 @@ static void translate_ec(struct EC* ec)
         if (ec->type_expression == EC_ASSIGNMENT) {
                 if (ec->type_operator == EC_OPE_SUBST) {
                         ec->var = __var_func_assignment_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
-                } else if (ec->type_operator == EC_OPE_CAST) {
-                        const int32_t indirect_len = ec->var->indirect_len;
-                        const int32_t type = ec->var->type;
-
-                        *(ec->var) = *(ec->child_ptr[0]->var);
-                        ec->var->indirect_len = indirect_len;
-                        ec->var->type &= ~(TYPE_VOID | TYPE_CHAR | TYPE_INT | TYPE_SHORT |
-                                               TYPE_LONG | TYPE_FLOAT | TYPE_DOUBLE | TYPE_SIGNED |
-                                               TYPE_UNSIGNED | TYPE_STRUCT | TYPE_ENUM);
-                        ec->var->type = type;
                 } else if (ec->type_operator == EC_OPE_LIST) {
                         /* 何もしない */
                 } else {
@@ -2397,6 +2389,17 @@ static void translate_ec(struct EC* ec)
                 } else {
                         yyerror("system err: translate_ec(), EC_CALC");
                 }
+        } else if (ec->type_expression == EC_CAST) {
+                if (ec->type_operator == EC_OPE_CAST) {
+                        /* 何もしない */
+                } else if (ec->type_operator == EC_OPE_REALIZE) {
+                        /* スタックに積まれてる変数アドレスをポップして間接参照を行い、
+                         * 直接の値に変換して再びプッシュする。
+                         */
+                        pop_stack("stack_socket");
+                        read_mem("fixL", "stack_socket");
+                        push_stack("fixL");
+                }
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
                         struct Var* tmp = varlist_search(ec->iden);
@@ -2416,14 +2419,18 @@ static void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_UNARY) {
                 if (ec->type_operator == EC_OPE_ADDRESS) {
-                        ec->var = ec->child_ptr[0]->var;
+                        *(ec->var) = *(ec->child_ptr[0]->var);
                         ec->var->indirect_len++;
                 } else if (ec->type_operator == EC_OPE_POINTER) {
-                        ec->var = ec->child_ptr[0]->var;
+                        *(ec->var) = *(ec->child_ptr[0]->var);
+
+                        if (ec->var->indirect_len <= 0)
+                                yyerror("syntax err: 間接参照の深さが不正です");
+
                         ec->var->indirect_len--;
-                        pop_stack("fixL");
-                        read_mem("fixR", "fixL");
-                        push_stack("fixR");
+                        pop_stack("fixR");
+                        read_mem("fixL", "fixR");
+                        push_stack("fixL");
                 } else if (ec->type_operator == EC_OPE_INV) {
                         ec->var = __var_func_invert_new(ec->child_ptr[0]->var);
                 } else if (ec->type_operator == EC_OPE_NOT) {
@@ -2439,7 +2446,7 @@ static void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_POSTFIX) {
                 if (ec->type_operator == EC_OPE_ARRAY) {
-                        if (ec->var->dim_len == 0)
+                        if (ec->var->dim_len <= 0)
                                 yyerror("syntax err: 配列の添字次元が不正です");
 
                         /* この時点でスタックには "変数アドレス -> 添字" の順で積まれてる前提。
@@ -3227,13 +3234,18 @@ multiplicative_expression
         ;
 
 cast_expression
-        : unary_expression
+        : unary_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_CAST;
+                ec->type_operator = EC_OPE_REALIZE;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
         | __LB type_specifier pointer __RB cast_expression {
                 struct EC* ec = new_ec();
-                ec->type_expression = EC_ASSIGNMENT;
+                ec->type_expression = EC_CAST;
                 ec->type_operator = EC_OPE_CAST;
-                ec->var = new_var();
-                ec->var = new_var();
                 ec->var->indirect_len = $3;
                 ec->var->type = $2;
                 ec->child_ptr[0] = $5;
@@ -3244,7 +3256,7 @@ cast_expression
 
 unary_expression
         : postfix_expression
-        | __OPE_AND unary_expression %prec __OPE_ADDRESS {
+        | __OPE_AND cast_expression %prec __OPE_ADDRESS {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_UNARY;
                 ec->type_operator = EC_OPE_ADDRESS;
@@ -3252,7 +3264,7 @@ unary_expression
                 ec->child_len = 1;
                 $$ = ec;
         }
-        | __OPE_MUL unary_expression %prec __OPE_POINTER {
+        | __OPE_MUL cast_expression %prec __OPE_POINTER {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_UNARY;
                 ec->type_operator = EC_OPE_POINTER;
