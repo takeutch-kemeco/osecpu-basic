@@ -234,7 +234,6 @@ static void dec_cur_scope_depth(void)
 #define VAR_DIM_MAX 0x100
 struct Var {
         char iden[IDENLIST_STR_LEN];
-        int32_t is_lvalue;      /* 左辺値として扱える場合は1。 右辺値の場合は0 */
         int32_t base_ptr;       /* ベースアドレス */
         int32_t total_len;      /* 配列変数全体の長さ */
         int32_t unit_len[VAR_DIM_MAX];  /* 各配列次元の長さ */
@@ -243,6 +242,20 @@ struct Var {
         int32_t type;           /* specifier | qualifier | storage_class による変数属性 */
         void* const_variable;   /* 変数が定数の場合の値 */
 };
+
+/* Varが左辺値の条件を満たしているかを調べる。
+ * 左辺値ならば 1 を返し、右辺値ならば 0 を返す。
+ */
+static int32_t var_is_lvalue(struct Var* var)
+{
+        /* 配列の添字が完了し、かつ、間接参照次元が0の場合は左辺値となる。
+         * それ以外は右辺値となる。
+         */
+        if ((var->dim_len == 0) && (var->indirect_len == 0))
+                return 1;
+        else
+                return 0;
+}
 
 /* Varの内容を印字する
  * 主にデバッグ用
@@ -255,7 +268,7 @@ static void var_print(struct Var* var)
         }
 
         printf("struct Var, iden[%s], is_lvalue[%d], base_ptr[%d], total_len[%d], unit_len",
-               var->iden, var->is_lvalue, var->base_ptr, var->total_len);
+               var->iden, var_is_lvalue(var), var->base_ptr, var->total_len);
 
         int32_t i;
         for (i = 0; i < var->dim_len; i++) {
@@ -279,7 +292,6 @@ static struct Var* new_var(void)
                 yyerror("system err: new_var(), malloc()");
 
         var->iden[0] = '\0';
-        var->is_lvalue = 1; /* デフォルトは左辺値 */
         var->base_ptr = 0;
         var->total_len = 0;
         var->dim_len = 0;
@@ -1511,8 +1523,6 @@ static struct Var* var_cast_new(struct Var* vh1, struct Var* vh2)
                 yyerror("system err: var_cast_new(), variable type not found");
         }
 
-        vh0->is_lvalue = 0;     /* 右辺値とする */
-
 #ifdef DEBUG_VAR_CAST
         printf("vh0, ");
         var_print(vh0);
@@ -2210,7 +2220,7 @@ __var_func_ge_new(struct Var* vh1, struct Var* vh2)
 static struct Var*
 __var_func_assignment_new(struct Var* vh1, struct Var* vh2)
 {
-        if (vh1->is_lvalue == 0)
+        if (var_is_lvalue(vh1) == 0)
                 yyerror("syntax err: 代入先が左辺値ではありません");
 
         /* vh0 = vh1 */
@@ -2302,6 +2312,7 @@ static struct EC* new_ec(void)
         if (ec == NULL)
                 yyerror("system err: new_ec(), malloc()");
 
+        ec->var = new_var();
         ec->type_operator = 0;
         ec->type_expression = 0;
         ec->child_len = 0;
@@ -2386,18 +2397,19 @@ static void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
-                        ec->var = new_var();
-                        ec->var = varlist_search(ec->iden);
-                        if (ec->var == NULL)
+                        struct Var* tmp = varlist_search(ec->iden);
+                        if (tmp == NULL)
                                 yyerror("syntax err: 未定義の変数を参照しようとしました");
+
+                        *(ec->var) = *tmp;
 
                         if (ec->var->type & TYPE_AUTO)
                                 pA("stack_socket = %d + stack_frame;", ec->var->base_ptr);
-                        else
+                        else if ((ec->var->type & TYPE_LITERAL) == 0)
                                 pA("stack_socket = %d;", ec->var->base_ptr);
 
                         push_stack("stack_socket");
-                        ec->var->is_lvalue = 1; /* 左辺値とする */
+
                 } else {
                         yyerror("system err: translate_ec(), EC_PRIMARY");
                 }
@@ -2426,18 +2438,22 @@ static void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_POSTFIX) {
                 if (ec->type_operator == EC_OPE_ARRAY) {
+                        if (ec->var->dim_len == 0)
+                                yyerror("syntax err: 配列の添字次元が不正です");
+
                         /* この時点でスタックには "変数アドレス -> 添字" の順で積まれてる前提。
                          * fixLに変数アドレス、fixRに添字をポップする。
                          */
                         pop_stack("fixL");
                         pop_stack("fixR");
 
-                        ec->var = ec->child_ptr[0]->var;
+                        *(ec->var) = *(ec->child_ptr[0]->var);
+
+                        ec->var->dim_len--;
                         ec->var->total_len /= ec->var->unit_len[ec->var->dim_len];
+
                         pA("fixL += fixR * %d;", ec->var->total_len);
                         push_stack("fixL");
-
-                        ec->var->dim_len++;
                 } else if (ec->type_operator == EC_OPE_FUNCTION) {
                         /* 現在の stack_frame をプッシュする。
                          * そして、ここには関数終了後にはリターン値が入った状態となる。
@@ -2766,19 +2782,6 @@ initializer
         }
         ;
 
-assignment_expression
-        : conditional_expression
-        | unary_expression __OPE_SUBST assignment_expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_ASSIGNMENT;
-                ec->type_operator = EC_OPE_SUBST;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        ;
-
 selection_statement
         : selection_if
         ;
@@ -3018,6 +3021,19 @@ define_struct
         {
                 structspec_set_iden($4, $2);
                 structspec_ptrlist_add($4);
+        }
+        ;
+
+assignment_expression
+        : conditional_expression
+        | unary_expression __OPE_SUBST assignment_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ASSIGNMENT;
+                ec->type_operator = EC_OPE_SUBST;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
         }
         ;
 
@@ -3296,8 +3312,6 @@ postfix_expression
                 ec->type_expression = EC_POSTFIX;
                 ec->type_operator = EC_OPE_FUNCTION;
 
-                ec->var = new_var();
-                ec->var = new_var();
                 ec->var->type = TYPE_FUNCTION | TYPE_SIGNED | TYPE_INT;
                 strcpy(ec->var->iden, $1);
 
@@ -3350,9 +3364,6 @@ constant
         : __INTEGER_CONSTANT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
-
-                ec->var = new_var();
-                ec->var = new_var();
                 ec->var->type = TYPE_SIGNED | TYPE_INT | TYPE_LITERAL;
 
                 ec->var->const_variable = malloc(sizeof(int));
@@ -3363,9 +3374,6 @@ constant
         | __CHARACTER_CONSTANT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
-
-                ec->var = new_var();
-                ec->var = new_var();
                 ec->var->type = TYPE_SIGNED | TYPE_CHAR |TYPE_LITERAL;
 
                 ec->var->const_variable = malloc(sizeof(int));
@@ -3376,9 +3384,6 @@ constant
         | __FLOATING_CONSTANT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
-
-                ec->var = new_var();
-                ec->var = new_var();
                 ec->var->type = TYPE_FLOAT | TYPE_LITERAL;
 
                 double a;
