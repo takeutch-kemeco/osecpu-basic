@@ -1645,27 +1645,6 @@ __new_var_initializer_local(const char* iden,
         return var;
 }
 
-/* 変数への代入関連
- */
-
-/* スタックにあるアドレスをポップし、間接参照で値を代入し、また、値自体もプッシュする
- *
- * スタックには "書き込み先アドレス -> 値" の順で積まれてる前提
- *
- * 代入先のアドレスは、添字分のシークや、スタックフレーム分の下駄の終えた状態の、
- * 完全なアドレスがスタックに既にプッシュされている前提。
- */
-static void __assignment_variable(struct Var* var)
-{
-        pop_stack("fixR");
-        pop_stack("fixL");
-        write_mem("fixR", "fixL");
-        push_stack("fixR");
-}
-
-/* 変数リード関連
- */
-
 /* ユーザー定義関数関連
  */
 
@@ -2801,10 +2780,16 @@ initializer
         }
         | initializer __OPE_SUBST expression {
                 translate_ec($3);
+                pop_stack("fixR");
+                struct Var* src_var = $3->var;
 
-                struct Var* var = $1;
+                struct Var* dst_var = $1;
+                pA("fixL = %d;", dst_var->base_ptr);
 
-                __assignment_variable(var);
+                push_stack("fixL");
+                push_stack("fixR");
+
+                $$ = __var_func_assignment_new(dst_var, src_var);
         }
         ;
 
