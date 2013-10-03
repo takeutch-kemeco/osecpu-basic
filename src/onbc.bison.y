@@ -419,11 +419,7 @@ static void varlist_add_common(const char* iden,
         cur->total_len = total_len;
         cur->dim_len = dim_len;
         cur->indirect_len = indirect_len;
-
-        if (cur_scope_depth == 0)
-                cur->type = type & (~TYPE_AUTO);
-        else
-                cur->type = type | TYPE_AUTO;
+        cur->type = type;
 
         varlist_head++;
 
@@ -436,6 +432,19 @@ static void varlist_add_common(const char* iden,
 #endif /* DEBUG_VARLIST */
 }
 
+/* 変数リストに新たにグローバル変数を追加する。
+ * 現在のスコープ内に重複する同名のグローバル変数が存在した場合は何もしない。
+ */
+static void varlist_add_global(const char* str,
+                               int32_t* unit_len,
+                               const int32_t dim_len,
+                               const int32_t indirect_len,
+                               const int32_t type)
+{
+        if (varlist_search(str) == NULL)
+                varlist_add_common(str, unit_len, dim_len, indirect_len, type & (~TYPE_AUTO));
+}
+
 /* 変数リストに新たにローカル変数を追加する。
  * 現在のスコープ内に重複する同名のローカル変数が存在した場合は何もしない。
  */
@@ -446,7 +455,7 @@ static void varlist_add_local(const char* str,
                               const int32_t type)
 {
         if (varlist_search_local(str) == NULL)
-                varlist_add_common(str, unit_len, dim_len, indirect_len, type);
+                varlist_add_common(str, unit_len, dim_len, indirect_len, type | TYPE_AUTO);
 }
 
 /* 変数リストの現在の最後の変数を、新しいスコープの先頭とみなして、それの base_ptr に0をセットする
@@ -1492,51 +1501,51 @@ static void __func_logical_rshift_float(void)
 
 /* 2項演算の場合のキャスト結果のVarを生成して返す
  */
-static struct Var* var_cast_new(struct Var* vh1, struct Var* vh2)
+static struct Var* var_cast_new(struct Var* var1, struct Var* var2)
 {
-        struct Var* vh0 = new_var();
+        struct Var* var0 = new_var();
 
-        /* より汎用性の高い方の型を vh0 に得る。
-         * その際に、vh0は非配列型とするので、var->total_lenには型の基本サイズが入る。
+        /* より汎用性の高い方の型を var0 に得る。
+         * その際に、var0は非配列型とするので、var->total_lenには型の基本サイズが入る。
          * 現状は実質的に SInt32 型のみなので、どの型も 1 となる。(void型も1)
          */
-        if ((vh1->type & TYPE_DOUBLE) || (vh2->type & TYPE_DOUBLE)) {
-                vh0->type |= TYPE_DOUBLE;
-                vh0->total_len = 1;
-        } else if ((vh1->type & TYPE_FLOAT) || (vh2->type & TYPE_FLOAT)) {
-                vh0->type |= TYPE_FLOAT;
-                vh0->total_len = 1;
-        } else if ((vh1->type & TYPE_INT) || (vh2->type & TYPE_INT)) {
-                vh0->type |= TYPE_INT;
-                vh0->total_len = 1;
-        } else if ((vh1->type & TYPE_LONG) || (vh2->type & TYPE_LONG)) {
-                vh0->type |= TYPE_LONG;
-                vh0->total_len = 1;
-        } else if ((vh1->type & TYPE_SHORT) || (vh2->type & TYPE_SHORT)) {
-                vh0->type |= TYPE_SHORT;
-                vh0->total_len = 1;
-        } else if ((vh1->type & TYPE_CHAR) || (vh2->type & TYPE_CHAR)) {
-                vh0->type |= TYPE_CHAR;
-                vh0->total_len = 1;
-        } else if ((vh1->type & TYPE_VOID) || (vh2->type & TYPE_VOID)) {
-                vh0->type |= TYPE_VOID;
-                vh0->total_len = 1;
+        if ((var1->type & TYPE_DOUBLE) || (var2->type & TYPE_DOUBLE)) {
+                var0->type |= TYPE_DOUBLE;
+                var0->total_len = 1;
+        } else if ((var1->type & TYPE_FLOAT) || (var2->type & TYPE_FLOAT)) {
+                var0->type |= TYPE_FLOAT;
+                var0->total_len = 1;
+        } else if ((var1->type & TYPE_INT) || (var2->type & TYPE_INT)) {
+                var0->type |= TYPE_INT;
+                var0->total_len = 1;
+        } else if ((var1->type & TYPE_LONG) || (var2->type & TYPE_LONG)) {
+                var0->type |= TYPE_LONG;
+                var0->total_len = 1;
+        } else if ((var1->type & TYPE_SHORT) || (var2->type & TYPE_SHORT)) {
+                var0->type |= TYPE_SHORT;
+                var0->total_len = 1;
+        } else if ((var1->type & TYPE_CHAR) || (var2->type & TYPE_CHAR)) {
+                var0->type |= TYPE_CHAR;
+                var0->total_len = 1;
+        } else if ((var1->type & TYPE_VOID) || (var2->type & TYPE_VOID)) {
+                var0->type |= TYPE_VOID;
+                var0->total_len = 1;
         } else {
                 yyerror("system err: var_cast_new(), variable type not found");
         }
 
 #ifdef DEBUG_VAR_CAST
-        printf("vh0, ");
-        var_print(vh0);
+        printf("var0, ");
+        var_print(var0);
 
-        printf("vh1, ");
-        var_print(vh1);
+        printf("var1, ");
+        var_print(var1);
 
-        printf("vh2, ");
-        var_print(vh2);
+        printf("var2, ");
+        var_print(var2);
 #endif /* DEBUG_VAR_CAST */
 
-        return vh0;
+        return var0;
 }
 
 /* 任意レジスターの値を型変換する
@@ -1631,7 +1640,7 @@ __new_var_initializer_local(const char* iden,
         /* 実際の動作時にメモリー確保するルーチンはこちら側
          */
         if (var->type & TYPE_AUTO)
-                pA("stack_head = %d + stack_frame;", var->base_ptr + var->total_len);
+                pA("stack_head += %d;", var->total_len);
 
         return var;
 }
@@ -2475,8 +2484,17 @@ static void translate_ec(struct EC* ec)
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
         } else if (ec->type_expression == EC_CONSTANT) {
-                pA("stack_socket = %d;", *((int*)(ec->var->const_variable)));
-                push_stack("stack_socket");
+                pA("fixR = %d;", *((int*)(ec->var->const_variable)));
+
+                struct Var* tmp = varlist_search(ec->iden);
+                if (tmp == NULL)
+                        yyerror("system err: const variable");
+
+                *(ec->var) = *tmp;
+
+                pA("fixL = %d;", ec->var->base_ptr);
+                write_mem("fixR", "fixL");
+                push_stack("fixL");
         } else {
                 yyerror("system err: translate_ec()");
         }
@@ -3363,8 +3381,7 @@ inline_assembler_statement
         }
         | __STATE_ASM __LB string __OPE_SUBST assignment_expression __RB __DECL_END {
                 translate_ec($5);
-                pop_stack("stack_socket");
-                read_mem($3, "stack_socket");
+                pop_stack($3);
         }
         | __STATE_ASM __LB unary_expression __OPE_SUBST string __RB __DECL_END {
                 translate_ec($3);
@@ -3377,7 +3394,8 @@ constant
         : __INTEGER_CONSTANT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
-                ec->var->type = TYPE_SIGNED | TYPE_INT | TYPE_LITERAL;
+                sprintf(ec->iden, "@%d", $1);
+                varlist_add_global(ec->iden, NULL, 0, 0, TYPE_SIGNED | TYPE_INT | TYPE_LITERAL);
 
                 ec->var->const_variable = malloc(sizeof(int));
                 *((int*)(ec->var->const_variable)) = $1;
@@ -3387,7 +3405,8 @@ constant
         | __CHARACTER_CONSTANT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
-                ec->var->type = TYPE_SIGNED | TYPE_CHAR |TYPE_LITERAL;
+                sprintf(ec->iden, "@%d", $1);
+                varlist_add_global(ec->iden, NULL, 0, 0, TYPE_SIGNED | TYPE_CHAR | TYPE_LITERAL);
 
                 ec->var->const_variable = malloc(sizeof(int));
                 *((int*)(ec->var->const_variable)) = $1;
@@ -3397,7 +3416,8 @@ constant
         | __FLOATING_CONSTANT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
-                ec->var->type = TYPE_FLOAT | TYPE_LITERAL;
+                sprintf(ec->iden, "@%f", $1);
+                varlist_add_global(ec->iden, NULL, 0, 0, TYPE_FLOAT | TYPE_LITERAL);
 
                 double a;
                 double b = modf($1, &a);
