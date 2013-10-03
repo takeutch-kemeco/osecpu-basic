@@ -240,24 +240,11 @@ struct Var {
         int32_t dim_len;        /* 配列の次元数 */
         int32_t indirect_len;   /* 間接参照の深さ。直接参照(非ポインター型)ならば0 */
         int32_t type;           /* specifier | qualifier | storage_class による変数属性 */
+        int32_t is_lvalue;      /* この変数が値を間接参照で得る場合(左辺値)は1。
+                                 * 即値で得る場合(右辺値)は0。
+                                 */
         void* const_variable;   /* 変数が定数の場合の値 */
 };
-
-/* Varが左辺値の条件を満たしているかを調べる。
- * 左辺値ならば 1 を返し、右辺値ならば 0 を返す。
- */
-static int32_t var_is_lvalue(struct Var* var)
-{
-        /* 配列の添字が完了し、かつ、間接参照次元が0で、かつ定数リテラルでは無い場合は左辺値となる。
-         * それ以外は右辺値となる。
-         */
-        if ((var->dim_len == 0) &&
-            (var->indirect_len == 0) &&
-            ((var->type & TYPE_LITERAL) == 0))
-                return 1;
-        else
-                return 0;
-}
 
 /* Varの内容を印字する
  * 主にデバッグ用
@@ -270,7 +257,7 @@ static void var_print(struct Var* var)
         }
 
         printf("struct Var, iden[%s], is_lvalue[%d], base_ptr[%d], total_len[%d], unit_len",
-               var->iden, var_is_lvalue(var), var->base_ptr, var->total_len);
+               var->iden, var->is_lvalue, var->base_ptr, var->total_len);
 
         int32_t i;
         for (i = 0; i < var->dim_len; i++) {
@@ -299,6 +286,7 @@ static struct Var* new_var(void)
         var->dim_len = 0;
         var->indirect_len = 0;
         var->type = TYPE_SIGNED | TYPE_INT; /* デフォルトは符号付きint */
+        var->is_lvalue = 0;
         var->const_variable = NULL;
 
         return var;
@@ -420,6 +408,7 @@ static void varlist_add_common(const char* iden,
         cur->dim_len = dim_len;
         cur->indirect_len = indirect_len;
         cur->type = type;
+        cur->is_lvalue = 1; /* 変数は左辺値 */
 
         varlist_head++;
 
@@ -1636,6 +1625,8 @@ __new_var_initializer_local(const char* iden,
         varlist_add_local(iden, unit_len, dim_len, indirect_len, type | TYPE_AUTO);
 
         struct Var* var = varlist_search_local(iden);
+        if (var == NULL)
+                yyerror("system err: __new_var_initializer_loval()");
 
         /* 実際の動作時にメモリー確保するルーチンはこちら側
          */
@@ -2210,14 +2201,24 @@ __var_func_ge_new(struct Var* vh1, struct Var* vh2)
 static struct Var*
 __var_func_assignment_new(struct Var* vh1, struct Var* vh2)
 {
-        if (var_is_lvalue(vh1) == 0)
+        if (vh1->is_lvalue == 0)
                 yyerror("syntax err: 代入先が左辺値ではありません");
 
         /* vh0 = vh1 */
         struct Var* vh0 = vh1;
 
-        pop_stack("fixR");
-        pop_stack("fixL");
+        if (vh2->is_lvalue) {
+                pop_stack("stack_socket");
+                read_mem("fixR", "stack_socket");
+        } else {
+                pop_stack("fixR");
+        }
+
+        if (vh1->is_lvalue) {
+                pop_stack("fixL");
+        } else {
+                yyerror("syntax err: 有効な左辺値ではないので代入できません");
+        }
 
         cast_regval("fixR", vh0, vh2);
         write_mem("fixR", "fixL");
@@ -2276,7 +2277,6 @@ __var_func_assignment_new(struct Var* vh1, struct Var* vh2)
 #define EC_OPE_SUBST            30      /* = */
 #define EC_OPE_LIST             31      /* , によって列挙されたリスト */
 #define EC_OPE_CAST             32      /* 型変換 */
-#define EC_OPE_REALIZE          33      /* 定数化 */
 
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
@@ -2335,7 +2335,7 @@ static void translate_ec(struct EC* ec)
 
         if (ec->type_expression == EC_ASSIGNMENT) {
                 if (ec->type_operator == EC_OPE_SUBST) {
-                        ec->var = __var_func_assignment_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        *(ec->var) = *(__var_func_assignment_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var));
                 } else if (ec->type_operator == EC_OPE_LIST) {
                         /* 何もしない */
                 } else {
@@ -2380,13 +2380,8 @@ static void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_CAST) {
                 if (ec->type_operator == EC_OPE_CAST) {
                         /* 何もしない */
-                } else if (ec->type_operator == EC_OPE_REALIZE) {
-                        /* スタックに積まれてる変数アドレスをポップして間接参照を行い、
-                         * 直接の値に変換して再びプッシュする。
-                         */
-                        pop_stack("stack_socket");
-                        read_mem("fixL", "stack_socket");
-                        push_stack("fixL");
+                } else {
+                        yyerror("system err: translate_ec(), EC_CAST");
                 }
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
@@ -2408,7 +2403,15 @@ static void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_UNARY) {
                 if (ec->type_operator == EC_OPE_ADDRESS) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
+
+                        if (ec->var->is_lvalue) {
+                                /* 何もしない */
+                        } else {
+                                yyerror("syntax err: 有効な左辺値ではないのでアドレス取得できません");
+                        }
+
                         ec->var->indirect_len++;
+                        ec->var->is_lvalue = 0;
                 } else if (ec->type_operator == EC_OPE_POINTER) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
@@ -2419,6 +2422,8 @@ static void translate_ec(struct EC* ec)
                         pop_stack("fixR");
                         read_mem("fixL", "fixR");
                         push_stack("fixL");
+
+                        ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_INV) {
                         ec->var = __var_func_invert_new(ec->child_ptr[0]->var);
                 } else if (ec->type_operator == EC_OPE_NOT) {
@@ -2440,8 +2445,19 @@ static void translate_ec(struct EC* ec)
                         /* この時点でスタックには "変数アドレス -> 添字" の順で積まれてる前提。
                          * fixLに変数アドレス、fixRに添字をポップする。
                          */
-                        pop_stack("fixR");
-                        pop_stack("fixL");
+                        if (ec->child_ptr[0]->var->is_lvalue) {
+                                pop_stack("stack_socket");
+                                read_mem("fixR", "stack_socket");
+                        } else {
+                                yyerror("system err: 有効な左辺値ではありません");
+                        }
+
+                        if (ec->child_ptr[1]->var->is_lvalue) {
+                                pop_stack("stack_socket");
+                                read_mem("fixL", "stack_socket");
+                        } else {
+                                pop_stack("fixL");
+                        }
 
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
@@ -2450,6 +2466,8 @@ static void translate_ec(struct EC* ec)
 
                         pA("fixL += fixR * %d;", ec->var->total_len);
                         push_stack("fixL");
+
+                        ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_FUNCTION) {
                         /* 現在の stack_frame をプッシュする。
                          * そして、ここには関数終了後にはリターン値が入った状態となる。
@@ -2767,29 +2785,27 @@ initializer_param
 
 initializer
         : type_specifier pointer __IDENTIFIER initializer_param {
-                struct Var* var =
-                        __new_var_initializer_local($3, &($4[1]), $4[0], $2, $1);
-
+                struct Var* var = new_var();
+                *var = *(__new_var_initializer_local($3, &($4[1]), $4[0], $2, $1));
                 $$ = var;
         }
         | initializer __OPE_COMMA pointer __IDENTIFIER initializer_param {
-                struct Var* var =
-                        __new_var_initializer_local($4, &($5[1]), $5[0], $3, $1->type);
-
+                struct Var* var = new_var();
+                *var = *(__new_var_initializer_local($4, &($5[1]), $5[0], $3, $1->type));
                 $$ = var;
         }
         | initializer __OPE_SUBST expression {
                 translate_ec($3);
-                pop_stack("fixR");
-                struct Var* src_var = $3->var;
 
-                struct Var* dst_var = $1;
-                pA("fixL = %d;", dst_var->base_ptr);
+                pop_stack("fixR");
+                pA("fixL = %d;", $1->base_ptr);
 
                 push_stack("fixL");
                 push_stack("fixR");
 
-                $$ = __var_func_assignment_new(dst_var, src_var);
+                struct Var* var = new_var();
+                *var = *(__var_func_assignment_new($1, $3->var));
+                $$ = var;
         }
         ;
 
@@ -3238,12 +3254,6 @@ multiplicative_expression
 
 cast_expression
         : unary_expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_CAST;
-                ec->type_operator = EC_OPE_REALIZE;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
         }
         | __LB type_specifier pointer __RB cast_expression {
                 struct EC* ec = new_ec();
@@ -3366,12 +3376,21 @@ inline_assembler_statement
         }
         | __STATE_ASM __LB string __OPE_SUBST assignment_expression __RB __DECL_END {
                 translate_ec($5);
-                pop_stack($3);
+                if ($5->var->is_lvalue) {
+                        pop_stack("stack_socket");
+                        read_mem($3, "stack_socket");
+                } else {
+                        pop_stack($3);
+                }
         }
         | __STATE_ASM __LB unary_expression __OPE_SUBST string __RB __DECL_END {
                 translate_ec($3);
-                pop_stack("stack_socket");
-                write_mem($5, "stack_socket");
+                if ($3->var->is_lvalue) {
+                        pop_stack("stack_socket");
+                        write_mem($5, "stack_socket");
+                } else {
+                        yyerror("syntax err: 有効な左辺値ではありません");
+                }
         }
         ;
 
