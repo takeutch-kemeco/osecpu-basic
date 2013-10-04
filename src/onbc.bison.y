@@ -2411,6 +2411,7 @@ static void translate_ec(struct EC* ec)
                         }
 
                         ec->var->indirect_len++;
+
                         ec->var->is_lvalue = 0;
                 } else if (ec->type_operator == EC_OPE_POINTER) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
@@ -2419,9 +2420,14 @@ static void translate_ec(struct EC* ec)
                                 yyerror("syntax err: 間接参照の深さが不正です");
 
                         ec->var->indirect_len--;
-                        pop_stack("fixR");
-                        read_mem("fixL", "fixR");
-                        push_stack("fixL");
+
+                        if (ec->var->is_lvalue) {
+                                pop_stack("fixR");
+                                read_mem("fixL", "fixR");
+                                push_stack("fixL");
+                        } else {
+                                pop_stack("fixR");
+                        }
 
                         ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_INV) {
