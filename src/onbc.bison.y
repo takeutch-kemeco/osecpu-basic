@@ -292,6 +292,27 @@ static struct Var* new_var(void)
         return var;
 }
 
+static void pop_stack(const char* register_name);
+static void read_mem(const char* regname_data,
+                     const char* regname_address);
+
+/* スタックからのポップ。
+ * ただしVar->is_lvalue、および EC->Var->dim_lenに応じて関節参照・直接参照を切り替える
+ */
+static void var_pop_stack(struct Var* var, const char* register_name)
+{
+        if (var->is_lvalue) {
+                if (var->dim_len <= 0) {
+                        pop_stack("stack_socket");
+                        read_mem(register_name, "stack_socket");
+                } else {
+                        pop_stack(register_name);
+                }
+        } else {
+                pop_stack(register_name);
+        }
+}
+
 /* 変数スペックのリストコンテナ
  */
 #define VARLIST_LEN 0x1000
@@ -2199,33 +2220,25 @@ __var_func_ge_new(struct Var* vh1, struct Var* vh2)
 }
 
 static struct Var*
-__var_func_assignment_new(struct Var* vh1, struct Var* vh2)
+__var_func_assignment_new(struct Var* var1, struct Var* var2)
 {
-        if (vh1->is_lvalue == 0)
-                yyerror("syntax err: 代入先が左辺値ではありません");
+        /* var0 = var1 */
+        struct Var* var0 = var_cast_new(var1, var1);
 
-        /* vh0 = vh1 */
-        struct Var* vh0 = vh1;
+        var_pop_stack(var2, "fixR");
 
-        if (vh2->is_lvalue) {
-                pop_stack("stack_socket");
-                read_mem("fixR", "stack_socket");
-        } else {
-                pop_stack("fixR");
-        }
-
-        if (vh1->is_lvalue) {
+        if (var1->is_lvalue && var1->dim_len == 0) {
                 pop_stack("fixL");
         } else {
                 yyerror("syntax err: 有効な左辺値ではないので代入できません");
         }
 
-        cast_regval("fixR", vh0, vh2);
+        cast_regval("fixR", var0, var2);
         write_mem("fixR", "fixL");
 
         push_stack("fixR");
 
-        return vh0;
+        return var0;
 }
 
 /* ExpressionContainer 関連
@@ -2404,14 +2417,10 @@ static void translate_ec(struct EC* ec)
                 if (ec->type_operator == EC_OPE_ADDRESS) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
-                        if (ec->var->is_lvalue) {
-                                /* 何もしない */
-                        } else {
+                        if (ec->var->is_lvalue == 0)
                                 yyerror("syntax err: 有効な左辺値ではないのでアドレス取得できません");
-                        }
 
                         ec->var->indirect_len++;
-
                         ec->var->is_lvalue = 0;
                 } else if (ec->type_operator == EC_OPE_POINTER) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
@@ -2421,13 +2430,8 @@ static void translate_ec(struct EC* ec)
 
                         ec->var->indirect_len--;
 
-                        if (ec->var->is_lvalue) {
-                                pop_stack("fixR");
-                                read_mem("fixL", "fixR");
-                                push_stack("fixL");
-                        } else {
-                                pop_stack("fixR");
-                        }
+                        var_pop_stack(ec->var, "fixL");
+                        push_stack("fixL");
 
                         ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_INV) {
@@ -2451,19 +2455,12 @@ static void translate_ec(struct EC* ec)
                         /* この時点でスタックには "変数アドレス -> 添字" の順で積まれてる前提。
                          * fixLに変数アドレス、fixRに添字をポップする。
                          */
-                        if (ec->child_ptr[0]->var->is_lvalue) {
-                                pop_stack("stack_socket");
-                                read_mem("fixR", "stack_socket");
-                        } else {
-                                yyerror("system err: 有効な左辺値ではありません");
-                        }
 
-                        if (ec->child_ptr[1]->var->is_lvalue) {
-                                pop_stack("stack_socket");
-                                read_mem("fixL", "stack_socket");
-                        } else {
-                                pop_stack("fixL");
-                        }
+                        if (ec->child_ptr[0]->var->is_lvalue == 0)
+                                yyerror("system err: 有効な左辺値ではありません");
+
+                        var_pop_stack(ec->child_ptr[1]->var, "fixR");
+                        var_pop_stack(ec->child_ptr[0]->var, "fixL");
 
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
@@ -3382,12 +3379,7 @@ inline_assembler_statement
         }
         | __STATE_ASM __LB string __OPE_SUBST assignment_expression __RB __DECL_END {
                 translate_ec($5);
-                if ($5->var->is_lvalue) {
-                        pop_stack("stack_socket");
-                        read_mem($3, "stack_socket");
-                } else {
-                        pop_stack($3);
-                }
+                var_pop_stack($5->var, $3);
         }
         | __STATE_ASM __LB unary_expression __OPE_SUBST string __RB __DECL_END {
                 translate_ec($3);
