@@ -2356,6 +2356,9 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_OPE_CAST             32      /* 型変換 */
 #define EC_OPE_GOTO             33
 #define EC_OPE_RETURN           34
+#define EC_OPE_ASM_STATEMENT    35      /* アセンブラ命令リスト */
+#define EC_OPE_ASM_SUBST_VTOR   36      /* 変数からレジスターへの代入 */
+#define EC_OPE_ASM_SUBST_RTOV   37      /* レジスターから変数への代入 */
 
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
@@ -2441,6 +2444,21 @@ static void translate_ec(struct EC* ec)
                         __define_user_function_return();
                 } else {
                         yyerror("system err: translate_ec(), EC_JUMP_STATEMENT");
+                }
+        } else if (ec->type_expression == EC_INLINE_ASSEMBLER_STATEMENT) {
+                if (ec->type_operator == EC_OPE_ASM_STATEMENT) {
+                        pA("%s", (char*)ec->var->const_variable);
+                } else if (ec->type_operator == EC_OPE_ASM_SUBST_VTOR) {
+                        var_pop_stack(ec->child_ptr[0]->var, ec->iden);
+                } else if (ec->type_operator == EC_OPE_ASM_SUBST_RTOV) {
+                        if (ec->child_ptr[0]->var->is_lvalue) {
+                                pop_stack("stack_socket");
+                                write_mem(ec->iden, "stack_socket");
+                        } else {
+                                yyerror("syntax err: 有効な左辺値ではありません");
+                        }
+                } else {
+                        yyerror("system err: translate_ec(), EC_INLINE_ASSEMBLER_STATEMENT");
                 }
         } else if (ec->type_expression == EC_EXPRESSION) {
                 /* 何もしない */
@@ -2811,6 +2829,8 @@ statement
         | inline_assembler_statement {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
                 $$ = ec;
         }
         ;
@@ -3543,20 +3563,31 @@ string
 
 inline_assembler_statement
         : __STATE_ASM __LB string __RB  __DECL_END {
-                pA($3);
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_INLINE_ASSEMBLER_STATEMENT;
+                ec->type_operator = EC_OPE_ASM_STATEMENT;
+                ec->var->const_variable = malloc(strlen($3) + 1);
+                strcpy(ec->var->const_variable, $3);
+                $$ = ec;
         }
         | __STATE_ASM __LB string __OPE_SUBST assignment_expression __RB __DECL_END {
-                translate_ec($5);
-                var_pop_stack($5->var, $3);
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_INLINE_ASSEMBLER_STATEMENT;
+                ec->type_operator = EC_OPE_ASM_SUBST_VTOR;
+                ec->child_ptr[0] = $5;
+                ec->child_len = 1;
+                strcpy(ec->iden, $3);
+                $$ = ec;
         }
         | __STATE_ASM __LB unary_expression __OPE_SUBST string __RB __DECL_END {
-                translate_ec($3);
-                if ($3->var->is_lvalue) {
-                        pop_stack("stack_socket");
-                        write_mem($5, "stack_socket");
-                } else {
-                        yyerror("syntax err: 有効な左辺値ではありません");
-                }
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_INLINE_ASSEMBLER_STATEMENT;
+                ec->type_operator = EC_OPE_ASM_SUBST_RTOV;
+                ec->child_ptr[0] = $3;
+                ec->child_len = 1;
+                ec->var->const_variable = malloc(strlen($5) + 1);
+                strcpy(ec->iden, $5);
+                $$ = ec;
         }
         ;
 
