@@ -2354,6 +2354,8 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_OPE_SUBST            30      /* = */
 #define EC_OPE_LIST             31      /* , によって列挙されたリスト */
 #define EC_OPE_CAST             32      /* 型変換 */
+#define EC_OPE_GOTO             33
+#define EC_OPE_RETURN           34
 
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
@@ -2413,12 +2415,32 @@ static void translate_ec(struct EC* ec)
 
         if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
+        } else if (ec->type_expression == EC_LABELED_STATEMENT) {
+                pA("LB(1, %d);", labellist_search(ec->var->iden));
         } else if (ec->type_expression == EC_EXPRESSION_STATEMENT) {
                 if (ec->child_len != 0) {
                         /* expression に属するステートメントは、
                          * 終了時点で”必ず”スタックへのプッシュが1個だけ余計に残ってる為、それを掃除する。
                          */
                         pop_stack_dummy();
+                }
+        } else if (ec->type_expression == EC_JUMP_STATEMENT) {
+                if (ec->type_operator == EC_OPE_GOTO) {
+                        pA("PLIMM(P3F, %d);", labellist_search(ec->var->iden));
+                } else if (ec->type_operator == EC_OPE_RETURN) {
+                        /* 空の return の場合は return 0 として動作させる。
+                         * これは、ユーザー定義関数は expression なので、
+                         * 終了後に必ずスタックが +1 状態である必要があるため。
+                         */
+                        if (ec->child_len == 0) {
+                                pA("fixA = 0;");
+                        } else {
+                                pop_stack("fixA");
+                        }
+
+                        __define_user_function_return();
+                } else {
+                        yyerror("system err: translate_ec(), EC_JUMP_STATEMENT");
                 }
         } else if (ec->type_expression == EC_EXPRESSION) {
                 /* 何もしない */
@@ -2656,14 +2678,14 @@ static void translate_ec(struct EC* ec)
 %type <ival> pointer
 
 %type <ec> statement
-%type <ec> labeled_statement
-%type <ec> expression_statement
 %type <ec> compound_statement
 %type <ec> selection_statement
 %type <ec> iteration_statement
 %type <ec> jump_statement
 %type <ec> inline_assembler_statement
 
+%type <ec> labeled_statement
+%type <ec> expression_statement
 %type <ec> expression
 %type <ec> assignment_expression
 %type <ec> conditional_expression
@@ -2753,6 +2775,8 @@ statement
         : labeled_statement {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
                 $$ = ec;
         }
         | expression_statement {
@@ -2780,11 +2804,22 @@ statement
         | jump_statement {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
                 $$ = ec;
         }
         | inline_assembler_statement {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_STATEMENT;
+                $$ = ec;
+        }
+        ;
+
+labeled_statement
+        : __DEFINE_LABEL {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_LABELED_STATEMENT;
+                strcpy(ec->var->iden, $1);
                 $$ = ec;
         }
         ;
@@ -3072,31 +3107,6 @@ iteration_for
                 /* end ラベル */
                 pA("LB(0, %d);", $<ival>6);
         }
-
-labeled_statement
-        : __DEFINE_LABEL {
-                pA("LB(1, %d);", labellist_search($1));
-        }
-        ;
-
-jump_statement
-        : __STATE_GOTO __IDENTIFIER __DECL_END {
-                pA("PLIMM(P3F, %d);", labellist_search($2));
-        }
-        | __STATE_RETURN expression __DECL_END {
-                translate_ec($2);
-
-                pop_stack("fixA");
-                __define_user_function_return();
-        }
-        | __STATE_RETURN __DECL_END {
-                /* 空の return の場合は return 0 として動作させる。
-                 * これは、ユーザー定義関数は expression なので、
-                 * 終了後に必ずスタックが +1 状態である必要があるため。
-                 */
-                pA("fixA = 0;");
-                __define_user_function_return();
-        }
         ;
 
 initializer_struct_member
@@ -3149,6 +3159,30 @@ define_struct
         {
                 structspec_set_iden($4, $2);
                 structspec_ptrlist_add($4);
+        }
+        ;
+
+jump_statement
+        : __STATE_GOTO __IDENTIFIER __DECL_END {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_JUMP_STATEMENT;
+                ec->type_operator = EC_OPE_GOTO;
+                strcpy(ec->var->iden, $2);
+                $$ = ec;
+        }
+        | __STATE_RETURN expression __DECL_END {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_JUMP_STATEMENT;
+                ec->type_operator = EC_OPE_RETURN;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | __STATE_RETURN __DECL_END {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_JUMP_STATEMENT;
+                ec->type_operator = EC_OPE_RETURN;
+                $$ = ec;
         }
         ;
 
