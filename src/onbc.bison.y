@@ -371,6 +371,23 @@ static struct Var* varlist_search_common(const char* iden, const int32_t varlist
         return NULL;
 }
 
+/* 変数リストに既に同名が登録されているかを、グローバル変数スコープの範囲内で確認する。
+ * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
+ */
+static struct Var* varlist_search_global(const char* iden)
+{
+        if (varlist_scope_head <= 0)
+                return varlist_search_common(iden, 0);
+
+        int32_t i = varlist_scope[1];
+        while (i-->0) {
+                if (strcmp(iden, varlist[i].iden) == 0)
+                        return &(varlist[i]);
+        }
+
+        return NULL;
+}
+
 /* 変数リストに既に同名が登録されているかを、最後尾側（varlist_head側）から現在のスコープの範囲内で確認する。
  * 確認する順序は最後尾側から開始して、現在のスコープ側へと向かう方向。
  * もし登録されていればその構造体アドレスを返す。無ければNULLを返す。
@@ -447,7 +464,7 @@ static void varlist_add_global(const char* str,
                                const int32_t indirect_len,
                                const int32_t type)
 {
-        if (varlist_search(str) == NULL)
+        if (varlist_search_global(str) == NULL)
                 varlist_add_common(str, unit_len, dim_len, indirect_len, type & (~TYPE_AUTO));
 }
 
@@ -782,7 +799,7 @@ static void init_stack(void)
         pA("SInt32 stack_socket:R03;");
 
         pA("stack_head = %d;", STACK_BEGIN_ADDRESS);
-        pA("stack_frame = 0;");
+        pA("stack_frame = %d;", STACK_BEGIN_ADDRESS);
 }
 
 /* スタック関連の各種レジスターの値を、実行時に画面に印字する
@@ -1628,12 +1645,11 @@ static void cast_regval(const char* register_name,
 
 /* ローカル変数のインスタンス生成
  */
-static struct Var*
-__new_var_initializer_local(const char* iden,
-                            int32_t* unit_len,
-                            const int32_t dim_len,
-                            const int32_t indirect_len,
-                            const int32_t type)
+static struct Var* __new_var_initializer_local(const char* iden,
+                                               int32_t* unit_len,
+                                               const int32_t dim_len,
+                                               const int32_t indirect_len,
+                                               const int32_t type)
 {
         if (dim_len >= VAR_DIM_MAX)
                 yyerror("syntax err: 配列の次元が高すぎます");
@@ -1645,7 +1661,7 @@ __new_var_initializer_local(const char* iden,
 
         struct Var* var = varlist_search_local(iden);
         if (var == NULL)
-                yyerror("system err: __new_var_initializer_loval()");
+                yyerror("system err: __new_var_initializer_local()");
 
         /* 実際の動作時にメモリー確保するルーチンはこちら側
          */
@@ -1653,6 +1669,42 @@ __new_var_initializer_local(const char* iden,
                 pA("stack_head += %d;", var->total_len);
 
         return var;
+}
+
+/* グローバル変数のインスタンス生成
+ */
+static struct Var* __new_var_initializer_global(const char* iden,
+                                                int32_t* unit_len,
+                                                const int32_t dim_len,
+                                                const int32_t indirect_len,
+                                                const int32_t type)
+{
+        if (dim_len >= VAR_DIM_MAX)
+                yyerror("syntax err: 配列の次元が高すぎます");
+
+        /* これはコンパイル時の変数状態を設定するにすぎない。
+         * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
+         */
+        varlist_add_global(iden, unit_len, dim_len, indirect_len, type);
+
+        struct Var* var = varlist_search_global(iden);
+        if (var == NULL)
+                yyerror("system err: __new_var_initializer_global()");
+
+        return var;
+}
+
+static struct Var* __new_var_initializer(const char* iden,
+                                         int32_t* unit_len,
+                                         const int32_t dim_len,
+                                         const int32_t indirect_len,
+                                         const int32_t type)
+{
+        if (cur_scope_depth == 0) {
+                return __new_var_initializer_global(iden, unit_len, dim_len, indirect_len, type);
+        } else {
+                return __new_var_initializer_local(iden, unit_len, dim_len, indirect_len, type);
+        }
 }
 
 /* ユーザー定義関数関連
@@ -1701,7 +1753,7 @@ static void __define_user_function_begin(const char* iden,
          * その後、それのオフセットに 0 をセットする（コンパイル時）
          */
         const char stack_prev_frame_iden[] = "@stack_prev_frame";
-        varlist_add_local(stack_prev_frame_iden, NULL, 0, 0, TYPE_FLOAT | TYPE_AUTO);
+        varlist_add_local(stack_prev_frame_iden, NULL, 0, 0, TYPE_AUTO);
         varlist_set_scope_head();
 
         /* スタック上に格納された引数順序と対応した順序となるように、ローカル変数を作成していく。
@@ -1712,7 +1764,7 @@ static void __define_user_function_begin(const char* iden,
                 char iden[0x1000];
                 idenlist_pop(iden);
 
-                varlist_add_local(iden, NULL, 0, 0, TYPE_FLOAT | TYPE_AUTO);
+                varlist_add_local(iden, NULL, 0, 0, TYPE_INT | TYPE_AUTO);
 
                 /* 変数のスペックを得る。（コンパイル時） */
                 struct Var* var = varlist_search_local(iden);
@@ -2256,6 +2308,7 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_PRIMARY              9       /* 参照演算 */
 #define EC_CONSTANT             10      /* 定数 */
 #define EC_CAST                 11      /* 型変換 */
+#define EC_ARGUMENT_EXPRESSION_LIST 12  /* 関数コール時の引数リスト */
 
 /* EC の演算子を示すフラグ
  */
@@ -2301,13 +2354,12 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
  * child_ptr[]: この EC をルートとして広がる枝ECへのポインター
  * child_len: child_ptr[] に登録されている枝の数
  */
-#define EC_CHILD_MAX 0x100
 struct EC {
         char iden[IDENLIST_STR_LEN];
         struct Var* var;
         uint32_t type_operator;
         uint32_t type_expression;
-        struct EC* child_ptr[EC_CHILD_MAX];
+        struct EC* child_ptr[2];
         int32_t child_len;
 };
 
@@ -2340,9 +2392,11 @@ static void delete_ec(struct EC* ec)
 
 static void translate_ec(struct EC* ec)
 {
-        int32_t i;
-        for (i = 0; i < ec->child_len; i++) {
-                translate_ec(ec->child_ptr[i]);
+        if (ec->type_operator != EC_OPE_FUNCTION) {
+                int32_t i;
+                for (i = 0; i < ec->child_len; i++) {
+                        translate_ec(ec->child_ptr[i]);
+                }
         }
 
         if (ec->child_len >= 1)
@@ -2487,6 +2541,8 @@ static void translate_ec(struct EC* ec)
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
+        } else if (ec->type_expression == EC_ARGUMENT_EXPRESSION_LIST) {
+                /* 何もしない */
         } else if (ec->type_expression == EC_CONSTANT) {
                 pA("fixR = %d;", *((int*)(ec->var->const_variable)));
 
@@ -2578,7 +2634,7 @@ static void translate_ec(struct EC* ec)
 %type <ival> type_specifier type_specifier_unit
 %type <ival> pointer
 
-%type <ec> expression expression_list
+%type <ec> expression
 %type <ec> assignment_expression
 
 %type <ec> conditional_expression
@@ -2592,11 +2648,11 @@ static void translate_ec(struct EC* ec)
 %type <ec> shift_expression
 %type <ec> additive_expression
 %type <ec> multiplicative_expression
-
 %type <ec> cast_expression
 %type <ec> unary_expression
 %type <ec> postfix_expression
 %type <ec> primary_expression
+%type <ec> argument_expression_list
 %type <ec> constant
 
 %type <ival_list> selection_if selection_if_v
@@ -2689,38 +2745,6 @@ expression_statement
         }
         ;
 
-expression
-        : assignment_expression
-        ;
-
-expression_list
-        : {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_ASSIGNMENT;
-                ec->type_operator = EC_OPE_LIST;
-                ec->child_len = 0;
-                $$ = ec;
-        }
-        | expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_ASSIGNMENT;
-                ec->type_operator = EC_OPE_LIST;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        | expression __OPE_COMMA expression_list {
-                struct EC* ec = $3;
-
-                if (ec->child_len >= EC_CHILD_MAX)
-                        yyerror("system err: expressionの列挙数が多すぎます");
-
-                ec->child_ptr[ec->child_len] = $1;
-                ec->child_len++;
-                $$ = ec;
-        }
-        ;
-
 type_specifier
         : type_specifier_unit
         | type_specifier_unit type_specifier {
@@ -2793,15 +2817,15 @@ initializer_param
 initializer
         : type_specifier pointer __IDENTIFIER initializer_param {
                 struct Var* var = new_var();
-                *var = *(__new_var_initializer_local($3, &($4[1]), $4[0], $2, $1));
+                *var = *(__new_var_initializer($3, &($4[1]), $4[0], $2, $1));
                 $$ = var;
         }
         | initializer __OPE_COMMA pointer __IDENTIFIER initializer_param {
                 struct Var* var = new_var();
-                *var = *(__new_var_initializer_local($4, &($5[1]), $5[0], $3, $1->type));
+                *var = *(__new_var_initializer($4, &($5[1]), $5[0], $3, $1->type));
                 $$ = var;
         }
-        | initializer __OPE_SUBST expression {
+        | initializer __OPE_SUBST assignment_expression {
                 translate_ec($3);
 
                 pop_stack("fixR");
@@ -2810,8 +2834,9 @@ initializer
                 push_stack("fixL");
                 push_stack("fixR");
 
-                struct Var* var = new_var();
-                *var = *(__var_func_assignment_new($1, $3->var));
+                struct Var* var = __var_func_assignment_new($1, $3->var);
+                pop_stack_dummy();
+
                 $$ = var;
         }
         ;
@@ -2986,9 +3011,9 @@ identifier_list
                 idenlist_push($1);
                 $$ = 1;
         }
-        | __IDENTIFIER __OPE_COMMA identifier_list {
-                idenlist_push($1);
-                $$ = 1 + $3;
+        | identifier_list __OPE_COMMA __IDENTIFIER {
+                idenlist_push($3);
+                $$ = 1 + $1;
         }
         ;
 
@@ -3056,6 +3081,10 @@ define_struct
                 structspec_set_iden($4, $2);
                 structspec_ptrlist_add($4);
         }
+        ;
+
+expression
+        : assignment_expression
         ;
 
 assignment_expression
@@ -3340,7 +3369,7 @@ postfix_expression
                 ec->child_len = 2;
                 $$ = ec;
         }
-        | __IDENTIFIER __LB expression_list __RB {
+        | __IDENTIFIER __LB argument_expression_list __RB {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_POSTFIX;
                 ec->type_operator = EC_OPE_FUNCTION;
@@ -3366,6 +3395,30 @@ primary_expression
         | constant
         | __LB expression __RB {
                 $$ = $2;
+        }
+        ;
+
+argument_expression_list
+        : {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ARGUMENT_EXPRESSION_LIST;
+                ec->child_len = 0;
+                $$ = ec;
+        }
+        | assignment_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ARGUMENT_EXPRESSION_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | argument_expression_list __OPE_COMMA assignment_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ARGUMENT_EXPRESSION_LIST;
+                ec->child_ptr[0] = $3; /* 引数の最後側をリストの先頭側とするため */
+                ec->child_ptr[1] = $1;
+                ec->child_len = 2;
+                $$ = ec;
         }
         ;
 
