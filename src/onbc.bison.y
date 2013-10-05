@@ -2309,6 +2309,8 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_CONSTANT             10      /* 定数 */
 #define EC_CAST                 11      /* 型変換 */
 #define EC_ARGUMENT_EXPRESSION_LIST 12  /* 関数コール時の引数リスト */
+#define EC_EXPRESSION           13      /* expression単位 */
+#define EC_EXPRESSION_STATEMENT 14      /* 命令としてのexpression単位 */
 
 /* EC の演算子を示すフラグ
  */
@@ -2402,7 +2404,16 @@ static void translate_ec(struct EC* ec)
         if (ec->child_len >= 1)
                 ec->var = ec->child_ptr[0]->var;
 
-        if (ec->type_expression == EC_ASSIGNMENT) {
+        if (ec->type_expression == EC_EXPRESSION_STATEMENT) {
+                if (ec->child_len != 0) {
+                        /* expression に属するステートメントは、
+                         * 終了時点で”必ず”スタックへのプッシュが1個だけ余計に残ってる為、それを掃除する。
+                         */
+                        pop_stack_dummy();
+                }
+        } else if (ec->type_expression == EC_EXPRESSION) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_ASSIGNMENT) {
                 if (ec->type_operator == EC_OPE_SUBST) {
                         *(ec->var) = *(__var_func_assignment_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var));
                 } else if (ec->type_operator == EC_OPE_LIST) {
@@ -2635,6 +2646,7 @@ static void translate_ec(struct EC* ec)
 %type <ival> type_specifier type_specifier_unit
 %type <ival> pointer
 
+%type <ec> expression_statement
 %type <ec> expression
 %type <ec> assignment_expression
 %type <ec> conditional_expression
@@ -2690,7 +2702,7 @@ external_declaration
         ;
 
 function_definition
-        : declaration_specifiers declarator compound_statement
+        : /* declaration_specifiers declarator compound_statement */
         ;
 
 declaration_list
@@ -2720,7 +2732,9 @@ declaration
 
 statement
         : labeled_statement
-        | expression_statement
+        | expression_statement {
+                translate_ec($1);
+        }
         | compound_statement
         | selection_statement
         | iteration_statement
@@ -2735,14 +2749,17 @@ statement_list
         ;
 
 expression_statement
-        : __DECL_END
+        : __DECL_END {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_EXPRESSION_STATEMENT;
+                $$ = ec;
+        }
         | expression __DECL_END {
-                translate_ec($1);
-
-                /* expression に属するステートメントは、
-                 * 終了時点で”必ず”スタックへのプッシュが1個だけ余計に残ってる為、それを掃除する。
-                 */
-                pop_stack_dummy();
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_EXPRESSION_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
         }
         ;
 
@@ -3090,6 +3107,14 @@ define_struct
 
 expression
         : assignment_expression
+        | expression __OPE_COMMA assignment_expression {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_EXPRESSION;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
         ;
 
 assignment_expression
@@ -3520,46 +3545,38 @@ __declaration_list
         ;
 
 __declaration_specifiers
-        : /* empty */ {
-                return 0;
-        }
-        | __storage_class_specifier __declaration_specifiers {
-                return($1 | $2);
-        }
-        | __type_specifier __declaration_specifiers {
-                return($1 | $2);
-        }
-        | __type_qualifier __declaration_specifiers {
-                return($1 | $2);
-        }
+        : /* empty */
+        | __storage_class_specifier __declaration_specifiers
+        | __type_specifier __declaration_specifiers
+        | __type_qualifier __declaration_specifiers
         ;
 
 __storage_class_specifier
-        : __TYPE_AUTO           {return(TYPE_AUTO);}
-        | __TYPE_REGISTER       {return(TYPE_REGISTER);}
-        | __TYPE_STATIC         {return(TYPE_STATIC);}
-        | __TYPE_EXTERN         {return(TYPE_EXTERN);}
-        | __TYPE_TYPEDEF        {return(TYPE_TYPEDEF);}
+        : __TYPE_AUTO
+        | __TYPE_REGISTER
+        | __TYPE_STATIC
+        | __TYPE_EXTERN
+        | __TYPE_TYPEDEF
         ;
 
 __type_specifier
-        : __TYPE_VOID           {return(TYPE_VOID);}
-        | __TYPE_CHAR           {return(TYPE_CHAR);}
-        | __TYPE_SHORT          {return(TYPE_SHORT);}
-        | __TYPE_INT            {return(TYPE_INT);}
-        | __TYPE_LONG           {return(TYPE_LONG);}
-        | __TYPE_FLOAT          {return(TYPE_FLOAT);}
-        | __TYPE_DOUBLE         {return(TYPE_DOUBLE);}
-        | __TYPE_SIGNED         {return(TYPE_SIGNED);}
-        | __TYPE_UNSIGNED       {return(TYPE_UNSIGNED);}
+        : __TYPE_VOID
+        | __TYPE_CHAR
+        | __TYPE_SHORT
+        | __TYPE_INT
+        | __TYPE_LONG
+        | __TYPE_FLOAT
+        | __TYPE_DOUBLE
+        | __TYPE_SIGNED
+        | __TYPE_UNSIGNED
         | __struct_or_union_specifier
         | __enum_specifier
         | __typedef_name
         ;
 
 __type_qualifier
-        : __TYPE_CONST          {return(TYPE_CONST);}
-        | __TYPE_VOLATILE       {return(TYPE_VOLATILE);}
+        : __TYPE_CONST
+        | __TYPE_VOLATILE
         ;
 
 __struct_or_union_specifier
