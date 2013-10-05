@@ -2631,12 +2631,12 @@ static void translate_ec(struct EC* ec)
 %type <sval> __STRING_CONSTANT string
 %type <sval> __IDENTIFIER __DEFINE_LABEL
 
+%type <ival> declaration_specifiers
 %type <ival> type_specifier type_specifier_unit
 %type <ival> pointer
 
 %type <ec> expression
 %type <ec> assignment_expression
-
 %type <ec> conditional_expression
 %type <ec> logical_or_expression
 %type <ec> logical_and_expression
@@ -2666,9 +2666,6 @@ static void translate_ec(struct EC* ec)
 %type <structspecptr> initializer_struct_member_list
 %type <varlistptr> initializer_struct_member
 
-%type <ival> identifier_list
-
-%type <ival> __declaration_specifiers
 %type <ival> __storage_class_specifier __type_specifier __type_qualifier
 
 %start translation_unit
@@ -2688,7 +2685,12 @@ translation_unit
         ;
 
 external_declaration
-        : declaration_list
+        : function_definition
+        | declaration_list
+        ;
+
+function_definition
+        : declaration_specifiers declarator compound_statement
         ;
 
 declaration_list
@@ -2712,7 +2714,6 @@ compound_statement
 
 declaration
         : initializer __DECL_END
-        | define_function
         | define_struct
         | statement
         ;
@@ -2744,6 +2745,14 @@ expression_statement
                 pop_stack_dummy();
         }
         ;
+
+declaration_specifiers
+        : /* empty */ {
+                $$ = 0;
+        }
+        | type_specifier declaration_specifiers {
+                $$ = $1 | $2;
+        }
 
 type_specifier
         : type_specifier_unit
@@ -2782,6 +2791,16 @@ type_specifier_unit
         }
         ;
 
+declarator
+        : pointer direct_declarator
+        ;
+
+direct_declarator
+        : __IDENTIFIER
+        | __LB declarator __RB
+        | direct_declarator __LB parameter_type_list __RB
+        ;
+
 pointer
         : /* empty */ {
                 $$ = 0;
@@ -2792,6 +2811,19 @@ pointer
         | __OPE_MUL pointer %prec __OPE_POINTER {
                 $$ = 1 + $2;
         }
+        ;
+
+parameter_type_list
+        : parameter_list
+        ;
+
+parameter_list
+        : parameter_declaration
+        | parameter_list __OPE_COMMA parameter_declaration
+        ;
+
+parameter_declaration
+        : declaration_specifiers declarator
         ;
 
 initializer_param
@@ -3000,33 +3032,6 @@ jump_statement
                  */
                 pA("fixA = 0;");
                 __define_user_function_return();
-        }
-        ;
-
-identifier_list
-        : {
-                $$ = 0;
-        }
-        | __IDENTIFIER {
-                idenlist_push($1);
-                $$ = 1;
-        }
-        | identifier_list __OPE_COMMA __IDENTIFIER {
-                idenlist_push($3);
-                $$ = 1 + $1;
-        }
-        ;
-
-define_function
-        : __STATE_FUNCTION __IDENTIFIER __LB identifier_list __RB {
-                const int32_t skip_label = cur_label_index_head;
-                cur_label_index_head++;
-                $<ival>$ = skip_label;
-
-                __define_user_function_begin($2, $4, skip_label);
-
-        } __BLOCK_LB declaration_list __BLOCK_RB {
-                __define_user_function_end($<ival>6);
         }
         ;
 
