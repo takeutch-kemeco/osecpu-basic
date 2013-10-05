@@ -2310,7 +2310,14 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_CAST                 11      /* 型変換 */
 #define EC_ARGUMENT_EXPRESSION_LIST 12  /* 関数コール時の引数リスト */
 #define EC_EXPRESSION           13      /* expression単位 */
-#define EC_EXPRESSION_STATEMENT 14      /* 命令としてのexpression単位 */
+#define EC_EXPRESSION_STATEMENT 14      /* expression命令 */
+#define EC_INLINE_ASSEMBLER_STATEMENT 15 /* inline_assembler命令 */
+#define EC_JUMP_STATEMENT       16      /* jump命令 */
+#define EC_ITERATION_STATEMENT  17      /* 反復命令 */
+#define EC_SELECTION_STATEMENT  18      /* 分岐命令 */
+#define EC_COMPOUND_STATEMENT   19      /* 命令ブロック */
+#define EC_LABELED_STATEMENT    20      /* ラベル定義命令 */
+#define EC_STATEMENT            21      /* 命令単位 */
 
 /* EC の演算子を示すフラグ
  */
@@ -2404,7 +2411,9 @@ static void translate_ec(struct EC* ec)
         if (ec->child_len >= 1)
                 ec->var = ec->child_ptr[0]->var;
 
-        if (ec->type_expression == EC_EXPRESSION_STATEMENT) {
+        if (ec->type_expression == EC_STATEMENT) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_EXPRESSION_STATEMENT) {
                 if (ec->child_len != 0) {
                         /* expression に属するステートメントは、
                          * 終了時点で”必ず”スタックへのプッシュが1個だけ余計に残ってる為、それを掃除する。
@@ -2646,7 +2655,15 @@ static void translate_ec(struct EC* ec)
 %type <ival> type_specifier type_specifier_unit
 %type <ival> pointer
 
+%type <ec> statement
+%type <ec> labeled_statement
 %type <ec> expression_statement
+%type <ec> compound_statement
+%type <ec> selection_statement
+%type <ec> iteration_statement
+%type <ec> jump_statement
+%type <ec> inline_assembler_statement
+
 %type <ec> expression
 %type <ec> assignment_expression
 %type <ec> conditional_expression
@@ -2727,19 +2744,49 @@ compound_statement
 declaration
         : initializer __DECL_END
         | define_struct
-        | statement
+        | statement {
+                translate_ec($1);
+        }
         ;
 
 statement
-        : labeled_statement
-        | expression_statement {
-                translate_ec($1);
+        : labeled_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                $$ = ec;
         }
-        | compound_statement
-        | selection_statement
-        | iteration_statement
-        | jump_statement
-        | inline_assembler_statement
+        | expression_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | compound_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                $$ = ec;
+        }
+        | selection_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                $$ = ec;
+        }
+        | iteration_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                $$ = ec;
+        }
+        | jump_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                $$ = ec;
+        }
+        | inline_assembler_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                $$ = ec;
+        }
         ;
 
 statement_list
