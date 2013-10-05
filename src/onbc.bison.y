@@ -2318,6 +2318,8 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_COMPOUND_STATEMENT   19      /* 命令ブロック */
 #define EC_LABELED_STATEMENT    20      /* ラベル定義命令 */
 #define EC_STATEMENT            21      /* 命令単位 */
+#define EC_STATEMENT_LIST       22      /* 命令リスト */
+#define EC_DECLARATION_LIST     23      /* 宣言リスト */
 
 /* EC の演算子を示すフラグ
  */
@@ -2406,7 +2408,8 @@ static void delete_ec(struct EC* ec)
 
 static void translate_ec(struct EC* ec)
 {
-        if (ec->type_operator != EC_OPE_FUNCTION) {
+        if ((ec->type_operator != EC_OPE_FUNCTION) &&
+            (ec->type_operator != EC_COMPOUND_STATEMENT)) {
                 int32_t i;
                 for (i = 0; i < ec->child_len; i++) {
                         translate_ec(ec->child_ptr[i]);
@@ -2418,6 +2421,15 @@ static void translate_ec(struct EC* ec)
 
         if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
+        } else if (ec->type_expression == EC_COMPOUND_STATEMENT) {
+                inc_cur_scope_depth();  /* コンパイル時 */
+                varlist_scope_push();   /* コンパイル時 */
+
+                translate_ec(ec->child_ptr[0]);
+                translate_ec(ec->child_ptr[1]);
+
+                dec_cur_scope_depth();  /* コンパイル時 */
+                varlist_scope_pop();    /* コンパイル時 */
         } else if (ec->type_expression == EC_LABELED_STATEMENT) {
                 pA("LB(1, %d);", labellist_search(ec->var->iden));
         } else if (ec->type_expression == EC_EXPRESSION_STATEMENT) {
@@ -2427,6 +2439,8 @@ static void translate_ec(struct EC* ec)
                          */
                         pop_stack_dummy();
                 }
+        } else if (ec->type_expression == EC_STATEMENT_LIST) {
+                /* 何もしない */
         } else if (ec->type_expression == EC_JUMP_STATEMENT) {
                 if (ec->type_operator == EC_OPE_GOTO) {
                         pA("PLIMM(P3F, %d);", labellist_search(ec->var->iden));
@@ -2695,15 +2709,17 @@ static void translate_ec(struct EC* ec)
 %type <ival> type_specifier type_specifier_unit
 %type <ival> pointer
 
+%type <ec> declaration_list
+
 %type <ec> statement
+%type <ec> inline_assembler_statement
+%type <ec> labeled_statement
+%type <ec> expression_statement
 %type <ec> compound_statement
+%type <ec> statement_list
 %type <ec> selection_statement
 %type <ec> iteration_statement
 %type <ec> jump_statement
-%type <ec> inline_assembler_statement
-
-%type <ec> labeled_statement
-%type <ec> expression_statement
 %type <ec> expression
 %type <ec> assignment_expression
 %type <ec> conditional_expression
@@ -2763,21 +2779,20 @@ function_definition
         ;
 
 declaration_list
-        : /* empty */
-        | declaration
-        | declaration declaration_list
-        ;
-
-compound_statement
-        : __BLOCK_LB __BLOCK_RB {
-                /* 空の場合は何もしない */
+        : /* empty */ {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_DECLARATION_LIST;
+                $$ = ec;
         }
-        | __BLOCK_LB {
-                inc_cur_scope_depth();  /* コンパイル時 */
-                varlist_scope_push();   /* コンパイル時 */
-        } declaration_list statement_list __BLOCK_RB {
-                dec_cur_scope_depth();  /* コンパイル時 */
-                varlist_scope_pop();    /* コンパイル時 */
+        | declaration {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_DECLARATION_LIST;
+                $$ = ec;
+        }
+        | declaration declaration_list {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_DECLARATION_LIST;
+                $$ = ec;
         }
         ;
 
@@ -2807,6 +2822,8 @@ statement
         | compound_statement {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
                 $$ = ec;
         }
         | selection_statement {
@@ -2845,9 +2862,26 @@ labeled_statement
         ;
 
 statement_list
-        : /* empty */
-        | statement
-        | statement_list statement
+        : /* empty */ {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT_LIST;
+                $$ = ec;
+        }
+        | statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | statement_list statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $2;
+                ec->child_len = 2;
+                $$ = ec;
+        }
         ;
 
 expression_statement
@@ -2861,6 +2895,22 @@ expression_statement
                 ec->type_expression = EC_EXPRESSION_STATEMENT;
                 ec->child_ptr[0] = $1;
                 ec->child_len = 1;
+                $$ = ec;
+        }
+        ;
+
+compound_statement
+        : __BLOCK_LB __BLOCK_RB {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_COMPOUND_STATEMENT;
+                $$ = ec;
+        }
+        | __BLOCK_LB declaration_list statement_list __BLOCK_RB {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_COMPOUND_STATEMENT;
+                ec->child_ptr[0] = $2;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
                 $$ = ec;
         }
         ;
