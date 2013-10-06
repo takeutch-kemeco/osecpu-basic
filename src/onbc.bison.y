@@ -2362,6 +2362,9 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_OPE_ASM_SUBST_VTOR   36      /* 変数からレジスターへの代入 */
 #define EC_OPE_ASM_SUBST_RTOV   37      /* レジスターから変数への代入 */
 #define EC_OPE_IF               38
+#define EC_OPE_WHILE            39
+#define EC_OPE_DO_WHILE         40
+#define EC_OPE_FOR              41
 
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
@@ -2411,7 +2414,8 @@ static void translate_ec(struct EC* ec)
 {
         if ((ec->type_operator != EC_OPE_FUNCTION) &&
             (ec->type_expression != EC_COMPOUND_STATEMENT) &&
-            (ec->type_expression != EC_SELECTION_STATEMENT)) {
+            (ec->type_expression != EC_SELECTION_STATEMENT) &&
+            (ec->type_expression != EC_ITERATION_STATEMENT)) {
                 int32_t i;
                 for (i = 0; i < ec->child_len; i++) {
                         translate_ec(ec->child_ptr[i]);
@@ -2464,6 +2468,47 @@ static void translate_ec(struct EC* ec)
                         pA("LB(0, %d);", end_label);
                 } else {
                         yyerror("system err: translate_ec(), EC_SELECTION_STATEMENT");
+                }
+        } else if (ec->type_expression == EC_ITERATION_STATEMENT) {
+                if (ec->type_operator == EC_OPE_WHILE) {
+                        int32_t loop_head = cur_label_index_head++;
+                        int32_t loop_end = cur_label_index_head++;
+
+                        pA("LB(0, %d);", loop_head);
+
+                        translate_ec(ec->child_ptr[0]);
+
+                        pop_stack("stack_socket");
+                        pA("if (stack_socket == 0) {PLIMM(P3F, %d);}", loop_end);
+
+                        translate_ec(ec->child_ptr[1]);
+
+                        pA("PLIMM(P3F, %d);", loop_head);
+
+                        pA("LB(0, %d);", loop_end);
+                } else if (ec->type_operator == EC_OPE_FOR) {
+                        int32_t loop_head = cur_label_index_head++;
+                        int32_t loop_end = cur_label_index_head++;
+
+                        translate_ec(ec->child_ptr[0]);
+
+                        pA("LB(0, %d);", loop_head);
+
+                        translate_ec(ec->child_ptr[1]);
+
+                        pop_stack("stack_socket");
+                        pA("if (stack_socket == 0) {PLIMM(P3F, %d);}", loop_end);
+
+                        translate_ec(ec->child_ptr[3]);
+
+                        translate_ec(ec->child_ptr[2]);
+                        pop_stack_dummy(); /* スタック+1の状態を0へ戻す */
+
+                        pA("PLIMM(P3F, %d);", loop_head);
+
+                        pA("LB(0, %d);", loop_end);
+                } else {
+                        yyerror("system err: translate_ec(), EC_ITERATION_STATEMENT");
                 }
         } else if (ec->type_expression == EC_JUMP_STATEMENT) {
                 if (ec->type_operator == EC_OPE_GOTO) {
@@ -2764,8 +2809,6 @@ static void translate_ec(struct EC* ec)
 %type <ec> argument_expression_list
 %type <ec> constant
 
-%type <sval> iteration_while iteration_for
-
 %type <varptr> initializer
 %type <ival_list> initializer_param
 
@@ -2953,106 +2996,6 @@ initializer
         }
         ;
 
-iteration_statement
-        : iteration_while
-        | iteration_for
-        ;
-
-iteration_while
-        : __STATE_WHILE __LB {
-                const int32_t loop_head = cur_label_index_head++;
-                $<ival>$ = loop_head;
-
-                /* ループの復帰位置をここに設定 */
-                pA("LB(0, %d);", loop_head);
-
-        } expression __RB {
-                translate_ec($4);
-
-                const int32_t loop_end = cur_label_index_head++;
-                $<ival>$ = loop_end;
-
-                pop_stack("stack_socket");
-                pA("if (stack_socket == 0) {");
-                pA("PLIMM(P3F, %d);", loop_end);
-                pA("}");
-
-        } statement {
-                /* ループの復帰 */
-                pA("PLIMM(P3F, %d);", $<ival>3);
-
-                /* 偽の場合はここへジャンプしてきて終了 */
-                pA("LB(0, %d);", $<ival>6);
-        }
-        ;
-
-iteration_for
-        : __STATE_FOR __LB expression {
-                translate_ec($3);
-
-                /* スタックを掃除 */
-                pop_stack("stack_socket");
-
-                /* head ラベルID */
-                int32_t loop_head = cur_label_index_head;
-                cur_label_index_head++;
-                $<ival>$ = loop_head;
-
-                /* head ラベル */
-                pA("LB(0, %d);", loop_head);
-
-        } __DECL_END {
-                /* end ラベルID */
-                $<ival>$ = cur_label_index_head;
-                cur_label_index_head++;
-
-        } expression {
-                translate_ec($7);
-
-                /* main ラベルID */
-                int32_t loop_main = cur_label_index_head;
-                cur_label_index_head++;
-                $<ival>$ = loop_main;
-
-                /* スタックから条件判定結果をポップ */
-                pop_stack("stack_socket");
-
-                /* 条件判定結果が真ならば main ラベルへジャンプ */
-                pA("if (stack_socket != 0) {PLIMM(P3F, %d);}", loop_main);
-
-                /* 条件判定結果が真でないならば（偽ならば） end ラベルへジャンプ */
-                pA("PLIMM(P3F, %d);", $<ival>6);
-
-        } __DECL_END {
-                /* pre_head ラベルID */
-                int32_t loop_pre_head = cur_label_index_head;
-                cur_label_index_head++;
-                $<ival>$ = loop_pre_head;
-
-                /* pre_head ラベル */
-                pA("LB(0, %d);", loop_pre_head);
-
-        } expression __RB {
-                translate_ec($11);
-
-                /* スタックを掃除 */
-                pop_stack("stack_socket");
-
-                /* head ラベルへジャンプ */
-                pA("PLIMM(P3F, %d);", $<ival>4);
-
-                /* main ラベル */
-                pA("LB(0, %d);", $<ival>8);
-
-        } statement {
-                /* pre_head ラベルへジャンプ */
-                pA("PLIMM(P3F, %d);", $<ival>10);
-
-                /* end ラベル */
-                pA("LB(0, %d);", $<ival>6);
-        }
-        ;
-
 initializer_struct_member
         : type_specifier pointer __IDENTIFIER initializer_param {
                 struct VarList* vl = malloc(sizeof(*vl));
@@ -3138,6 +3081,8 @@ statement
         | iteration_statement {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
                 $$ = ec;
         }
         | jump_statement {
@@ -3237,6 +3182,29 @@ selection_statement
                 ec->child_ptr[0] = $3;
                 ec->child_ptr[1] = $5;
                 ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+iteration_statement
+        : __STATE_WHILE __LB expression __RB statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ITERATION_STATEMENT;
+                ec->type_operator = EC_OPE_WHILE;
+                ec->child_ptr[0] = $3;
+                ec->child_ptr[1] = $5;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        | __STATE_FOR __LB expression __DECL_END expression __DECL_END expression __RB statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_ITERATION_STATEMENT;
+                ec->type_operator = EC_OPE_FOR;
+                ec->child_ptr[0] = $3;
+                ec->child_ptr[1] = $5;
+                ec->child_ptr[2] = $7;
+                ec->child_ptr[3] = $9;
+                ec->child_len = 4;
                 $$ = ec;
         }
         ;
