@@ -1643,23 +1643,28 @@ static void cast_regval(const char* register_name,
 /* 変数インスタンス関連
  */
 
+/* 現在の__new_var_initializer_{,local,global}()にて作成する型
+ * new_var_initializer_{,local,global}()は、関数実行時点でのこの型のインスタンスを生成する
+ */
+static int32_t cur_initializer_type = 0;
+
 /* ローカル変数のインスタンス生成
  */
-static struct Var* __new_var_initializer_local(const char* iden,
-                                               int32_t* unit_len,
-                                               const int32_t dim_len,
-                                               const int32_t indirect_len,
-                                               const int32_t type)
+static struct Var* __new_var_initializer_local(struct Var* var)
 {
-        if (dim_len >= VAR_DIM_MAX)
+        if (var->dim_len >= VAR_DIM_MAX)
                 yyerror("syntax err: 配列の次元が高すぎます");
 
         /* これはコンパイル時の変数状態を設定するにすぎない。
          * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
          */
-        varlist_add_local(iden, unit_len, dim_len, indirect_len, type | TYPE_AUTO);
+        varlist_add_local(var->iden,
+                          var->unit_len,
+                          var->dim_len,
+                          var->indirect_len,
+                          cur_initializer_type | TYPE_AUTO);
 
-        struct Var* var = varlist_search_local(iden);
+        var = varlist_search_local(var->iden);
         if (var == NULL)
                 yyerror("system err: __new_var_initializer_local()");
 
@@ -1673,37 +1678,33 @@ static struct Var* __new_var_initializer_local(const char* iden,
 
 /* グローバル変数のインスタンス生成
  */
-static struct Var* __new_var_initializer_global(const char* iden,
-                                                int32_t* unit_len,
-                                                const int32_t dim_len,
-                                                const int32_t indirect_len,
-                                                const int32_t type)
+static struct Var* __new_var_initializer_global(struct Var* var)
 {
-        if (dim_len >= VAR_DIM_MAX)
+        if (var->dim_len >= VAR_DIM_MAX)
                 yyerror("syntax err: 配列の次元が高すぎます");
 
         /* これはコンパイル時の変数状態を設定するにすぎない。
          * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
          */
-        varlist_add_global(iden, unit_len, dim_len, indirect_len, type);
+        varlist_add_global(var->iden,
+                           var->unit_len,
+                           var->dim_len,
+                           var->indirect_len,
+                           cur_initializer_type);
 
-        struct Var* var = varlist_search_global(iden);
+        var = varlist_search_global(var->iden);
         if (var == NULL)
                 yyerror("system err: __new_var_initializer_global()");
 
         return var;
 }
 
-static struct Var* __new_var_initializer(const char* iden,
-                                         int32_t* unit_len,
-                                         const int32_t dim_len,
-                                         const int32_t indirect_len,
-                                         const int32_t type)
+static struct Var* __new_var_initializer(struct Var* var)
 {
         if (cur_scope_depth == 0) {
-                return __new_var_initializer_global(iden, unit_len, dim_len, indirect_len, type);
+                return __new_var_initializer_global(var);
         } else {
-                return __new_var_initializer_local(iden, unit_len, dim_len, indirect_len, type);
+                return __new_var_initializer_local(var);
         }
 }
 
@@ -2319,7 +2320,12 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_LABELED_STATEMENT    20      /* ラベル定義命令 */
 #define EC_STATEMENT            21      /* 命令単位 */
 #define EC_STATEMENT_LIST       22      /* 命令リスト */
-#define EC_DECLARATION_LIST     23      /* 宣言リスト */
+#define EC_DECLARATION          23      /* 宣言命令単位 */
+#define EC_DECLARATION_LIST     24      /* 宣言命令リスト */
+#define EC_INIT_DECLARATOR      25      /* 初期宣言単位 */
+#define EC_INIT_DECLARATOR_LIST 26      /* 初期化宣言リスト */
+#define EC_DECLARATOR           27      /* 宣言単位 */
+#define EC_DIRECT_DECLARATOR    28      /* 間接参照を伴わない宣言単位 */
 
 /* EC の演算子を示すフラグ
  */
@@ -2415,17 +2421,39 @@ static void translate_ec(struct EC* ec)
         if ((ec->type_operator != EC_OPE_FUNCTION) &&
             (ec->type_expression != EC_COMPOUND_STATEMENT) &&
             (ec->type_expression != EC_SELECTION_STATEMENT) &&
-            (ec->type_expression != EC_ITERATION_STATEMENT)) {
+            (ec->type_expression != EC_ITERATION_STATEMENT) &&
+            (ec->type_expression != EC_DECLARATION)) {
                 int32_t i;
                 for (i = 0; i < ec->child_len; i++) {
                         translate_ec(ec->child_ptr[i]);
                 }
 
                 if (ec->child_len >= 1)
-                        ec->var = ec->child_ptr[0]->var;
+                        *(ec->var) = *(ec->child_ptr[0]->var);
         }
 
-        if (ec->type_expression == EC_STATEMENT) {
+        if (ec->type_expression == EC_DECLARATION) {
+                cur_initializer_type = ec->var->type;
+                translate_ec(ec->child_ptr[0]);
+                *(ec->var) = *(ec->child_ptr[0]->var);
+        } else if (ec->type_expression == EC_DECLARATION_LIST) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_INIT_DECLARATOR_LIST) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_INIT_DECLARATOR) {
+                pA("fixL = %d;", ec->var->base_ptr);
+                pop_stack("fixR");
+
+                push_stack("fixL");
+                push_stack("fixR");
+
+                *(ec->var) = *(__var_func_assignment_new(ec->var, ec->child_ptr[1]->var));
+                pop_stack_dummy();
+        } else if (ec->type_expression == EC_DECLARATOR) {
+                ec->var = __new_var_initializer(ec->var);
+        } else if (ec->type_expression == EC_DIRECT_DECLARATOR) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_COMPOUND_STATEMENT) {
                 inc_cur_scope_depth();  /* コンパイル時 */
@@ -2778,7 +2806,15 @@ static void translate_ec(struct EC* ec)
 %type <ival> type_specifier type_specifier_unit
 %type <ival> pointer
 
+%type <ec> declaration
 %type <ec> declaration_list
+
+%type <ec> init_declarator_list
+%type <ec> init_declarator
+%type <ec> declarator
+%type <ec> direct_declarator
+
+%type <ec> initializer
 
 %type <ec> statement
 %type <ec> inline_assembler_statement
@@ -2809,7 +2845,6 @@ static void translate_ec(struct EC* ec)
 %type <ec> argument_expression_list
 %type <ec> constant
 
-%type <varptr> initializer
 %type <ival_list> initializer_param
 
 %type <sval> define_struct
@@ -2836,11 +2871,26 @@ translation_unit
 
 external_declaration
         : function_definition
-        | declaration_list
+        | declaration_list {
+                translate_ec($1);
+        }
         ;
 
 function_definition
         : /* declaration_specifiers declarator compound_statement */
+        | define_struct
+        ;
+
+declaration
+        : declaration_specifiers init_declarator_list __DECL_END {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_DECLARATION;
+                ec->var->type = $1;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | statement
         ;
 
 declaration_list
@@ -2852,20 +2902,17 @@ declaration_list
         | declaration {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_DECLARATION_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
                 $$ = ec;
         }
         | declaration declaration_list {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_DECLARATION_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $2;
+                ec->child_len = 2;
                 $$ = ec;
-        }
-        ;
-
-declaration
-        : initializer __DECL_END
-        | define_struct
-        | statement {
-                translate_ec($1);
         }
         ;
 
@@ -2876,6 +2923,7 @@ declaration_specifiers
         | type_specifier declaration_specifiers {
                 $$ = $1 | $2;
         }
+        ;
 
 type_specifier
         : type_specifier_unit
@@ -2914,14 +2962,59 @@ type_specifier_unit
         }
         ;
 
+init_declarator_list
+        : init_declarator
+        | init_declarator_list __OPE_COMMA init_declarator {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_INIT_DECLARATOR_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+init_declarator
+        : declarator
+        | declarator __OPE_SUBST initializer {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_INIT_DECLARATOR;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
 declarator
-        : pointer direct_declarator
+        : pointer direct_declarator {
+                struct EC* ec = $2;
+                ec->type_expression = EC_DECLARATOR;
+                ec->var->indirect_len += $1;
+                $$ = ec;
+        }
         ;
 
 direct_declarator
-        : __IDENTIFIER
-        | __LB declarator __RB
-        | direct_declarator __LB parameter_type_list __RB
+        : __IDENTIFIER {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_DIRECT_DECLARATOR;
+                strcpy(ec->var->iden, $1);
+                $$ = ec;
+        }
+        | __LB declarator __RB {
+                $$ = $2;
+        }
+        | direct_declarator __ARRAY_LB __INTEGER_CONSTANT __ARRAY_RB {
+                struct EC* ec = $1;
+                ec->var->unit_len[ec->var->dim_len] = $3;
+                ec->var->dim_len++;
+                $$ = ec;
+
+        }
+        | direct_declarator __LB parameter_type_list __RB {
+                yyerror("system err: 関数定義は未実装");
+        }
         ;
 
 pointer
@@ -2970,30 +3063,7 @@ initializer_param
         ;
 
 initializer
-        : type_specifier pointer __IDENTIFIER initializer_param {
-                struct Var* var = new_var();
-                *var = *(__new_var_initializer($3, &($4[1]), $4[0], $2, $1));
-                $$ = var;
-        }
-        | initializer __OPE_COMMA pointer __IDENTIFIER initializer_param {
-                struct Var* var = new_var();
-                *var = *(__new_var_initializer($4, &($5[1]), $5[0], $3, $1->type));
-                $$ = var;
-        }
-        | initializer __OPE_SUBST assignment_expression {
-                translate_ec($3);
-
-                pop_stack("fixR");
-                pA("fixL = %d;", $1->base_ptr);
-
-                push_stack("fixL");
-                push_stack("fixR");
-
-                struct Var* var = __var_func_assignment_new($1, $3->var);
-                pop_stack_dummy();
-
-                $$ = var;
-        }
+        : assignment_expression
         ;
 
 initializer_struct_member
