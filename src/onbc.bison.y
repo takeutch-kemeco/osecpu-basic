@@ -2361,6 +2361,7 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_OPE_ASM_STATEMENT    35      /* アセンブラ命令リスト */
 #define EC_OPE_ASM_SUBST_VTOR   36      /* 変数からレジスターへの代入 */
 #define EC_OPE_ASM_SUBST_RTOV   37      /* レジスターから変数への代入 */
+#define EC_OPE_IF               38
 
 /* EC (ExpressionContainer)
  * 構文解析の expression_statement 以下から終端記号までの情報を保持するためのコンテナ
@@ -2375,7 +2376,7 @@ struct EC {
         struct Var* var;
         uint32_t type_operator;
         uint32_t type_expression;
-        struct EC* child_ptr[2];
+        struct EC* child_ptr[4];
         int32_t child_len;
 };
 
@@ -2409,15 +2410,16 @@ static void delete_ec(struct EC* ec)
 static void translate_ec(struct EC* ec)
 {
         if ((ec->type_operator != EC_OPE_FUNCTION) &&
-            (ec->type_operator != EC_COMPOUND_STATEMENT)) {
+            (ec->type_expression != EC_COMPOUND_STATEMENT) &&
+            (ec->type_expression != EC_SELECTION_STATEMENT)) {
                 int32_t i;
                 for (i = 0; i < ec->child_len; i++) {
                         translate_ec(ec->child_ptr[i]);
                 }
-        }
 
-        if (ec->child_len >= 1)
-                ec->var = ec->child_ptr[0]->var;
+                if (ec->child_len >= 1)
+                        ec->var = ec->child_ptr[0]->var;
+        }
 
         if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
@@ -2441,6 +2443,28 @@ static void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_STATEMENT_LIST) {
                 /* 何もしない */
+        } else if (ec->type_expression == EC_SELECTION_STATEMENT) {
+                if (ec->type_operator == EC_OPE_IF) {
+                        translate_ec(ec->child_ptr[0]);
+
+                        int32_t else_label = cur_label_index_head++;
+                        int32_t end_label = cur_label_index_head++;
+
+                        pop_stack("stack_socket");
+                        pA("if (stack_socket == 0) {PLIMM(P3F, %d);}", else_label);
+
+                        translate_ec(ec->child_ptr[1]);
+
+                        pA("PLIMM(P3F, %d);", end_label);
+                        pA("LB(0, %d);", else_label);
+
+                        if (ec->child_len == 3)
+                                translate_ec(ec->child_ptr[2]);
+
+                        pA("LB(0, %d);", end_label);
+                } else {
+                        yyerror("system err: translate_ec(), EC_SELECTION_STATEMENT");
+                }
         } else if (ec->type_expression == EC_JUMP_STATEMENT) {
                 if (ec->type_operator == EC_OPE_GOTO) {
                         pA("PLIMM(P3F, %d);", labellist_search(ec->var->iden));
@@ -2740,8 +2764,6 @@ static void translate_ec(struct EC* ec)
 %type <ec> argument_expression_list
 %type <ec> constant
 
-%type <ival_list> selection_if selection_if_v
-
 %type <sval> iteration_while iteration_for
 
 %type <varptr> initializer
@@ -2801,117 +2823,6 @@ declaration
         | define_struct
         | statement {
                 translate_ec($1);
-        }
-        ;
-
-statement
-        : labeled_statement {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_STATEMENT;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        | expression_statement {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_STATEMENT;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        | compound_statement {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_STATEMENT;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        | selection_statement {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_STATEMENT;
-                $$ = ec;
-        }
-        | iteration_statement {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_STATEMENT;
-                $$ = ec;
-        }
-        | jump_statement {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_STATEMENT;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        | inline_assembler_statement {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_STATEMENT;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        ;
-
-labeled_statement
-        : __DEFINE_LABEL {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_LABELED_STATEMENT;
-                strcpy(ec->var->iden, $1);
-                $$ = ec;
-        }
-        ;
-
-statement_list
-        : /* empty */ {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_STATEMENT_LIST;
-                $$ = ec;
-        }
-        | statement {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_STATEMENT_LIST;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        | statement_list statement {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_STATEMENT_LIST;
-                ec->child_ptr[0] = $1;
-                ec->child_ptr[1] = $2;
-                ec->child_len = 2;
-                $$ = ec;
-        }
-        ;
-
-expression_statement
-        : __DECL_END {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_EXPRESSION_STATEMENT;
-                $$ = ec;
-        }
-        | expression __DECL_END {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_EXPRESSION_STATEMENT;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
-        }
-        ;
-
-compound_statement
-        : __BLOCK_LB __BLOCK_RB {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_COMPOUND_STATEMENT;
-                $$ = ec;
-        }
-        | __BLOCK_LB declaration_list statement_list __BLOCK_RB {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_COMPOUND_STATEMENT;
-                ec->child_ptr[0] = $2;
-                ec->child_ptr[1] = $3;
-                ec->child_len = 2;
-                $$ = ec;
         }
         ;
 
@@ -3039,43 +2950,6 @@ initializer
                 pop_stack_dummy();
 
                 $$ = var;
-        }
-        ;
-
-selection_statement
-        : selection_if
-        ;
-
-selection_if
-        : selection_if_v __STATE_ELSE {
-                pA("LB(0, %d);", $1[0]);
-        } statement {
-                pA("LB(0, %d);", $1[1]);
-        }
-        | selection_if_v {
-                pA("LB(0, %d);", $1[0]);
-                pA("LB(0, %d);", $1[1]);
-        }
-        ;
-
-selection_if_v
-        : __STATE_IF __LB expression __RB {
-                translate_ec($3);
-
-                const int32_t else_label = cur_label_index_head++;
-                $<ival>$ = else_label;
-
-                pop_stack("stack_socket");
-                pA("if (stack_socket == 0) {");
-                pA("PLIMM(P3F, %d);", else_label);
-                pA("}");
-
-        } statement {
-                const int32_t end_label = cur_label_index_head++;
-                $$[0] = $<ival>5;
-                $$[1] = end_label;
-
-                pA("PLIMM(P3F, %d);", end_label);
         }
         ;
 
@@ -3229,6 +3103,141 @@ define_struct
         {
                 structspec_set_iden($4, $2);
                 structspec_ptrlist_add($4);
+        }
+        ;
+
+statement
+        : labeled_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | expression_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | compound_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | selection_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | iteration_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                $$ = ec;
+        }
+        | jump_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | inline_assembler_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        ;
+
+labeled_statement
+        : __DEFINE_LABEL {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_LABELED_STATEMENT;
+                strcpy(ec->var->iden, $1);
+                $$ = ec;
+        }
+        ;
+
+statement_list
+        : /* empty */ {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT_LIST;
+                $$ = ec;
+        }
+        | statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | statement_list statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_STATEMENT_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $2;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+expression_statement
+        : __DECL_END {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_EXPRESSION_STATEMENT;
+                $$ = ec;
+        }
+        | expression __DECL_END {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_EXPRESSION_STATEMENT;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        ;
+
+compound_statement
+        : __BLOCK_LB __BLOCK_RB {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_COMPOUND_STATEMENT;
+                $$ = ec;
+        }
+        | __BLOCK_LB declaration_list statement_list __BLOCK_RB {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_COMPOUND_STATEMENT;
+                ec->child_ptr[0] = $2;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
+        ;
+
+selection_statement
+        : __STATE_IF __LB expression __RB statement __STATE_ELSE statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_SELECTION_STATEMENT;
+                ec->type_operator = EC_OPE_IF;
+                ec->child_ptr[0] = $3;
+                ec->child_ptr[1] = $5;
+                ec->child_ptr[2] = $7;
+                ec->child_len = 3;
+                $$ = ec;
+        }
+        | __STATE_IF __LB expression __RB statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_SELECTION_STATEMENT;
+                ec->type_operator = EC_OPE_IF;
+                ec->child_ptr[0] = $3;
+                ec->child_ptr[1] = $5;
+                ec->child_len = 2;
+                $$ = ec;
         }
         ;
 
