@@ -2428,7 +2428,8 @@ static void translate_ec(struct EC* ec)
             (ec->type_expression != EC_ITERATION_STATEMENT) &&
             (ec->type_expression != EC_DECLARATION) &&
             (ec->type_expression != EC_DIRECT_DECLARATOR) &&
-            (ec->type_expression != EC_FUNCTION_DEFINITION)) {
+            (ec->type_expression != EC_FUNCTION_DEFINITION) &&
+            (ec->type_expression != EC_DECLARATOR)) {
                 int32_t i;
                 for (i = 0; i < ec->child_len; i++) {
                         translate_ec(ec->child_ptr[i]);
@@ -2439,7 +2440,7 @@ static void translate_ec(struct EC* ec)
         }
 
         if (ec->type_expression == EC_FUNCTION_DEFINITION) {
-                /* 何もしない */
+                translate_ec(ec->child_ptr[0]);
         } else if (ec->type_expression == EC_DECLARATION) {
                 cur_initializer_type = ec->var->type;
                 translate_ec(ec->child_ptr[0]);
@@ -2880,19 +2881,15 @@ translation_unit
         : __EOF {
                 YYACCEPT;
         }
-        | external_declaration __EOF {
-                YYACCEPT;
-        }
-        | translation_unit external_declaration __EOF {
-                YYACCEPT;
-        }
+        | external_declaration
+        | external_declaration translation_unit
         ;
 
 external_declaration
         : function_definition {
                 translate_ec($1);
         }
-        | declaration_list {
+        | declaration {
                 translate_ec($1);
         }
         ;
@@ -2949,6 +2946,7 @@ declaration_specifiers
         : /* empty */ {
                 $$ = 0;
         }
+        | type_specifier
         | type_specifier declaration_specifiers {
                 $$ = $1 | $2;
         }
@@ -3042,7 +3040,11 @@ direct_declarator
 
         }
         | direct_declarator __LB parameter_type_list __RB {
-                yyerror("system err: 関数定義は未実装");
+                struct EC* ec = $1;
+                ec->var->type |= TYPE_FUNCTION;
+                ec->child_ptr[0] = $3;
+                ec->child_len = 1;
+                $$ = ec;
         }
         ;
 
