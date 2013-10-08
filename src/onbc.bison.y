@@ -2329,6 +2329,7 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_PARAMETER_TYPE_LIST  29      /* 関数引数リストのラッパー */
 #define EC_PARAMETER_LIST       30      /* 関数引数リスト */
 #define EC_PARAMETER_DECLARATION 31     /* 関数引数の宣言命令単位 */
+#define EC_FUNCTION_DEFINITION  32      /* 関数定義 */
 
 /* EC の演算子を示すフラグ
  */
@@ -2426,7 +2427,8 @@ static void translate_ec(struct EC* ec)
             (ec->type_expression != EC_SELECTION_STATEMENT) &&
             (ec->type_expression != EC_ITERATION_STATEMENT) &&
             (ec->type_expression != EC_DECLARATION) &&
-            (ec->type_expression != EC_DIRECT_DECLARATOR)) {
+            (ec->type_expression != EC_DIRECT_DECLARATOR) &&
+            (ec->type_expression != EC_FUNCTION_DEFINITION)) {
                 int32_t i;
                 for (i = 0; i < ec->child_len; i++) {
                         translate_ec(ec->child_ptr[i]);
@@ -2436,7 +2438,9 @@ static void translate_ec(struct EC* ec)
                         *(ec->var) = *(ec->child_ptr[0]->var);
         }
 
-        if (ec->type_expression == EC_DECLARATION) {
+        if (ec->type_expression == EC_FUNCTION_DEFINITION) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_DECLARATION) {
                 cur_initializer_type = ec->var->type;
                 translate_ec(ec->child_ptr[0]);
                 *(ec->var) = *(ec->child_ptr[0]->var);
@@ -2456,6 +2460,12 @@ static void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_DECLARATOR) {
                 ec->var = __new_var_initializer(ec->var);
         } else if (ec->type_expression == EC_DIRECT_DECLARATOR) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_PARAMETER_TYPE_LIST) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_PARAMETER_LIST) {
+                /* 何もしない */
+        } else if (ec->type_expression == EC_PARAMETER_DECLARATION) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
@@ -2810,6 +2820,7 @@ static void translate_ec(struct EC* ec)
 %type <ival> type_specifier type_specifier_unit
 %type <ival> pointer
 
+%type <ec> function_definition
 %type <ec> declaration
 %type <ec> declaration_list
 
@@ -2878,14 +2889,24 @@ translation_unit
         ;
 
 external_declaration
-        : function_definition
+        : function_definition {
+                translate_ec($1);
+        }
         | declaration_list {
                 translate_ec($1);
         }
         ;
 
 function_definition
-        : declaration_specifiers declarator compound_statement
+        : declaration_specifiers declarator compound_statement {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_FUNCTION_DEFINITION;
+                ec->var->type = $1;
+                ec->child_ptr[0] = $2;
+                ec->child_ptr[1] = $3;
+                ec->child_len = 2;
+                $$ = ec;
+        }
         ;
 
 declaration
