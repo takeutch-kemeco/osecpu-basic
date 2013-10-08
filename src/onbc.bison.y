@@ -2326,6 +2326,9 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
 #define EC_INIT_DECLARATOR_LIST 26      /* 初期化宣言リスト */
 #define EC_DECLARATOR           27      /* 宣言単位 */
 #define EC_DIRECT_DECLARATOR    28      /* 間接参照を伴わない宣言単位 */
+#define EC_PARAMETER_TYPE_LIST  29      /* 関数引数リストのラッパー */
+#define EC_PARAMETER_LIST       30      /* 関数引数リスト */
+#define EC_PARAMETER_DECLARATION 31     /* 関数引数の宣言命令単位 */
 
 /* EC の演算子を示すフラグ
  */
@@ -2422,7 +2425,8 @@ static void translate_ec(struct EC* ec)
             (ec->type_expression != EC_COMPOUND_STATEMENT) &&
             (ec->type_expression != EC_SELECTION_STATEMENT) &&
             (ec->type_expression != EC_ITERATION_STATEMENT) &&
-            (ec->type_expression != EC_DECLARATION)) {
+            (ec->type_expression != EC_DECLARATION) &&
+            (ec->type_expression != EC_DIRECT_DECLARATOR)) {
                 int32_t i;
                 for (i = 0; i < ec->child_len; i++) {
                         translate_ec(ec->child_ptr[i]);
@@ -2814,6 +2818,10 @@ static void translate_ec(struct EC* ec)
 %type <ec> declarator
 %type <ec> direct_declarator
 
+%type <ec> parameter_type_list
+%type <ec> parameter_list
+%type <ec> parameter_declaration
+
 %type <ec> initializer
 
 %type <ec> statement
@@ -2877,8 +2885,7 @@ external_declaration
         ;
 
 function_definition
-        : /* declaration_specifiers declarator compound_statement */
-        | define_struct
+        : declaration_specifiers declarator compound_statement
         ;
 
 declaration
@@ -2891,6 +2898,7 @@ declaration
                 $$ = ec;
         }
         | statement
+        | define_struct
         ;
 
 declaration_list
@@ -3030,16 +3038,42 @@ pointer
         ;
 
 parameter_type_list
-        : parameter_list
+        : parameter_list {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_PARAMETER_TYPE_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
         ;
 
 parameter_list
-        : parameter_declaration
-        | parameter_list __OPE_COMMA parameter_declaration
+        : parameter_declaration {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_PARAMETER_LIST;
+                ec->child_ptr[0] = $1;
+                ec->child_len = 1;
+                $$ = ec;
+        }
+        | parameter_list __OPE_COMMA parameter_declaration {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_PARAMETER_LIST;
+                ec->child_ptr[0] = $3; /* 引数順序を前後逆転するため */
+                ec->child_ptr[1] = $1;
+                ec->child_len = 2;
+                $$ = ec;
+        }
         ;
 
 parameter_declaration
-        : declaration_specifiers declarator
+        : declaration_specifiers declarator {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_PARAMETER_DECLARATION;
+                ec->var->type = $1;
+                ec->child_ptr[0] = $2;
+                ec->child_len = 1;
+                $$ = ec;
+        }
         ;
 
 initializer_param
