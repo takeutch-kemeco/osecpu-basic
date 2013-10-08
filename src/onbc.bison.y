@@ -2440,7 +2440,26 @@ static void translate_ec(struct EC* ec)
         }
 
         if (ec->type_expression == EC_FUNCTION_DEFINITION) {
+                int32_t skip_label = cur_label_index_head++;
+                pA("PLIMM(P3F, %d);", skip_label);
+
                 translate_ec(ec->child_ptr[0]);
+                translate_ec(ec->child_ptr[1]);
+
+                /* 現在の関数からのリターン
+                 * プログラムフローがこの位置へ至る状態は、関数内でreturnが実行されなかった場合。
+                 * しかし、関数は expression なので、終了後に"必ず"スタックが +1 された状態でなければならないので、
+                 * fixAにデフォルト値として 0 をセットし、 return 0 と同様の処理となる。
+                 */
+                pA("fixA = 0;");
+                __define_user_function_return();
+
+                /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
+                 */
+                dec_cur_scope_depth();
+                varlist_scope_pop();
+
+                pA("LB(0, %d);", skip_label);
         } else if (ec->type_expression == EC_DECLARATION) {
                 cur_initializer_type = ec->var->type;
                 translate_ec(ec->child_ptr[0]);
@@ -2459,11 +2478,37 @@ static void translate_ec(struct EC* ec)
                 *(ec->var) = *(__var_func_assignment_new(ec->var, ec->child_ptr[1]->var));
                 pop_stack_dummy();
         } else if (ec->type_expression == EC_DECLARATOR) {
-                ec->var = __new_var_initializer(ec->var);
+                if (ec->var->type & TYPE_FUNCTION)
+                        cur_initializer_type |= TYPE_FUNCTION;
+
+                __new_var_initializer_global(ec->var);
+
+                if (ec->var->type & TYPE_FUNCTION) {
+                        int32_t func_label = cur_label_index_head++;
+
+                        struct Var* var = varlist_search(ec->var->iden);
+                        var->base_ptr = func_label;
+
+                        pA("LB(1, %d);", func_label);
+
+                        translate_ec(ec->child_ptr[0]);
+                }
         } else if (ec->type_expression == EC_DIRECT_DECLARATOR) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_PARAMETER_TYPE_LIST) {
-                /* 何もしない */
+                /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時）
+                 */
+                inc_cur_scope_depth();
+                varlist_scope_push();
+
+                /* ローカル変数として @stack_prev_frame を作成し、
+                 * その後、それのオフセットに 0 をセットする（コンパイル時）
+                 */
+                const char stack_prev_frame_iden[] = "@stack_prev_frame";
+                varlist_add_local(stack_prev_frame_iden, NULL, 0, 0, TYPE_INT | TYPE_AUTO);
+                varlist_set_scope_head();
+
+                translate_ec(ec->child_ptr[0]);
         } else if (ec->type_expression == EC_PARAMETER_LIST) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_PARAMETER_DECLARATION) {
@@ -2719,11 +2764,23 @@ static void translate_ec(struct EC* ec)
                         /* 現在の stack_frame をプッシュする。
                          * そして、ここには関数終了後にはリターン値が入った状態となる。
                          */
-                        push_stack("stack_frame");
+#if 0
+                        pA("stack_socket = stack_frame;");
+                        pA("stack_frame = stack_head;");
+                        push_stack("stack_socket");
 
                         translate_ec(ec->child_ptr[0]);
 
-                        __call_user_function(ec->var->iden);
+                        struct Var* var = varlist_search_global(ec->iden);
+
+                        int32_t return_label = cur_label_index_head++;
+
+                        pA("labelstack_socket, %d;", return_label);
+                        push_labelstack();
+
+                        pA("PLIMM(P3F, %d);", var->base_ptr);
+                        pA("LB(1, %d);", return_label);
+#endif
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
