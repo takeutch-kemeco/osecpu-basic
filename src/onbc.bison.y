@@ -2440,11 +2440,11 @@ static void translate_ec(struct EC* ec)
         }
 
         if (ec->type_expression == EC_FUNCTION_DEFINITION) {
-                int32_t skip_label = cur_label_index_head++;
+                const int32_t skip_label = cur_label_index_head++;
                 pA("PLIMM(P3F, %d);", skip_label);
 
-                translate_ec(ec->child_ptr[0]);
-                translate_ec(ec->child_ptr[1]);
+                translate_ec(ec->child_ptr[0]); /* 関数識別子、および引数 */
+                translate_ec(ec->child_ptr[1]); /* 関数のステートメント部 */
 
                 /* 現在の関数からのリターン
                  * プログラムフローがこの位置へ至る状態は、関数内でreturnが実行されなかった場合。
@@ -2478,18 +2478,20 @@ static void translate_ec(struct EC* ec)
                 *(ec->var) = *(__var_func_assignment_new(ec->var, ec->child_ptr[1]->var));
                 pop_stack_dummy();
         } else if (ec->type_expression == EC_DECLARATOR) {
-                if (ec->var->type & TYPE_FUNCTION)
+                if (ec->var->type & TYPE_FUNCTION) {
                         cur_initializer_type |= TYPE_FUNCTION;
+                        cur_initializer_type &= ~(TYPE_AUTO);
+                }
 
-                __new_var_initializer_global(ec->var);
+                __new_var_initializer(ec->var);
 
                 if (ec->var->type & TYPE_FUNCTION) {
-                        int32_t func_label = cur_label_index_head++;
+                        const int32_t func_label = cur_label_index_head++;
 
                         struct Var* var = varlist_search(ec->var->iden);
                         var->base_ptr = func_label;
 
-                        pA("LB(1, %d);", func_label);
+                        pA("LB(0, %d);", func_label);
 
                         translate_ec(ec->child_ptr[0]);
                 }
@@ -2508,7 +2510,8 @@ static void translate_ec(struct EC* ec)
                 varlist_add_local(stack_prev_frame_iden, NULL, 0, 0, TYPE_INT | TYPE_AUTO);
                 varlist_set_scope_head();
 
-                translate_ec(ec->child_ptr[0]);
+                if (ec->child_len == 1)
+                        translate_ec(ec->child_ptr[0]);
         } else if (ec->type_expression == EC_PARAMETER_LIST) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_PARAMETER_DECLARATION) {
@@ -2539,8 +2542,8 @@ static void translate_ec(struct EC* ec)
                 if (ec->type_operator == EC_OPE_IF) {
                         translate_ec(ec->child_ptr[0]);
 
-                        int32_t else_label = cur_label_index_head++;
-                        int32_t end_label = cur_label_index_head++;
+                        const int32_t else_label = cur_label_index_head++;
+                        const int32_t end_label = cur_label_index_head++;
 
                         pop_stack("stack_socket");
                         pA("if (stack_socket == 0) {PLIMM(P3F, %d);}", else_label);
@@ -2559,8 +2562,8 @@ static void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_ITERATION_STATEMENT) {
                 if (ec->type_operator == EC_OPE_WHILE) {
-                        int32_t loop_head = cur_label_index_head++;
-                        int32_t loop_end = cur_label_index_head++;
+                        const int32_t loop_head = cur_label_index_head++;
+                        const int32_t loop_end = cur_label_index_head++;
 
                         pA("LB(0, %d);", loop_head);
 
@@ -2575,8 +2578,8 @@ static void translate_ec(struct EC* ec)
 
                         pA("LB(0, %d);", loop_end);
                 } else if (ec->type_operator == EC_OPE_FOR) {
-                        int32_t loop_head = cur_label_index_head++;
-                        int32_t loop_end = cur_label_index_head++;
+                        const int32_t loop_head = cur_label_index_head++;
+                        const int32_t loop_end = cur_label_index_head++;
 
                         translate_ec(ec->child_ptr[0]);
 
@@ -2764,23 +2767,23 @@ static void translate_ec(struct EC* ec)
                         /* 現在の stack_frame をプッシュする。
                          * そして、ここには関数終了後にはリターン値が入った状態となる。
                          */
-#if 0
                         pA("stack_socket = stack_frame;");
                         pA("stack_frame = stack_head;");
                         push_stack("stack_socket");
 
+                        struct Var* var = varlist_search_global(ec->var->iden);
+                        if (var == NULL)
+                                yyerror("syntax err: 未定義の関数を呼び出そうとしました");
+
                         translate_ec(ec->child_ptr[0]);
 
-                        struct Var* var = varlist_search_global(ec->iden);
+                        const int32_t return_label = cur_label_index_head++;
 
-                        int32_t return_label = cur_label_index_head++;
-
-                        pA("labelstack_socket, %d;", return_label);
+                        pA("PLIMM(labelstack_socket, %d);", return_label);
                         push_labelstack();
 
                         pA("PLIMM(P3F, %d);", var->base_ptr);
                         pA("LB(1, %d);", return_label);
-#endif
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
@@ -3118,7 +3121,12 @@ pointer
         ;
 
 parameter_type_list
-        : parameter_list {
+        : /* empty */ {
+                struct EC* ec = new_ec();
+                ec->type_expression = EC_PARAMETER_TYPE_LIST;
+                $$ = ec;
+        }
+        | parameter_list {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_PARAMETER_TYPE_LIST;
                 ec->child_ptr[0] = $1;
