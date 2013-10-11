@@ -2,7 +2,10 @@ bin_PROGRAMS = onbc
 onbc_SOURCES = main.c \
                onbc.bison.y onbc.flex.l \
                onbc.print.c onbc.print.h \
-               onbc.iden.c onbc.iden.h
+               onbc.iden.c onbc.iden.h \
+               onbc.var.c onbc.var.h \
+               onbc.mem.c onbc.mem.h \
+               onbc.stack.c onbc.stack.h
 
 LFLAGS = -Cf -8
 YFLAGS = -dv
@@ -18,4 +21,3 @@ CFLAGS = -O0 -g
 #CFLAGS += -DDEBUG_VAR_CAST
 #CFLAGS += -DDEBUG_CAST_REGVAL
 LIBS = -lm -lfl
-
