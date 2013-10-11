@@ -6,6 +6,7 @@ AC_INIT([Osecpu NB Compiler], [0.0.10], [takeutchkemeco@gmail.com])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_HEADERS([src/config.h])
+LT_INIT
 
 # Checks for programs.
 AC_PROG_CC
