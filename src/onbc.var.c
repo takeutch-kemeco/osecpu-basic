@@ -89,7 +89,7 @@ struct Var* new_var(void)
 }
 
 /* スタックからのポップ。
- * ただしVar->is_lvalue、および Var->dim_lenに応じて間接参照・直接参照を切り替える
+ * ただしVar->is_lvalue, Var->dim_lenに応じて間接参照・直接参照を切り替える
  */
 void var_pop_stack(struct Var* var, const char* register_name)
 {
@@ -188,6 +188,7 @@ struct Var* varlist_search(const char* iden)
  *
  * これらの値はint32型。（fix32型ではないので注意)
  */
+static
 void varlist_add_common(const char* iden,
                         int32_t* unit_len,
                         const int32_t dim_len,
@@ -232,6 +233,7 @@ void varlist_add_common(const char* iden,
 /* 変数リストに新たにグローバル変数を追加する。
  * 現在のスコープ内に重複する同名のグローバル変数が存在した場合は何もしない。
  */
+static
 void varlist_add_global(const char* str,
                         int32_t* unit_len,
                         const int32_t dim_len,
@@ -247,6 +249,7 @@ void varlist_add_global(const char* str,
 /* 変数リストに新たにローカル変数を追加する。
  * 現在のスコープ内に重複する同名のローカル変数が存在した場合は何もしない。
  */
+static
 void varlist_add_local(const char* str,
                        int32_t* unit_len,
                        const int32_t dim_len,

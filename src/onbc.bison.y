@@ -1064,7 +1064,12 @@ constant
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
                 sprintf(ec->iden, "@%d", $1);
-                varlist_add_global(ec->iden, NULL, 0, 0, TYPE_SIGNED | TYPE_INT | TYPE_LITERAL);
+
+                strcpy(ec->var->iden, ec->iden);
+                ec->var->dim_len = 0;
+                ec->var->indirect_len = 0;
+                ec->var->type = TYPE_SIGNED | TYPE_INT | TYPE_LITERAL;
+                ec->var = __new_var_initializer_global(ec->var);
 
                 ec->var->const_variable = malloc(sizeof(int));
                 *((int*)(ec->var->const_variable)) = $1;
@@ -1075,7 +1080,12 @@ constant
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
                 sprintf(ec->iden, "@%d", $1);
-                varlist_add_global(ec->iden, NULL, 0, 0, TYPE_SIGNED | TYPE_CHAR | TYPE_LITERAL);
+
+                strcpy(ec->var->iden, ec->iden);
+                ec->var->dim_len = 0;
+                ec->var->indirect_len = 0;
+                ec->var->type = TYPE_SIGNED | TYPE_CHAR | TYPE_LITERAL;
+                ec->var = __new_var_initializer_global(ec->var);
 
                 ec->var->const_variable = malloc(sizeof(int));
                 *((int*)(ec->var->const_variable)) = $1;
@@ -1086,7 +1096,12 @@ constant
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
                 sprintf(ec->iden, "@%f", $1);
-                varlist_add_global(ec->iden, NULL, 0, 0, TYPE_FLOAT | TYPE_LITERAL);
+
+                strcpy(ec->var->iden, ec->iden);
+                ec->var->dim_len = 0;
+                ec->var->indirect_len = 0;
+                ec->var->type = TYPE_FLOAT | TYPE_LITERAL;
+                ec->var = __new_var_initializer_global(ec->var);
 
                 double a;
                 double b = modf($1, &a);

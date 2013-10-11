@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include "onbc.print.h"
 #include "onbc.label.h"
 #include "onbc.var.h"
@@ -96,8 +97,12 @@ void __define_user_function_begin(const char* iden,
         /* ローカル変数として @stack_prev_frame を作成し、
          * その後、それのオフセットに 0 をセットする（コンパイル時）
          */
-        const char stack_prev_frame_iden[] = "@stack_prev_frame";
-        varlist_add_local(stack_prev_frame_iden, NULL, 0, 0, TYPE_AUTO);
+        struct Var* var = new_var();
+        strcpy(var->iden, "@stack_prev_frame");
+        var->dim_len = 0;
+        var->indirect_len = 0;
+        cur_initializer_type = TYPE_AUTO;
+        __new_var_initializer_local(var);
         varlist_set_scope_head();
 
         /* スタック上に格納された引数順序と対応した順序となるように、ローカル変数を作成していく。
@@ -108,12 +113,12 @@ void __define_user_function_begin(const char* iden,
                 char iden[0x1000];
                 idenlist_pop(iden);
 
-                varlist_add_local(iden, NULL, 0, 0, TYPE_INT | TYPE_AUTO);
-
-                /* 変数のスペックを得る。（コンパイル時） */
-                struct Var* var = varlist_search_local(iden);
-                if (var == NULL)
-                        yyerror("system err: functionによる関数定義において、ローカル変数の作成に失敗しました");
+                struct Var* var = new_var();
+                strcpy(var->iden, iden);
+                var->dim_len = 0;
+                var->indirect_len = 0;
+                cur_initializer_type = TYPE_AUTO;
+                __new_var_initializer_local(var);
         }
 
         /* 現在の stack_frame に stack_head - (arglen + 1) をセットする。

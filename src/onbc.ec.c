@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 #include "onbc.print.h"
 #include "onbc.mem.h"
@@ -140,8 +141,12 @@ void translate_ec(struct EC* ec)
                 /* ローカル変数として @stack_prev_frame を作成し、
                  * その後、それのオフセットに 0 をセットする（コンパイル時）
                  */
-                const char stack_prev_frame_iden[] = "@stack_prev_frame";
-                varlist_add_local(stack_prev_frame_iden, NULL, 0, 0, TYPE_INT | TYPE_AUTO);
+                struct Var* var = new_var();
+                strcpy(var->iden, "@stack_prev_frame");
+                var->dim_len = 0;
+                var->indirect_len = 0;
+                cur_initializer_type = TYPE_AUTO;
+                __new_var_initializer_local(var);
                 varlist_set_scope_head();
 
                 if (ec->child_len == 1)

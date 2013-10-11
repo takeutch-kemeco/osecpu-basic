@@ -42,58 +42,6 @@ test02()
         putchar('\n');
 }
 
-test03()
-{
-        puts("varlist_add_global()で、指定したスペックのグローバル変数が作成されるかのテスト");
-
-        const char iden[] = "global_int_x";
-        const int32_t dim_len = 5;
-        int32_t unit_len[5] = {1,2,3,4,5};
-        const int32_t indirect_len = 10;
-        const int32_t type = TYPE_INT;
-
-        puts("指定したスペック:");
-        printf("iden[%s], dim_len[%d], "
-               "unit_len[dim_len] = {1,2,3,4,5}, "
-               "indirect_len[%d], type[%d]\n",
-               iden, dim_len, indirect_len, type);
-
-        varlist_add_global(iden, unit_len, dim_len, indirect_len, type);
-
-        puts("実際に作成されたスペック:");
-        struct Var* var = varlist_search(iden);
-        var_print(var);
-        printf("var->type & TYPE_AUTO = [%d]\n", var->type & TYPE_AUTO);
-
-        putchar('\n');
-}
-
-test04()
-{
-        puts("varlist_add_global()で、指定したスペックのローカル変数が作成されるかのテスト");
-
-        const char iden[] = "local_float_x";
-        const int32_t dim_len = 5;
-        int32_t unit_len[5] = {1,2,3,4,5};
-        const int32_t indirect_len = 10;
-        const int32_t type = TYPE_FLOAT;
-
-        puts("指定したスペック:");
-        printf("iden[%s], dim_len[%d], "
-               "unit_len[dim_len] = {1,2,3,4,5}, "
-               "indirect_len[%d], type[%d]\n",
-               iden, dim_len, indirect_len, type);
-
-        varlist_add_local(iden, unit_len, dim_len, indirect_len, type);
-
-        puts("実際に作成されたスペック:");
-        struct Var* var = varlist_search(iden);
-        var_print(var);
-        printf("var->type & TYPE_AUTO = [%d]\n", var->type & TYPE_AUTO);
-
-        putchar('\n');
-}
-
 test05()
 {
         puts("__new_var_initializer_global()で、指定したスペックのグローバル変数が作成されるかのテスト");
@@ -166,8 +114,6 @@ int main(int argc, char** argv)
 
         test01();
         test02();
-        test03();
-        test04();
         test05();
         test06();
 

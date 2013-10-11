@@ -64,21 +64,6 @@ struct Var* varlist_search_common(const char* iden, const int32_t varlist_bottom
 struct Var* varlist_search_global(const char* iden);
 struct Var* varlist_search_local(const char* iden);
 struct Var* varlist_search(const char* iden);
-void varlist_add_common(const char* iden,
-                        int32_t* unit_len,
-                        const int32_t dim_len,
-                        const int32_t indirect_len,
-                        const int32_t type);
-void varlist_add_global(const char* str,
-                        int32_t* unit_len,
-                        const int32_t dim_len,
-                        const int32_t indirect_len,
-                        const int32_t type);
-void varlist_add_local(const char* str,
-                       int32_t* unit_len,
-                       const int32_t dim_len,
-                       const int32_t indirect_len,
-                       const int32_t type);
 void varlist_set_scope_head(void);
 struct Var* __new_var_initializer_local(struct Var* var);
 struct Var* __new_var_initializer_global(struct Var* var);
