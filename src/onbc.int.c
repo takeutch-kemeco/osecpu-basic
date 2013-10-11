@@ -17,6 +17,7 @@
  */
 
 #include "onbc.print.h"
+#include "onbc.func.h"
 
 /* int 型用アキュムレーター
  * 加算、減算、乗算、除算、余り算、符号反転、
