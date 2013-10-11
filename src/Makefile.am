@@ -13,7 +13,8 @@ onbc_SOURCES = main.c \
                onbc.float.c onbc.float.h \
                onbc.cast.c onbc.cast.h \
                onbc.acm.c onbc.acm.h \
-               onbc.ec.c onbc.ec.h
+               onbc.ec.c onbc.ec.h \
+               onbc.struct.c onbc.struct.h
 
 LFLAGS = -Cf -8
 YFLAGS = -dv
