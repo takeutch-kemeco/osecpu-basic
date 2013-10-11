@@ -5,7 +5,8 @@ onbc_SOURCES = main.c \
                onbc.iden.c onbc.iden.h \
                onbc.var.c onbc.var.h \
                onbc.mem.c onbc.mem.h \
-               onbc.stack.c onbc.stack.h
+               onbc.stack.c onbc.stack.h \
+               onbc.label.c onbc.label.h
 
 LFLAGS = -Cf -8
 YFLAGS = -dv
