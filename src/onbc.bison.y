@@ -25,112 +25,9 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <math.h>
+#include "onbc.print.h"
 
 #define YYMAXDEPTH 0x10000000
-
-extern char filepath[0x1000];
-extern int32_t linenumber;
-
-/* 現在の filepath のファイル中から、line行目を文字列として dst へ読み出す。
- * dst には十分な長さのバッファーを渡すこと。
- *
- * line が 1 未満、または EOF 以降の場合は -1 を返す。
- *
- * これは主にエラー表示時に、補助的な情報として表示する文字列用。
- * メインの字句解析や構文解析に用いるような用途には使ってない。
- */
-static int32_t read_line_file(char* dst, const int32_t line)
-{
-        if (line < 1)
-                return -1;
-
-        FILE* fp = fopen(filepath, "rt");
-
-        /* 目的行までシーク
-         */
-        int i = line - 1;
-        while (i-->0) {
-                while (1) {
-                        int c = fgetc(fp);
-                        if (c == '\n')
-                                break;
-
-                        if (c == EOF)
-                                return -1;
-                }
-        }
-
-        /* 改行、または EOF までを dst へ読み出す
-         */
-        while (1) {
-                int c = fgetc(fp);
-                if (c == '\n' || c == EOF)
-                        break;
-
-                *dst++ = c;
-        }
-
-        *dst = '\0';
-
-        fclose(fp);
-        return 0;
-}
-
-/* 警告表示 */
-void yywarning(const char *error_message)
-{
-        printf("filepath: %s\n", filepath);
-
-        /* エラー行と、その前後 3 行を表示する
-         */
-        char tmp[0x1000];
-        int i;
-        for (i = -3; i <= +3; i++) {
-                if (read_line_file(tmp, linenumber + i) != -1)
-                        printf("%6d: %s\n", linenumber + i, tmp);
-        }
-
-        printf("line: %d\n", linenumber);
-        printf("%s\n\n", error_message);
-}
-
-/* エラー表示 */
-void yyerror(const char *error_message)
-{
-        yywarning(error_message);
-        exit(EXIT_FAILURE);
-}
-
-extern FILE* yyin;
-extern FILE* yyout;
-extern FILE* yyaskA;
-extern FILE* yyaskB;
-
-/* 出力ファイル yyaskA へ文字列を書き出す関数 */
-static void pA(const char* fmt, ...)
-{
-        va_list ap;
-        va_start(ap, fmt);
-
-        vfprintf(yyaskA, fmt, ap);
-        va_end(ap);
-
-        fputs("\n", yyaskA);
-}
-
-/* 出力ファイル yyaskA へ文字列を書き出す関数（改行無し）
- *
- * 主に } else { 用。
- * （elseを挟む中括弧を改行をするとエラーになるので）
- */
-static void pA_nl(const char* fmt, ...)
-{
-        va_list ap;
-        va_start(ap, fmt);
-
-        vfprintf(yyaskA, fmt, ap);
-        va_end(ap);
-}
 
 /* 変数型の識別フラグのルール関連
  */
@@ -466,6 +363,8 @@ static void varlist_add_global(const char* str,
 {
         if (varlist_search_global(str) == NULL)
                 varlist_add_common(str, unit_len, dim_len, indirect_len, type & (~TYPE_AUTO));
+        else
+                yyerror("syntax err: 同名のグローバル変数を重複して宣言しました");
 }
 
 /* 変数リストに新たにローカル変数を追加する。
@@ -479,6 +378,8 @@ static void varlist_add_local(const char* str,
 {
         if (varlist_search_local(str) == NULL)
                 varlist_add_common(str, unit_len, dim_len, indirect_len, type | TYPE_AUTO);
+        else
+                yyerror("syntax err: 同名のローカル変数を重複して宣言しました");
 }
 
 /* 変数リストの現在の最後の変数を、新しいスコープの先頭とみなして、それの base_ptr に0をセットする
@@ -2429,7 +2330,8 @@ static void translate_ec(struct EC* ec)
             (ec->type_expression != EC_DECLARATION) &&
             (ec->type_expression != EC_DIRECT_DECLARATOR) &&
             (ec->type_expression != EC_FUNCTION_DEFINITION) &&
-            (ec->type_expression != EC_DECLARATOR)) {
+            (ec->type_expression != EC_DECLARATOR) &&
+            (ec->type_expression != EC_PARAMETER_TYPE_LIST)) {
                 int32_t i;
                 for (i = 0; i < ec->child_len; i++) {
                         translate_ec(ec->child_ptr[i]);
@@ -2469,13 +2371,14 @@ static void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_INIT_DECLARATOR_LIST) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_INIT_DECLARATOR) {
-                pA("fixL = %d;", ec->var->base_ptr);
+                pA("fixL = %d;", ec->child_ptr[0]->var->base_ptr);
                 pop_stack("fixR");
 
                 push_stack("fixL");
                 push_stack("fixR");
 
-                *(ec->var) = *(__var_func_assignment_new(ec->var, ec->child_ptr[1]->var));
+                ec->child_ptr[0]->var->is_lvalue = 1;
+                *(ec->var) = *(__var_func_assignment_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var));
                 pop_stack_dummy();
         } else if (ec->type_expression == EC_DECLARATOR) {
                 if (ec->var->type & TYPE_FUNCTION) {
