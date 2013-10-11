@@ -55,8 +55,6 @@ struct Var {
 
 extern int32_t cur_initializer_type;
 
-void inc_cur_scope_depth(void);
-void dec_cur_scope_depth(void);
 void var_print(struct Var* var);
 struct Var* new_var(void);
 void var_pop_stack(struct Var* var, const char* register_name);

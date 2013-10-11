@@ -91,7 +91,6 @@ void translate_ec(struct EC* ec)
 
                 /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
                  */
-                dec_cur_scope_depth();
                 varlist_scope_pop();
 
                 pA("LB(0, %d);", skip_label);
@@ -136,7 +135,6 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_PARAMETER_TYPE_LIST) {
                 /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時）
                  */
-                inc_cur_scope_depth();
                 varlist_scope_push();
 
                 /* ローカル変数として @stack_prev_frame を作成し、
@@ -155,13 +153,11 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_COMPOUND_STATEMENT) {
-                inc_cur_scope_depth();  /* コンパイル時 */
                 varlist_scope_push();   /* コンパイル時 */
 
                 translate_ec(ec->child_ptr[0]);
                 translate_ec(ec->child_ptr[1]);
 
-                dec_cur_scope_depth();  /* コンパイル時 */
                 varlist_scope_pop();    /* コンパイル時 */
         } else if (ec->type_expression == EC_LABELED_STATEMENT) {
                 pA("LB(1, %d);", labellist_search(ec->var->iden));

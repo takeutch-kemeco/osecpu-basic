@@ -42,31 +42,6 @@ static int32_t varlist_scope_head = 0;
  */
 int32_t cur_initializer_type = 0;
 
-/* プログラムフローにおける現時点でのスコープの深さ
- * ローカルが深まる毎に +1 されて、浅くなる毎に -1 される前提。
- * スコープが最も浅い場合はグローバルで、これは 0 となる。
- *
- * コンパイラーを書く上において、この値を各所で適切に設定する責任はプログラマーに委ねられる。（自動的には行われない）
- *
- * この値が 0 か 非0 かに伴い、スコープがグローバル時での変数定義の動作を変えるために用いる。
- * 0 ならば変数はヒープから確保し、 非0 ならば変数はスタック上に確保する際に、この値を参考に分岐させるのに用いる。
- */
-static int32_t cur_scope_depth = 0;
-
-/* プログラムフローにおける現時点でのスコープの深さを1段進める */
-void inc_cur_scope_depth(void)
-{
-        cur_scope_depth++;
-}
-
-/* プログラムフローにおける現時点でのスコープの深さを1段戻す */
-void dec_cur_scope_depth(void)
-{
-        cur_scope_depth--;
-        if (cur_scope_depth < 0)
-                yyerror("system err: dec_cur_scope_depth();");
-}
-
 /* Varの内容を印字する
  * 主にデバッグ用
  */
@@ -114,7 +89,7 @@ struct Var* new_var(void)
 }
 
 /* スタックからのポップ。
- * ただしVar->is_lvalue、および EC->Var->dim_lenに応じて間接参照・直接参照を切り替える
+ * ただしVar->is_lvalue、および Var->dim_lenに応じて間接参照・直接参照を切り替える
  */
 void var_pop_stack(struct Var* var, const char* register_name)
 {
@@ -356,9 +331,10 @@ struct Var* __new_var_initializer_global(struct Var* var)
 
 struct Var* __new_var_initializer(struct Var* var)
 {
-        if (cur_scope_depth == 0) {
-                return __new_var_initializer_global(var);
-        } else {
-                return __new_var_initializer_local(var);
-        }
+        if (varlist_scope_head == 0)
+                var = __new_var_initializer_global(var);
+        else
+                var = __new_var_initializer_local(var);
+
+        return var;
 }

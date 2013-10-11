@@ -91,7 +91,6 @@ void __define_user_function_begin(const char* iden,
 
         /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時）
          */
-        inc_cur_scope_depth();
         varlist_scope_push();
 
         /* ローカル変数として @stack_prev_frame を作成し、
@@ -178,7 +177,6 @@ void __define_user_function_end(const int32_t skip_label)
 
         /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
          */
-        dec_cur_scope_depth();
         varlist_scope_pop();
 
         /* 通常フロー中では、この関数定義を読み飛ばし、ここへとジャンプしてくる前提

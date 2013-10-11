@@ -48,7 +48,7 @@ test03()
 
         const char iden[] = "global_int_x";
         const int32_t dim_len = 5;
-        const int32_t unit_len[5] = {1,2,3,4,5};
+        int32_t unit_len[5] = {1,2,3,4,5};
         const int32_t indirect_len = 10;
         const int32_t type = TYPE_INT;
 
@@ -74,7 +74,7 @@ test04()
 
         const char iden[] = "local_float_x";
         const int32_t dim_len = 5;
-        const int32_t unit_len[5] = {1,2,3,4,5};
+        int32_t unit_len[5] = {1,2,3,4,5};
         const int32_t indirect_len = 10;
         const int32_t type = TYPE_FLOAT;
 
