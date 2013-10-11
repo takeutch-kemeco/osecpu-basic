@@ -29,6 +29,8 @@
 #include "onbc.iden.h"
 #include "onbc.var.h"
 #include "onbc.label.h"
+#include "onbc.eoe.h"
+#include "onbc.func.h"
 
 #define YYMAXDEPTH 0x10000000
 
@@ -251,176 +253,6 @@ static void structspec_ptrlist_add(struct StructSpec* spec)
 #endif /* DEBUG_STRUCTSPEC_PTRLIST */
 }
 
-/* プリセット関数やアキュムレーターを呼び出し命令に対して、追加でさらに共通の定型命令を出力する。
- * すなわち、関数呼び出しのラッパ。
- * （ラベルスタックへの戻りラベルのプッシュ、関数実行、関数後位置への戻りラベル設定）
- *
- * 呼び出し先の関数は、中でさらに再帰を行っても良いが、
- * 最終的には必ず pop_labelstack を伴ったリターン（すなわち retF()）をしなければならない。
- * （さもなくばラベルスタックの整合性が壊れてしまう）
- * このリターンに関しては別の関数に任す形となる。（callF()からはコントロールできないので）
- *
- * 引数 label には、別途、各関数およびアキュムレーターに対してユニークに定義された定数を渡す。
- */
-static void callF(const int32_t label)
-{
-        pA("PLIMM(%s, %d);", CUR_RETURN_LABEL, cur_label_index_head);
-        push_labelstack();
-        pA("PLIMM(P3F, %d);", label);
-
-        pA("LB(1, %d);", cur_label_index_head);
-        cur_label_index_head++;
-}
-
-/* pop_labelstack を伴ったリターンの定型命令を出力する
- * すなわち、関数リターンのラッパ。
- */
-static void retF(void)
-{
-        pop_labelstack();
-        pA("PCP(P3F, %s);", CUR_RETURN_LABEL);
-}
-
-/* beginF, endF
- * プリセット関数及びアキュムレーターをサブルーチン命令化する仕掛け、を記したマクロ。
- * このマクロをプリセット関数及びアキュムレーターの先頭に beginF() を書き、最後に endF() を書くだけで、それをサブルーチン命令化できる。
- *
- * unique_func_label には、その関数に設定されるユニークラベル番号が設定される。
- * これは、このマクロが含まれる関数が始めて呼び出された時点での cur_label_index_head が用いられる。
- * また同時に、内部処理用に unique_func_label + 1 のラベルも消費される。
- * （つまり、関数辺り、2個のユニークラベルが消費される）
- * もちろん、cur_label_index_head は、副作用の無さそうなタイミングで +2 される。
- *
- * 何故こんなハック的な解決方法を採ってるかというと、ただ単に大げさな方法による全面改修をするのが面倒くさかったから。
- */
-#define beginF()                                                        \
-        static int32_t unique_func_label;                               \
-                                                                        \
-        static int func_label_init_flag = 0;                            \
-        if (func_label_init_flag == 1) {                                \
-                callF(unique_func_label);                               \
-                return;                                                 \
-        }                                                               \
-                                                                        \
-        unique_func_label = cur_label_index_head;                       \
-        const int32_t end_label = unique_func_label + 1;                \
-        cur_label_index_head += 2;                                      \
-                                                                        \
-        callF(unique_func_label);                                       \
-        pA("PLIMM(P3F, %d);", end_label);                               \
-                                                                        \
-        pA("LB(0, %d);", unique_func_label);
-
-#define endF()                                                          \
-        retF();                                                         \
-        pA("LB(0, %d);", end_label);                                    \
-        func_label_init_flag = 1;
-
-/* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
- */
-static void read_eoe_arg(void)
-{
-        pop_stack("fixR");
-        pop_stack("fixL");
-}
-
-/* eoe用レジスタをスタックへプッシュする
- */
-static void push_eoe(void)
-{
-        beginF();
-
-        push_stack("fixL");
-        push_stack("fixR");
-        push_stack("fixLx");
-        push_stack("fixRx");
-        push_stack("fixS");
-        push_stack("fixT");
-        push_stack("fixT1");
-        push_stack("fixT2");
-        push_stack("fixT3");
-        push_stack("fixT4");
-
-        endF();
-}
-
-/* eoe用レジスタをスタックからポップする
- */
-static void pop_eoe(void)
-{
-        beginF();
-
-        pop_stack("fixT4");
-        pop_stack("fixT3");
-        pop_stack("fixT2");
-        pop_stack("fixT1");
-        pop_stack("fixT");
-        pop_stack("fixS");
-        pop_stack("fixRx");
-        pop_stack("fixLx");
-        pop_stack("fixR");
-        pop_stack("fixL");
-
-        endF();
-};
-
-static char debug_eoe[] = {
-        "junkApi_putConstString('\\nfixL:');"
-        "junkApi_putStringDec('\\1', fixL, 11, 1);"
-        "junkApi_putConstString(' fixR:');"
-        "junkApi_putStringDec('\\1', fixR, 11, 1);"
-        "junkApi_putConstString(' fixLx:');"
-        "junkApi_putStringDec('\\1', fixLx, 11, 1);"
-        "junkApi_putConstString(' fixRx:');"
-        "junkApi_putStringDec('\\1', fixRx, 11, 1);"
-        "junkApi_putConstString(' fixT:');"
-        "junkApi_putStringDec('\\1', fixT, 11, 1);"
-        "junkApi_putConstString(' fixT1:');"
-        "junkApi_putStringDec('\\1', fixT1, 11, 1);"
-        "junkApi_putConstString(' fixT2:');"
-        "junkApi_putStringDec('\\1', fixT2, 11, 1);"
-        "junkApi_putConstString(' fixT3:');"
-        "junkApi_putStringDec('\\1', fixT3, 11, 1);"
-        "junkApi_putConstString(' fixT4:');"
-        "junkApi_putStringDec('\\1', fixT4, 11, 1);"
-        "junkApi_putConstString(' fixS:');"
-        "junkApi_putStringDec('\\1', fixS, 11, 1);"
-        "junkApi_putConstString(' fixA:');"
-        "junkApi_putStringDec('\\1', fixA, 11, 1);"
-        "junkApi_putConstString(' fixA1:');"
-        "junkApi_putStringDec('\\1', fixA1, 11, 1);"
-        "junkApi_putConstString(' fixA2:');"
-        "junkApi_putStringDec('\\1', fixA2, 11, 1);"
-        "junkApi_putConstString(' fixA3:');"
-        "junkApi_putStringDec('\\1', fixA3, 11, 1);"
-        "junkApi_putConstString('\\n');"
-};
-
-/* read_eoe_arg 用変数の初期化
- *
- * push_eoe(), pop_eoe() ともに、例外として fixA スタックへ退避しない。
- * この fixA は eoe 間で値を受け渡しする為に用いるので、push_eoe(), pop_eoe() に影響されないようにしてある。
- * （push後に行った演算の結果をfixAに入れておくことで、その後にpopした後でも演算結果を引き継げるように）
- *
- * fixA1 ～ fixA3 も、 fixA 同様に戻り値の受け渡しに使える。
- */
-static char init_eoe_arg[] = {
-        "SInt32 fixA:R07;\n"
-        "SInt32 fixL:R08;\n"
-        "SInt32 fixR:R09;\n"
-        "SInt32 fixLx:R0A;\n"
-        "SInt32 fixRx:R0B;\n"
-        "SInt32 fixS:R0C;\n"
-        "SInt32 fixT:R0D;\n"
-        "SInt32 fixT1:R0E;\n"
-        "SInt32 fixT2:R0F;\n"
-        "SInt32 fixT3:R10;\n"
-        "SInt32 fixT4:R11;\n"
-        "SInt32 fixA1:R12;\n"
-        "SInt32 fixA2:R13;\n"
-        "SInt32 fixA3:R14;\n"
-};
-
 /* 全ての初期化
  */
 void init_all(void)
@@ -433,7 +265,7 @@ void init_all(void)
         init_heap();
         init_stack();
         init_labelstack();
-        pA(init_eoe_arg);
+        init_eoe_arg();
 }
 
 /* 各種アキュムレーター
