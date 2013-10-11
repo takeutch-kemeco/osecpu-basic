@@ -188,8 +188,7 @@ struct Var* varlist_search(const char* iden)
  *
  * これらの値はint32型。（fix32型ではないので注意)
  */
-static
-void varlist_add_common(const char* iden,
+static void varlist_add(const char* iden,
                         int32_t* unit_len,
                         const int32_t dim_len,
                         const int32_t indirect_len,
@@ -230,38 +229,6 @@ void varlist_add_common(const char* iden,
 #endif /* DEBUG_VARLIST */
 }
 
-/* 変数リストに新たにグローバル変数を追加する。
- * 現在のスコープ内に重複する同名のグローバル変数が存在した場合は何もしない。
- */
-static
-void varlist_add_global(const char* str,
-                        int32_t* unit_len,
-                        const int32_t dim_len,
-                        const int32_t indirect_len,
-                        const int32_t type)
-{
-        if (varlist_search_global(str) == NULL)
-                varlist_add_common(str, unit_len, dim_len, indirect_len, type & (~TYPE_AUTO));
-        else
-                yyerror("syntax err: 同名のグローバル変数を重複して宣言しました");
-}
-
-/* 変数リストに新たにローカル変数を追加する。
- * 現在のスコープ内に重複する同名のローカル変数が存在した場合は何もしない。
- */
-static
-void varlist_add_local(const char* str,
-                       int32_t* unit_len,
-                       const int32_t dim_len,
-                       const int32_t indirect_len,
-                       const int32_t type)
-{
-        if (varlist_search_local(str) == NULL)
-                varlist_add_common(str, unit_len, dim_len, indirect_len, type | TYPE_AUTO);
-        else
-                yyerror("syntax err: 同名のローカル変数を重複して宣言しました");
-}
-
 /* 変数リストの現在の最後の変数を、新しいスコープの先頭とみなして、それの base_ptr に0をセットする
  *
  * 新しいスコープ内にて、新たにローカル変数 a, b, c を宣言する場合の例:
@@ -291,15 +258,15 @@ struct Var* __new_var_initializer_local(struct Var* var)
         /* これはコンパイル時の変数状態を設定するにすぎない。
          * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
          */
-        varlist_add_local(var->iden,
-                          var->unit_len,
-                          var->dim_len,
-                          var->indirect_len,
-                          cur_initializer_type | TYPE_AUTO);
+        varlist_add(var->iden,
+                    var->unit_len,
+                    var->dim_len,
+                    var->indirect_len,
+                    cur_initializer_type | TYPE_AUTO);
 
         var = varlist_search_local(var->iden);
         if (var == NULL)
-                yyerror("system err: __new_var_initializer_local()");
+               yyerror("syntax err: 同名のローカル変数を重複して宣言しました");
 
         /* 実際の動作時にメモリー確保するルーチンはこちら側
          */
@@ -319,15 +286,15 @@ struct Var* __new_var_initializer_global(struct Var* var)
         /* これはコンパイル時の変数状態を設定するにすぎない。
          * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
          */
-        varlist_add_global(var->iden,
-                           var->unit_len,
-                           var->dim_len,
-                           var->indirect_len,
-                           cur_initializer_type);
+        varlist_add(var->iden,
+                    var->unit_len,
+                    var->dim_len,
+                    var->indirect_len,
+                    cur_initializer_type & (~TYPE_AUTO));
 
         var = varlist_search_global(var->iden);
         if (var == NULL)
-                yyerror("system err: __new_var_initializer_global()");
+                yyerror("syntax err: 同名のグローバル変数を重複して宣言しました");
 
         return var;
 }
