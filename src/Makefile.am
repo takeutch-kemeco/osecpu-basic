@@ -1,7 +1,8 @@
 bin_PROGRAMS = onbc
 onbc_SOURCES = main.c \
                onbc.bison.y onbc.flex.l \
-               onbc.print.c onbc.print.h
+               onbc.print.c onbc.print.h \
+               onbc.iden.c onbc.iden.h
 
 LFLAGS = -Cf -8
 YFLAGS = -dv

@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <math.h>
 #include "onbc.print.h"
+#include "onbc.iden.h"
 
 #define YYMAXDEPTH 0x10000000
 
@@ -60,43 +61,6 @@
 #define TYPE_TYPEDEF    (1 << 28)
 #define TYPE_LITERAL    (1 << 29)
 #define TYPE_FUNCTION   (1 << 30)
-
-/* IDENTIFIER 文字列用のスタック */
-#define IDENLIST_STR_LEN 0x100
-#define IDENLIST_LEN 0x1000
-static char* idenlist[IDENLIST_LEN] = {[0 ... IDENLIST_LEN - 1] = NULL};
-static int32_t idenlist_head = 0;
-
-/* idenlist に IDENTIFIER 文字列をプッシュする
- *
- * idenlist[idenlist_head]が0の場合はmallocされる。その領域が以後も使いまわされる。
- * （開放はしない。確保したまま）
- */
-static void idenlist_push(const char* src)
-{
-        if (idenlist_head >= IDENLIST_LEN)
-                yyerror("system err: idenlist_push()");
-
-        if(idenlist[idenlist_head] == NULL)
-                idenlist[idenlist_head] = malloc(IDENLIST_STR_LEN);
-
-        strcpy(idenlist[idenlist_head], src);
-        idenlist_head++;
-}
-
-/* idenlist から文字列をdstへポップする
- *
- * コピー渡しなので、十分な長さが確保されたdstを渡すこと
- */
-static void idenlist_pop(char* dst)
-{
-        idenlist_head--;
-
-        if (idenlist_head < 0)
-                yyerror("system err: idenlist_pop()");
-
-        strcpy(dst, idenlist[idenlist_head]);
-}
 
 /* プログラムフローにおける現時点でのスコープの深さ
  * ローカルが深まる毎に +1 されて、浅くなる毎に -1 される前提。
