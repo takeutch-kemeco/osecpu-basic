@@ -1,4 +1,5 @@
-bin_PROGRAMS = onbc
+bin_PROGRAMS = onbc \
+               test.onbc.var
 
 onbc_SOURCES = main.c \
                onbc.bison.y onbc.flex.l \
@@ -19,6 +20,9 @@ libonbc_la_SOURCES = onbc.print.c onbc.print.h \
                      onbc.cast.c onbc.cast.h \
                      onbc.acm.c onbc.acm.h \
                      onbc.struct.c onbc.struct.h
+
+test_onbc_var_SOURCES = test.onbc.var.c
+test_onbc_var_CFLAGS = -lonbc
 
 LFLAGS = -Cf -8
 YFLAGS = -dv
