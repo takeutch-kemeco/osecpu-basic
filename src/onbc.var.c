@@ -301,10 +301,10 @@ struct Var* __new_var_initializer_global(struct Var* var)
 
 struct Var* __new_var_initializer(struct Var* var)
 {
-        if (varlist_scope_head == 0)
-                var = __new_var_initializer_global(var);
-        else
+        if (var->type & TYPE_AUTO)
                 var = __new_var_initializer_local(var);
+        else
+                var = __new_var_initializer_global(var);
 
         return var;
 }
