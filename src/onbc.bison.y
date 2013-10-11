@@ -316,33 +316,6 @@ static void retF(void)
         pA("LB(0, %d);", end_label);                                    \
         func_label_init_flag = 1;
 
-/* ヒープメモリー関連
- */
-
-/* ヒープメモリーの初期化
- */
-static void init_heap(void)
-{
-        pA("SInt32 heap_base:R04;");
-        pA("SInt32 heap_socket:R05;");
-        pA("SInt32 heap_offset:R06;");
-        pA("heap_base = 0;");
-};
-
-/* ヒープメモリー関連の各種レジスターの値を、実行時に画面に印字する
- * 主にデバッグ用
- */
-static void debug_heap(void)
-{
-        pA("junkApi_putConstString('heap_socket[');");
-        pA("junkApi_putStringDec('\\1', heap_socket, 11, 1);");
-        pA("junkApi_putConstString('], heap_base[');");
-        pA("junkApi_putStringDec('\\1', heap_base, 11, 1);");
-        pA("junkApi_putConstString('], heap_offset[');");
-        pA("junkApi_putStringDec('\\1', heap_offset, 11, 1);");
-        pA("junkApi_putConstString(']\\n');");
-}
-
 /* <expression> <OPE_?> <expression> の状態から、左右の <expression> の値をそれぞれ fixL, fixR へ読み込む
  */
 static void read_eoe_arg(void)

@@ -43,3 +43,27 @@ void read_mem(const char* regname_data,
 {
         pA("PALMEM0(%s, T_SINT32, mem_ptr, %s);", regname_data, regname_address);
 }
+
+/* ヒープメモリーの初期化
+ */
+void init_heap(void)
+{
+        pA("SInt32 heap_base:R04;");
+        pA("SInt32 heap_socket:R05;");
+        pA("SInt32 heap_offset:R06;");
+        pA("heap_base = 0;");
+};
+
+/* ヒープメモリー関連の各種レジスターの値を、実行時に画面に印字する
+ * 主にデバッグ用
+ */
+void debug_heap(void)
+{
+        pA("junkApi_putConstString('heap_socket[');");
+        pA("junkApi_putStringDec('\\1', heap_socket, 11, 1);");
+        pA("junkApi_putConstString('], heap_base[');");
+        pA("junkApi_putStringDec('\\1', heap_base, 11, 1);");
+        pA("junkApi_putConstString('], heap_offset[');");
+        pA("junkApi_putStringDec('\\1', heap_offset, 11, 1);");
+        pA("junkApi_putConstString(']\\n');");
+}
