@@ -8,7 +8,8 @@ onbc_SOURCES = main.c \
                onbc.stack.c onbc.stack.h \
                onbc.label.c onbc.label.h \
                onbc.eoe.c onbc.eoe.h \
-               onbc.func.c onbc.func.h
+               onbc.func.c onbc.func.h \
+               onbc.int.c onbc.int.h
 
 LFLAGS = -Cf -8
 YFLAGS = -dv
