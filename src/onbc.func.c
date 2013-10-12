@@ -101,8 +101,7 @@ void __define_user_function_begin(const char* iden,
         strcpy(var->iden, "@stack_prev_frame");
         var->dim_len = 0;
         var->indirect_len = 0;
-        cur_initializer_type = TYPE_AUTO;
-        __new_var_initializer(var);
+        __new_var_initializer(var, TYPE_INT | TYPE_AUTO);
         local_varlist_set_scope_head();
 
         /* スタック上に格納された引数順序と対応した順序となるように、ローカル変数を作成していく。
@@ -117,8 +116,7 @@ void __define_user_function_begin(const char* iden,
                 strcpy(var->iden, iden);
                 var->dim_len = 0;
                 var->indirect_len = 0;
-                cur_initializer_type = TYPE_AUTO;
-                __new_var_initializer(var);
+                __new_var_initializer(var, TYPE_INT | TYPE_AUTO);
         }
 
         /* 現在の stack_frame に stack_head - (arglen + 1) をセットする。

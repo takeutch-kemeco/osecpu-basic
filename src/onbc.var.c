@@ -42,11 +42,6 @@ static int32_t local_varlist_head = 0;
 static int32_t local_varlist_scope[VARLIST_SCOPE_LEN] = {[0] = 0};
 static int32_t local_varlist_scope_head = 0;
 
-/* 現在の__new_var_initializer_{,local,global}()にて作成する型
- * new_var_initializer_{,local,global}()は、関数実行時点でのこの型のインスタンスを生成する
- */
-int32_t cur_initializer_type = 0;
-
 /* Varの内容を印字する
  * 主にデバッグ用
  */
@@ -338,7 +333,7 @@ void local_varlist_set_scope_head(void)
  * 1 : 実際の値 x[0] の格納位置
  * 0 : 変数読み書き時に参照する位置。 ここにx[0](または間接参照)へのアドレスが入る
  */
-static struct Var* __new_var_initializer_local(struct Var* var)
+static struct Var* __new_var_initializer_local(struct Var* var, const int32_t type)
 {
         if (local_varlist_search(var->iden) != NULL)
                yyerror("syntax err: 同名のローカル変数を重複して宣言しました");
@@ -353,7 +348,7 @@ static struct Var* __new_var_initializer_local(struct Var* var)
                     var->unit_len,
                     var->dim_len,
                     var->indirect_len,
-                    cur_initializer_type | TYPE_AUTO);
+                    type | TYPE_AUTO);
 
         struct Var* ret = local_varlist_search(var->iden);
         if (ret == NULL);
@@ -375,7 +370,7 @@ static struct Var* __new_var_initializer_local(struct Var* var)
 
 /* グローバル変数のインスタンス生成
  */
-static struct Var* __new_var_initializer_global(struct Var* var)
+static struct Var* __new_var_initializer_global(struct Var* var, const int32_t type)
 {
         if (global_varlist_search(var->iden) != NULL)
                 yyerror("syntax err: 同名のグローバル変数を重複して宣言しました");
@@ -390,7 +385,7 @@ static struct Var* __new_var_initializer_global(struct Var* var)
                     var->unit_len,
                     var->dim_len,
                     var->indirect_len,
-                    cur_initializer_type & (~TYPE_AUTO));
+                    type & (~TYPE_AUTO));
 
         struct Var* ret = global_varlist_search(var->iden);
         if (ret == NULL)
@@ -399,10 +394,21 @@ static struct Var* __new_var_initializer_global(struct Var* var)
         return ret;
 }
 
-struct Var* __new_var_initializer(struct Var* var)
+struct Var* __new_var_initializer(struct Var* var, int32_t type)
 {
-        if (var->type & TYPE_AUTO)
-                return __new_var_initializer_local(var);
+        /* スコープが 1 以上(ブロックに入ってる状態)であれば、
+         * デフォルトを TYPE_AUTO とする。
+         */
+        if (local_varlist_scope_head >= 1)
+                type |= TYPE_AUTO;
+
+        /* static または literal であれば TYPE_AUTO を外す
+         */
+        if ((type & TYPE_STATIC) || (type & TYPE_LITERAL))
+                type &= ~(TYPE_AUTO);
+
+        if (type & TYPE_AUTO)
+                return __new_var_initializer_local(var, type);
         else
-                return __new_var_initializer_global(var);
+                return __new_var_initializer_global(var, type);
 }

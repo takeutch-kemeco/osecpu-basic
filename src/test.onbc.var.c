@@ -53,16 +53,15 @@ test05()
         var->unit_len[2] = 30;
         var->dim_len = 3;
         var->indirect_len = 100;
-
-        cur_initializer_type = TYPE_FLOAT;
+        var->type = TYPE_FLOAT;
 
         puts("指定したスペック:");
         printf("var->iden[%s], var->dim_len[%d], "
                "var->unit_len[] = {10,20,30}, "
-               "var->indirect_len[%d], cur_initializer_type[%d]\n",
-               var->iden, var->dim_len, var->indirect_len, cur_initializer_type);
+               "var->indirect_len[%d], var->type[%d]\n",
+               var->iden, var->dim_len, var->indirect_len, var->type);
 
-        __new_var_initializer(var);
+        __new_var_initializer(var, var->type);
 
         puts("実際に作成されたスペック:");
         struct Var* dst = varlist_search(var->iden);
@@ -84,16 +83,15 @@ test06()
         var->unit_len[2] = 30;
         var->dim_len = 3;
         var->indirect_len = 100;
-
-        cur_initializer_type = TYPE_INT;
+        var->type = TYPE_INT;
 
         puts("指定したスペック:");
         printf("var->iden[%s], var->dim_len[%d], "
                "var->unit_len[] = {10,20,30}, "
-               "var->indirect_len[%d], cur_initializer_type[%d]\n",
-               var->iden, var->dim_len, var->indirect_len, cur_initializer_type);
+               "var->indirect_len[%d], var->type[%d]\n",
+               var->iden, var->dim_len, var->indirect_len, var->type);
 
-        __new_var_initializer(var);
+        __new_var_initializer(var, var->type);
 
         puts("実際に作成されたスペック:");
         struct Var* dst = varlist_search(var->iden);

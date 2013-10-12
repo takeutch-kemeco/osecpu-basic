@@ -135,6 +135,7 @@ void cast_regval(const char* register_name,
                 } else if (dst_var->type & TYPE_VOID) {
                         /* なにもしない */
                 } else {
+                        printf("dst->var->type[%d]\n", dst_var->type);
                         yyerror("system err: cast_regval(), variable type not found");
                 }
         }

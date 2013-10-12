@@ -1063,18 +1063,11 @@ constant
         : __INTEGER_CONSTANT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
-                sprintf(ec->iden, "@%d", $1);
+                sprintf(ec->var->iden, "@literal%d", $1);
 
-                strcpy(ec->var->iden, ec->iden);
                 ec->var->dim_len = 0;
                 ec->var->indirect_len = 0;
                 ec->var->type = TYPE_SIGNED | TYPE_INT | TYPE_LITERAL;
-
-                struct Var* tmp = global_varlist_search(ec->iden);
-                if (tmp == NULL)
-                        *(ec->var) = *(__new_var_initializer(ec->var));
-                else
-                        *(ec->var) = *tmp;
 
                 ec->var->const_variable = malloc(sizeof(int));
                 *((int*)(ec->var->const_variable)) = $1;
@@ -1084,18 +1077,11 @@ constant
         | __CHARACTER_CONSTANT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
-                sprintf(ec->iden, "@%d", $1);
+                sprintf(ec->var->iden, "@literal%d", $1);
 
-                strcpy(ec->var->iden, ec->iden);
                 ec->var->dim_len = 0;
                 ec->var->indirect_len = 0;
                 ec->var->type = TYPE_SIGNED | TYPE_CHAR | TYPE_LITERAL;
-
-                struct Var* tmp = global_varlist_search(ec->iden);
-                if (tmp == NULL)
-                        *(ec->var) = *(__new_var_initializer(ec->var));
-                else
-                        *(ec->var) = *tmp;
 
                 ec->var->const_variable = malloc(sizeof(int));
                 *((int*)(ec->var->const_variable)) = $1;
@@ -1105,18 +1091,11 @@ constant
         | __FLOATING_CONSTANT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
-                sprintf(ec->iden, "@%f", $1);
+                sprintf(ec->var->iden, "@literal%d", $1);
 
-                strcpy(ec->var->iden, ec->iden);
                 ec->var->dim_len = 0;
                 ec->var->indirect_len = 0;
                 ec->var->type = TYPE_FLOAT | TYPE_LITERAL;
-
-                struct Var* tmp = global_varlist_search(ec->iden);
-                if (tmp == NULL)
-                        *(ec->var) = *(__new_var_initializer(ec->var));
-                else
-                        *(ec->var) = *tmp;
 
                 double a;
                 double b = modf($1, &a);

@@ -28,6 +28,11 @@
 #include "onbc.acm.h"
 #include "onbc.ec.h"
 
+/* int a, b, c; 等、ノードを越えて型情報を共有したい場合に用いる一時変数。
+ * __new_var_initializer() の引数に用いることを想定。
+ */
+static int32_t cur_initializer_type = 0;
+
 /* 白紙のECインスタンスをメモリー領域を確保して生成
  */
 struct EC* new_ec(void)
@@ -107,6 +112,7 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_INIT_DECLARATOR) {
                 translate_ec(ec->child_ptr[0]);
                 *(ec->var) = *(ec->child_ptr[0]->var);
+                ec->var->type = cur_initializer_type;
 
                 if (ec->var->type & TYPE_AUTO)
                         pA("fixL = %d + stack_frame;", ec->var->base_ptr);
@@ -122,11 +128,11 @@ void translate_ec(struct EC* ec)
                 pop_stack_dummy();
         } else if (ec->type_expression == EC_DECLARATOR) {
                 if (ec->var->type & TYPE_FUNCTION) {
-                        cur_initializer_type |= TYPE_FUNCTION;
-                        cur_initializer_type &= ~(TYPE_AUTO);
+                        ec->var->type |= TYPE_FUNCTION;
+                        ec->var->type &= ~(TYPE_AUTO);
                 }
 
-                *(ec->var) = *(__new_var_initializer(ec->var));
+                *(ec->var) = *(__new_var_initializer(ec->var, ec->var->type));
 
                 if (ec->var->type & TYPE_FUNCTION) {
                         const int32_t func_label = cur_label_index_head++;
@@ -152,8 +158,8 @@ void translate_ec(struct EC* ec)
                 strcpy(var->iden, "@stack_prev_frame");
                 var->dim_len = 0;
                 var->indirect_len = 0;
-                cur_initializer_type = TYPE_AUTO;
-                __new_var_initializer(var);
+                var->type = TYPE_INT | TYPE_AUTO;
+                __new_var_initializer(var, var->type);
                 local_varlist_set_scope_head();
 
                 if (ec->child_len == 1)
@@ -167,8 +173,10 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_COMPOUND_STATEMENT) {
                 local_varlist_scope_push();   /* コンパイル時 */
 
-                translate_ec(ec->child_ptr[0]);
-                translate_ec(ec->child_ptr[1]);
+                if (ec->child_len == 2) {
+                        translate_ec(ec->child_ptr[0]);
+                        translate_ec(ec->child_ptr[1]);
+                }
 
                 local_varlist_scope_pop();    /* コンパイル時 */
         } else if (ec->type_expression == EC_LABELED_STATEMENT) {
@@ -436,11 +444,11 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_CONSTANT) {
                 pA("fixR = %d;", *((int*)(ec->var->const_variable)));
 
-                struct Var* tmp = varlist_search(ec->iden);
+                struct Var* tmp = global_varlist_search(ec->var->iden);
                 if (tmp == NULL)
-                        yyerror("system err: const variable");
-
-                *(ec->var) = *tmp;
+                        *(ec->var) = *(__new_var_initializer(ec->var, ec->var->type));
+                else
+                        *(ec->var) = *tmp;
 
                 pA("fixL = %d;", ec->var->base_ptr);
                 write_mem("fixR", "fixL");

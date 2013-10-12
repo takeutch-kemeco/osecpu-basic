@@ -53,8 +53,6 @@ struct Var {
         void* const_variable;   /* 変数が定数の場合の値 */
 };
 
-extern int32_t cur_initializer_type;
-
 void var_print(struct Var* var);
 struct Var* var_set_param(struct Var* var,
                           const char* iden,
@@ -74,6 +72,6 @@ struct Var* global_varlist_search(const char* iden);
 struct Var* local_varlist_search(const char* iden);
 struct Var* varlist_search(const char* iden);
 void local_varlist_set_scope_head(void);
-struct Var* __new_var_initializer(struct Var* var);
+struct Var* __new_var_initializer(struct Var* var, const int32_t type);
 
 #endif /* __ONBC_VAR_H__ */
