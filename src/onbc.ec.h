@@ -93,7 +93,6 @@
  * child_len: child_ptr[] に登録されている枝の数
  */
 struct EC {
-        char iden[IDENLIST_STR_LEN];
         struct Var* var;
         uint32_t type_operator;
         uint32_t type_expression;
