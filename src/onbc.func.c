@@ -92,7 +92,7 @@ void __define_user_function_begin(const char* iden,
 
         /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時）
          */
-        varlist_scope_push();
+        local_varlist_scope_push();
 
         /* ローカル変数として @stack_prev_frame を作成し、
          * その後、それのオフセットに 0 をセットする（コンパイル時）
@@ -102,8 +102,8 @@ void __define_user_function_begin(const char* iden,
         var->dim_len = 0;
         var->indirect_len = 0;
         cur_initializer_type = TYPE_AUTO;
-        __new_var_initializer_local(var);
-        varlist_set_scope_head();
+        __new_var_initializer(var);
+        local_varlist_set_scope_head();
 
         /* スタック上に格納された引数順序と対応した順序となるように、ローカル変数を作成していく。
          * （作成したローカル変数へ値を代入する手間が省ける）
@@ -118,7 +118,7 @@ void __define_user_function_begin(const char* iden,
                 var->dim_len = 0;
                 var->indirect_len = 0;
                 cur_initializer_type = TYPE_AUTO;
-                __new_var_initializer_local(var);
+                __new_var_initializer(var);
         }
 
         /* 現在の stack_frame に stack_head - (arglen + 1) をセットする。
@@ -182,7 +182,7 @@ void __define_user_function_end(const int32_t skip_label)
 
         /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
          */
-        varlist_scope_pop();
+        local_varlist_scope_pop();
 
         /* 通常フロー中では、この関数定義を読み飛ばし、ここへとジャンプしてくる前提
          * また、この skip_label の値は、

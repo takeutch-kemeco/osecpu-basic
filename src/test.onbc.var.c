@@ -19,24 +19,24 @@ test01()
 
 test02()
 {
-        puts("varlist_scope_{push,pop}()のスタックアンダーフローエラーのテスト");
+        puts("local_varlist_scope_{push,pop}()のスタックアンダーフローエラーのテスト");
 
         int32_t i;
         const int32_t len = 0x1000 - 1;
         for (i = 0; i < len; i++) {
-                varlist_scope_push();
+                local_varlist_scope_push();
         }
-        printf("varlist_scope_push() * %d ... compleate\n", len);
+        printf("local_varlist_scope_push() * %d ... compleate\n", len);
 
         for (i = 0; i < len; i++) {
-                varlist_scope_pop();
+                local_varlist_scope_pop();
         }
-        printf("varlist_scope_pop() * %d ... compleate\n", len);
+        printf("local_varlist_scope_pop() * %d ... compleate\n", len);
 
 #if 0
-        varlist_scope_pop();
-        puts("varlist_scope_pop()でわざとエラーを生じさせる。エラーが表示されれば正常");
-        varlist_scope_pop();
+        local_varlist_scope_pop();
+        puts("local_varlist_scope_pop()でわざとエラーを生じさせる。エラーが表示されれば正常");
+        local_varlist_scope_pop();
 #endif
 
         putchar('\n');
@@ -44,7 +44,7 @@ test02()
 
 test05()
 {
-        puts("__new_var_initializer_global()で、指定したスペックのグローバル変数が作成されるかのテスト");
+        puts("__new_var_initializer()で、指定したスペックのグローバル変数が作成されるかのテスト");
 
         struct Var* var = new_var();
         strcpy(var->iden, "global_float_x");
@@ -62,7 +62,7 @@ test05()
                "var->indirect_len[%d], cur_initializer_type[%d]\n",
                var->iden, var->dim_len, var->indirect_len, cur_initializer_type);
 
-        __new_var_initializer_global(var);
+        __new_var_initializer(var);
 
         puts("実際に作成されたスペック:");
         struct Var* dst = varlist_search(var->iden);
@@ -75,7 +75,7 @@ test05()
 
 test06()
 {
-        puts("__new_var_initializer_local()で、指定したスペックのローカル変数が作成されるかのテスト");
+        puts("__new_var_initializer()で、指定したスペックのローカル変数が作成されるかのテスト");
 
         struct Var* var = new_var();
         strcpy(var->iden, "local_int_x");
@@ -93,7 +93,7 @@ test06()
                "var->indirect_len[%d], cur_initializer_type[%d]\n",
                var->iden, var->dim_len, var->indirect_len, cur_initializer_type);
 
-        __new_var_initializer_local(var);
+        __new_var_initializer(var);
 
         puts("実際に作成されたスペック:");
         struct Var* dst = varlist_search(var->iden);

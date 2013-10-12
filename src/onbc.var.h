@@ -56,17 +56,24 @@ struct Var {
 extern int32_t cur_initializer_type;
 
 void var_print(struct Var* var);
+struct Var* var_set_param(struct Var* var,
+                          const char* iden,
+                          const int32_t base_ptr,
+                          int32_t* unit_len,
+                          const int32_t dim_len,
+                          const int32_t total_len,
+                          const int32_t indirect_len,
+                          const int32_t type,
+                          const int32_t is_lvalue,
+                          void* const_valiable);
 struct Var* new_var(void);
 void var_pop_stack(struct Var* var, const char* register_name);
-void varlist_scope_push(void);
-void varlist_scope_pop(void);
-struct Var* varlist_search_common(const char* iden, const int32_t varlist_bottom);
-struct Var* varlist_search_global(const char* iden);
-struct Var* varlist_search_local(const char* iden);
+void local_varlist_scope_push(void);
+void local_varlist_scope_pop(void);
+struct Var* global_varlist_search(const char* iden);
+struct Var* local_varlist_search(const char* iden);
 struct Var* varlist_search(const char* iden);
-void varlist_set_scope_head(void);
-struct Var* __new_var_initializer_local(struct Var* var);
-struct Var* __new_var_initializer_global(struct Var* var);
+void local_varlist_set_scope_head(void);
 struct Var* __new_var_initializer(struct Var* var);
 
 #endif /* __ONBC_VAR_H__ */

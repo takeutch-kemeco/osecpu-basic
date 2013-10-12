@@ -92,7 +92,7 @@ void translate_ec(struct EC* ec)
 
                 /* スコープ復帰位置をポップし、ローカルスコープから一段復帰する（コンパイル時）
                  */
-                varlist_scope_pop();
+                local_varlist_scope_pop();
 
                 pA("LB(0, %d);", skip_label);
         } else if (ec->type_expression == EC_DECLARATION) {
@@ -136,7 +136,7 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_PARAMETER_TYPE_LIST) {
                 /* スコープ復帰位置をプッシュし、一段深いローカルスコープの開始（コンパイル時）
                  */
-                varlist_scope_push();
+                local_varlist_scope_push();
 
                 /* ローカル変数として @stack_prev_frame を作成し、
                  * その後、それのオフセットに 0 をセットする（コンパイル時）
@@ -146,8 +146,8 @@ void translate_ec(struct EC* ec)
                 var->dim_len = 0;
                 var->indirect_len = 0;
                 cur_initializer_type = TYPE_AUTO;
-                __new_var_initializer_local(var);
-                varlist_set_scope_head();
+                __new_var_initializer(var);
+                local_varlist_set_scope_head();
 
                 if (ec->child_len == 1)
                         translate_ec(ec->child_ptr[0]);
@@ -158,12 +158,12 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_COMPOUND_STATEMENT) {
-                varlist_scope_push();   /* コンパイル時 */
+                local_varlist_scope_push();   /* コンパイル時 */
 
                 translate_ec(ec->child_ptr[0]);
                 translate_ec(ec->child_ptr[1]);
 
-                varlist_scope_pop();    /* コンパイル時 */
+                local_varlist_scope_pop();    /* コンパイル時 */
         } else if (ec->type_expression == EC_LABELED_STATEMENT) {
                 pA("LB(1, %d);", labellist_search(ec->var->iden));
         } else if (ec->type_expression == EC_EXPRESSION_STATEMENT) {
@@ -408,7 +408,7 @@ void translate_ec(struct EC* ec)
                         pA("stack_frame = stack_head;");
                         push_stack("stack_socket");
 
-                        struct Var* var = varlist_search_global(ec->var->iden);
+                        struct Var* var = global_varlist_search(ec->var->iden);
                         if (var == NULL)
                                 yyerror("syntax err: 未定義の関数を呼び出そうとしました");
 
