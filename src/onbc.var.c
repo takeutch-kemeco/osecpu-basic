@@ -210,8 +210,14 @@ static void varlist_add(const char* iden,
                 total_len *= unit_len[i];
         }
 
+        if (varlist_head == 0) {
+                cur->base_ptr = 0;
+        } else {
+                /* 最後の +1 は、スタック変数において参照先アドレスに保存用に用いる */
+                cur->base_ptr = prev->base_ptr + prev->total_len + 1;
+        }
+
         strcpy(cur->iden, iden);
-        cur->base_ptr = (varlist_head == 0) ? 0 : prev->base_ptr + prev->total_len;
         cur->total_len = total_len;
         cur->dim_len = dim_len;
         cur->indirect_len = indirect_len;
@@ -249,6 +255,12 @@ void varlist_set_scope_head(void)
  */
 
 /* ローカル変数のインスタンス生成
+ *
+ * ローカル変数の、スタック上でのメモリーイメージ:
+ * 3 : ↑
+ * 2 : 実際の値 x[1] の格納位置
+ * 1 : 実際の値 x[0] の格納位置
+ * 0 : 変数読み書き時に参照する位置。 ここにx[0](または間接参照)へのアドレスが入る
  */
 struct Var* __new_var_initializer_local(struct Var* var)
 {
@@ -268,10 +280,19 @@ struct Var* __new_var_initializer_local(struct Var* var)
         if (var == NULL)
                yyerror("syntax err: 同名のローカル変数を重複して宣言しました");
 
-        /* 実際の動作時にメモリー確保するルーチンはこちら側
+        if ((var->type & TYPE_AUTO) == 0)
+               yyerror("system err: __new_var_initializer_local(), var->type");
+
+        /* 現在のstack_headを変数への間接参照アドレスの格納位置とし、
+         * ここへ stack_head + 1 のアドレスをセットする
          */
-        if (var->type & TYPE_AUTO)
-                pA("stack_head += %d;", var->total_len);
+        pA("stack_socket = stack_head + 1");
+        write_mem("stack_socket", "stack_head");
+
+        /* スタック変数の為のメモリー領域確保を、その分だけスタックを進めることで行う。
+         * +1 はスタック変数において参照先アドレスの保存用に用いた分。
+         */
+        pA("stack_head += %d;", var->total_len + 1);
 
         return var;
 }
@@ -295,6 +316,9 @@ struct Var* __new_var_initializer_global(struct Var* var)
         var = varlist_search_global(var->iden);
         if (var == NULL)
                 yyerror("syntax err: 同名のグローバル変数を重複して宣言しました");
+
+        if (var->type & TYPE_AUTO)
+               yyerror("system err: __new_var_initializer_global(), var->type");
 
         return var;
 }

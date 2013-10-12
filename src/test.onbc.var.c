@@ -106,7 +106,7 @@ test06()
 
 FILE* yyaskA;
 int32_t linenumber = 0;
-char filepath[] = "empty";
+char filepath[] = "/dev/null";
 
 int main(int argc, char** argv)
 {
