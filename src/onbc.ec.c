@@ -64,6 +64,7 @@ void translate_ec(struct EC* ec)
             (ec->type_expression != EC_DECLARATION) &&
             (ec->type_expression != EC_DIRECT_DECLARATOR) &&
             (ec->type_expression != EC_FUNCTION_DEFINITION) &&
+            (ec->type_expression != EC_INIT_DECLARATOR) &&
             (ec->type_expression != EC_DECLARATOR) &&
             (ec->type_expression != EC_PARAMETER_TYPE_LIST)) {
                 int32_t i;
@@ -104,14 +105,20 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_INIT_DECLARATOR_LIST) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_INIT_DECLARATOR) {
-                pA("fixL = %d;", ec->child_ptr[0]->var->base_ptr);
-                pop_stack("fixR");
+                translate_ec(ec->child_ptr[0]);
+                *(ec->var) = *(ec->child_ptr[0]->var);
+
+                if (ec->var->type & TYPE_AUTO)
+                        pA("fixL = %d + stack_frame;", ec->var->base_ptr);
+                else
+                        pA("fixL = %d;", ec->var->base_ptr);
 
                 push_stack("fixL");
-                push_stack("fixR");
 
-                ec->child_ptr[0]->var->is_lvalue = 1;
-                *(ec->var) = *(__var_func_assignment_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var));
+                translate_ec(ec->child_ptr[1]);
+
+                ec->var->is_lvalue = 1;
+                *(ec->var) = *(__var_func_assignment_new(ec->var, ec->child_ptr[1]->var));
                 pop_stack_dummy();
         } else if (ec->type_expression == EC_DECLARATOR) {
                 if (ec->var->type & TYPE_FUNCTION) {
@@ -119,7 +126,7 @@ void translate_ec(struct EC* ec)
                         cur_initializer_type &= ~(TYPE_AUTO);
                 }
 
-                __new_var_initializer(ec->var);
+                *(ec->var) = *(__new_var_initializer(ec->var));
 
                 if (ec->var->type & TYPE_FUNCTION) {
                         const int32_t func_label = cur_label_index_head++;
