@@ -31,7 +31,7 @@
 /* int a, b, c; 等、ノードを越えて型情報を共有したい場合に用いる一時変数。
  * __new_var_initializer() の引数に用いることを想定。
  */
-static int32_t cur_initializer_type = 0;
+static int32_t cur_declaration_specifiers = 0;
 
 /* 白紙のECインスタンスをメモリー領域を確保して生成
  */
@@ -70,6 +70,7 @@ void translate_ec(struct EC* ec)
             (ec->type_expression != EC_DECLARATION) &&
             (ec->type_expression != EC_DIRECT_DECLARATOR) &&
             (ec->type_expression != EC_FUNCTION_DEFINITION) &&
+            (ec->type_expression != EC_PARAMETER_DECLARATION) &&
             (ec->type_expression != EC_INIT_DECLARATOR) &&
             (ec->type_expression != EC_DECLARATOR) &&
             (ec->type_expression != EC_PARAMETER_TYPE_LIST)) {
@@ -89,6 +90,8 @@ void translate_ec(struct EC* ec)
                 translate_ec(ec->child_ptr[0]); /* 関数識別子、および引数 */
                 translate_ec(ec->child_ptr[1]); /* 関数のステートメント部 */
 
+                cur_declaration_specifiers = ec->var->type; /* 戻り値の型 */
+
                 /* 現在の関数からのリターン
                  * プログラムフローがこの位置へ至る状態は、関数内でreturnが実行されなかった場合。
                  * しかし、関数は expression なので、終了後に"必ず"スタックが +1 された状態でなければならないので、
@@ -103,7 +106,7 @@ void translate_ec(struct EC* ec)
 
                 pA("LB(0, %d);", skip_label);
         } else if (ec->type_expression == EC_DECLARATION) {
-                cur_initializer_type = ec->var->type;
+                cur_declaration_specifiers = ec->var->type; /* 子ノードの型 */
                 translate_ec(ec->child_ptr[0]);
                 *(ec->var) = *(ec->child_ptr[0]->var);
         } else if (ec->type_expression == EC_DECLARATION_LIST) {
@@ -113,7 +116,6 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_INIT_DECLARATOR) {
                 translate_ec(ec->child_ptr[0]);
                 *(ec->var) = *(ec->child_ptr[0]->var);
-                ec->var->type = cur_initializer_type;
 
                 if (ec->var->type & TYPE_AUTO)
                         pA("fixL = %d + stack_frame;", ec->var->base_ptr);
@@ -128,12 +130,10 @@ void translate_ec(struct EC* ec)
                 *(ec->var) = *(__var_func_assignment_new(ec->var, ec->child_ptr[1]->var));
                 pop_stack_dummy();
         } else if (ec->type_expression == EC_DECLARATOR) {
-                if (ec->var->type & TYPE_FUNCTION) {
-                        ec->var->type |= TYPE_FUNCTION;
-                        ec->var->type &= ~(TYPE_AUTO);
-                }
+                if (ec->var->type & TYPE_FUNCTION)
+                        cur_declaration_specifiers |= TYPE_FUNCTION;
 
-                *(ec->var) = *(__new_var_initializer(ec->var, ec->var->type));
+                *(ec->var) = *(__new_var_initializer(ec->var, cur_declaration_specifiers));
 
                 if (ec->var->type & TYPE_FUNCTION) {
                         const int32_t func_label = cur_label_index_head++;
@@ -159,8 +159,7 @@ void translate_ec(struct EC* ec)
                 strcpy(var->iden, "@stack_prev_frame");
                 var->dim_len = 0;
                 var->indirect_len = 0;
-                var->type = TYPE_INT | TYPE_AUTO;
-                __new_var_initializer(var, var->type);
+                *(var) = *(__new_var_initializer(var, TYPE_INT | TYPE_AUTO));
                 local_varlist_set_scope_head();
 
                 if (ec->child_len == 1)
@@ -168,7 +167,9 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_PARAMETER_LIST) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_PARAMETER_DECLARATION) {
-                /* 何もしない */
+                cur_declaration_specifiers = ec->var->type;
+                translate_ec(ec->child_ptr[0]);
+                *(ec->var) = *(ec->child_ptr[0]->var);
         } else if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_COMPOUND_STATEMENT) {

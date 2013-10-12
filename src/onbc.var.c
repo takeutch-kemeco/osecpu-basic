@@ -402,9 +402,9 @@ struct Var* __new_var_initializer(struct Var* var, int32_t type)
         if (local_varlist_scope_head >= 1)
                 type |= TYPE_AUTO;
 
-        /* static または literal であれば TYPE_AUTO を外す
+        /* static | literal | function であれば TYPE_AUTO を外す
          */
-        if ((type & TYPE_STATIC) || (type & TYPE_LITERAL))
+        if ((type & TYPE_STATIC) || (type & TYPE_LITERAL) || (type & TYPE_FUNCTION))
                 type &= ~(TYPE_AUTO);
 
         if (type & TYPE_AUTO)
