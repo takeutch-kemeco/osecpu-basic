@@ -344,8 +344,10 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
                         struct Var* tmp = varlist_search(ec->var->iden);
-                        if (tmp == NULL)
+                        if (tmp == NULL) {
+                                printf("[%s]\n", ec->var->iden);
                                 yyerror("syntax err: 未定義の変数を参照しようとしました");
+                        }
 
                         *(ec->var) = *tmp;
 

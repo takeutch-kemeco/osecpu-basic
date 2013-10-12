@@ -357,7 +357,7 @@ static struct Var* __new_var_initializer_local(struct Var* var, const int32_t ty
         /* 現在のstack_headを変数への間接参照アドレスの格納位置とし、
          * ここへ stack_head + 1 のアドレスをセットする
          */
-        pA("stack_socket = stack_head + 1");
+        pA("stack_socket = stack_head + 1;");
         write_mem("stack_socket", "stack_head");
 
         /* スタック変数の為のメモリー領域確保を、その分だけスタックを進めることで行う。
