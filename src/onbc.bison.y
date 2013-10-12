@@ -987,7 +987,7 @@ primary_expression
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_PRIMARY;
                 ec->type_operator = EC_OPE_VARIABLE;
-                strcpy(ec->iden, $1);
+                strcpy(ec->var->iden, $1);
                 ec->child_len = 0;
                 $$ = ec;
         }
