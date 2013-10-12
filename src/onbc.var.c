@@ -351,7 +351,7 @@ static struct Var* __new_var_initializer_local(struct Var* var, const int32_t ty
                     type | TYPE_AUTO);
 
         struct Var* ret = local_varlist_search(var->iden);
-        if (ret == NULL);
+        if (ret == NULL)
                 yyerror("system err: ローカル変数の作成に失敗しました");
 
         /* 現在のstack_headを変数への間接参照アドレスの格納位置とし、
