@@ -1044,7 +1044,8 @@ inline_assembler_statement
                 ec->type_operator = EC_OPE_ASM_SUBST_VTOR;
                 ec->child_ptr[0] = $5;
                 ec->child_len = 1;
-                strcpy(ec->iden, $3);
+                ec->var->const_variable = malloc(strlen($3) + 1);
+                strcpy(ec->var->const_variable, $3);
                 $$ = ec;
         }
         | __STATE_ASM __LB unary_expression __OPE_SUBST string __RB __DECL_END {
@@ -1054,7 +1055,7 @@ inline_assembler_statement
                 ec->child_ptr[0] = $3;
                 ec->child_len = 1;
                 ec->var->const_variable = malloc(strlen($5) + 1);
-                strcpy(ec->iden, $5);
+                strcpy(ec->var->const_variable, $5);
                 $$ = ec;
         }
         ;

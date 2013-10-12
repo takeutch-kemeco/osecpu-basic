@@ -66,6 +66,7 @@ void translate_ec(struct EC* ec)
             (ec->type_expression != EC_COMPOUND_STATEMENT) &&
             (ec->type_expression != EC_SELECTION_STATEMENT) &&
             (ec->type_expression != EC_ITERATION_STATEMENT) &&
+            (ec->type_expression != EC_INLINE_ASSEMBLER_STATEMENT) &&
             (ec->type_expression != EC_DECLARATION) &&
             (ec->type_expression != EC_DIRECT_DECLARATOR) &&
             (ec->type_expression != EC_FUNCTION_DEFINITION) &&
@@ -275,11 +276,13 @@ void translate_ec(struct EC* ec)
                 if (ec->type_operator == EC_OPE_ASM_STATEMENT) {
                         pA("%s", (char*)ec->var->const_variable);
                 } else if (ec->type_operator == EC_OPE_ASM_SUBST_VTOR) {
-                        var_pop_stack(ec->child_ptr[0]->var, ec->iden);
+                        translate_ec(ec->child_ptr[0]);
+                        var_pop_stack(ec->child_ptr[0]->var, (char*)ec->var->const_variable);
                 } else if (ec->type_operator == EC_OPE_ASM_SUBST_RTOV) {
+                        translate_ec(ec->child_ptr[0]);
                         if (ec->child_ptr[0]->var->is_lvalue) {
                                 pop_stack("stack_socket");
-                                write_mem(ec->iden, "stack_socket");
+                                write_mem((char*)ec->var->const_variable, "stack_socket");
                         } else {
                                 yyerror("syntax err: 有効な左辺値ではありません");
                         }
