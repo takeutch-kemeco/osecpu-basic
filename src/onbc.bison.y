@@ -1092,7 +1092,7 @@ constant
         | __FLOATING_CONSTANT {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CONSTANT;
-                sprintf(ec->var->iden, "@literal%d", $1);
+                sprintf(ec->var->iden, "@literal%20.20f", $1);
 
                 ec->var->dim_len = 0;
                 ec->var->indirect_len = 0;
