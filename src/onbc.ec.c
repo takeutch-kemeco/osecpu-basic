@@ -73,7 +73,8 @@ void translate_ec(struct EC* ec)
             (ec->type_expression != EC_PARAMETER_DECLARATION) &&
             (ec->type_expression != EC_INIT_DECLARATOR) &&
             (ec->type_expression != EC_DECLARATOR) &&
-            (ec->type_expression != EC_PARAMETER_TYPE_LIST)) {
+            (ec->type_expression != EC_PARAMETER_TYPE_LIST) &&
+            (ec->type_expression != EC_ARGUMENT_EXPRESSION_LIST)) {
                 int32_t i;
                 for (i = 0; i < ec->child_len; i++) {
                         translate_ec(ec->child_ptr[i]);
@@ -446,7 +447,23 @@ void translate_ec(struct EC* ec)
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
         } else if (ec->type_expression == EC_ARGUMENT_EXPRESSION_LIST) {
-                /* 何もしない */
+                if (ec->child_len >= 1) {
+                        translate_ec(ec->child_ptr[0]);
+
+                        /* 引数が左辺値であれば右辺値へと変更してスタックへ積み直す
+                         */
+                        if (ec->child_ptr[0]->var->is_lvalue) {
+                                pop_stack("fixR");
+                                read_mem("fixL", "fixR");
+                                push_stack("fixL");
+
+                                ec->child_ptr[0]->var->is_lvalue = 0;
+                        }
+                }
+
+                if (ec->child_len == 2)
+                        translate_ec(ec->child_ptr[1]);
+
         } else if (ec->type_expression == EC_CONSTANT) {
                 pA("fixR = %d;", *((int*)(ec->var->const_variable)));
 
