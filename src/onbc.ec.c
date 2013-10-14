@@ -171,6 +171,13 @@ void translate_ec(struct EC* ec)
                 cur_declaration_specifiers = ec->var->type;
                 translate_ec(ec->child_ptr[0]);
                 *(ec->var) = *(ec->child_ptr[0]->var);
+
+#ifdef DEBUG_EC_PARAMETER_DECLARATION
+                pA_mes("after EC_PARAMETER_DECLARATION, ");
+                pA_reg("stack_head");
+                pA_reg("stack_frame");
+                debug_stack_frame();
+#endif /* DEBUG_EC_PARAMETER_DECLARATION */
         } else if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_COMPOUND_STATEMENT) {
@@ -423,6 +430,13 @@ void translate_ec(struct EC* ec)
 
                         ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_FUNCTION) {
+#ifdef DEBUG_EC_OPE_FUNCTION
+                        pA_mes("before OPE_FUNCTION, ");
+                        pA_reg("stack_frame");
+                        pA_reg("stack_head");
+                        debug_stack_frame();
+#endif /* DEBUG_EC_OPE_FUNCTION */
+
                         /* 現在の stack_frame をプッシュする。
                          * そして、ここには関数終了後にはリターン値が入った状態となる。
                          */
@@ -443,6 +457,13 @@ void translate_ec(struct EC* ec)
 
                         pA("PLIMM(P3F, %d);", var->base_ptr);
                         pA("LB(1, %d);", return_label);
+
+#ifdef DEBUG_EC_OPE_FUNCTION
+                        pA_mes("after OPE_FUNCTION, ");
+                        pA_reg("stack_frame");
+                        pA_reg("stack_head");
+                        debug_stack_frame();
+#endif /* DEBUG_EC_OPE_FUNCTION */
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
                 }
@@ -458,6 +479,15 @@ void translate_ec(struct EC* ec)
                                 push_stack("fixL");
 
                                 ec->child_ptr[0]->var->is_lvalue = 0;
+
+#ifdef DEBUG_EC_ARGUMENT_EXPRESSION_LIST
+                                pA_mes("after EC_ARGUMENT_EXPRESSION_LIST, ");
+                                pA_reg("fixR");
+                                pA_reg("fixL");
+                                pA_reg("stack_frame");
+                                pA_reg("stack_head");
+                                debug_stack_frame();
+#endif /* DEBUG_EC_ARGUMENT_EXPRESSION_LIST */
                         }
                 }
 
