@@ -127,7 +127,15 @@ void pA_nl(const char* fmt, ...)
         va_end(ap);
 }
 
-/* レジスターの内容を実行時にコンソールへ印字する命令を yyaskAへ書き出す
+/* 実行時に文字列をコンソールへ印字する命令を yyaskA へ書き出す
+ * 主にデバッグ用
+ */
+void pA_mes(const char* str)
+{
+        pA("junkApi_putConstString('%s');", str);
+}
+
+/* レジスターの内容を実行時にコンソールへ印字する命令を yyaskA へ書き出す
  * 主にデバッグ用
  */
 void pA_reg(const char* register_name)
