@@ -91,11 +91,28 @@ void init_stack(void)
  */
 void debug_stack(void)
 {
-        pA("junkApi_putConstString('stack_socket[');");
-        pA("junkApi_putStringDec('\\1', stack_socket, 11, 1);");
-        pA("junkApi_putConstString('], stack_head[');");
-        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
-        pA("junkApi_putConstString('], stack_frame[');");
-        pA("junkApi_putStringDec('\\1', stack_frame, 11, 1);");
-        pA("junkApi_putConstString(']\\n');");
+        pA_reg("stack_socket");
+        pA_reg("stack_head");
+        pA_reg("stack_frame");
+}
+
+/* スタックフレームから10個分の内容を、実行時に画面に印字する
+ * 主にデバッグ用
+ * fixA1, fixA2の値を破壊するので注意
+ */
+void debug_stack_frame(void)
+{
+        pA("junkApi_putConstString('debug_stack_frame:');");
+
+        int32_t i;
+        for (i = 0; i < 10; i++) {
+                pA("fixA1 = stack_frame + %d;", i);
+                read_mem("fixA2", "fixA1");
+
+                pA("junkApi_putConstString('[');");
+                pA("junkApi_putStringDec('\\1', fixA2, 11, 1);");
+                pA("junkApi_putConstString(']');");
+        }
+
+        pA("junkApi_putConstString('\\n');");
 }
