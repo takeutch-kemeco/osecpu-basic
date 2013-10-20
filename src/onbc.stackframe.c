@@ -18,13 +18,12 @@
 
 #include "onbc.print.h"
 #include "onbc.mem.h"
+#include "onbc.stackframe.h"
 
 /* スタックフレームポインターの単純なプッシュ・ポップのみを提供する。
  * すなわち、スタックフレームの位置をプッシュ・ポップするためだけの、専用のスタック。
  * 実際には mem の STACKFRAME_BEGIN_ADDRESS 以降のメモリー領域を用いる。
  */
-
-#define STACKFRAME_BEGIN_ADDRESS (MEM_SIZE - 0x10000)
 
 /* 古いスタックフレームをプッシュし、任意のレジスターの値によって現在のスタックフレームを更新する
  */
@@ -63,9 +62,34 @@ void pop_stackframe(void)
  */
 void init_stackframe(void)
 {
-        pA("SInt32 stack_frame_head:R15;");
+        pA("SInt32 stack_frame_stack_head:R15;");
         pA("SInt32 stack_frame:R02;");
 
+        pA("SInt32 stack_frame_debug_tmp:R22;");
+
         pA("stack_frame_stack_head = %d;", STACKFRAME_BEGIN_ADDRESS);
-        pA("stack_frame = stack_head;");
+        pA("stack_frame = %d;", STACK_BEGIN_ADDRESS); /* 初期値はstack_headの初期値と同じ */
+}
+
+/* スタックフレームから n 個分の内容を、実行時に画面に印字する
+ * 主にデバッグ用
+ */
+void debug_stackframe(const int32_t n)
+{
+        pA_mes("debug_stack_frame: {");
+        pA_mes("\\n");
+
+        int32_t i;
+        for (i = 0; i < n; i++) {
+                pA("stack_frame_debug_tmp = stack_frame + %d;", i);
+                pA_reg_noname("stack_frame_debug_tmp");
+
+                read_mem("stack_frame_debug_tmp", "stack_frame_debug_tmp");
+                pA_reg_noname("stack_frame_debug_tmp");
+
+                pA_mes("\\n");
+        }
+
+        pA_mes("}");
+        pA_mes("\\n");
 }

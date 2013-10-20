@@ -23,6 +23,7 @@
 #include "onbc.print.h"
 #include "onbc.mem.h"
 #include "onbc.stack.h"
+#include "onbc.stackframe.h"
 #include "onbc.var.h"
 #include "onbc.label.h"
 #include "onbc.acm.h"
@@ -179,7 +180,7 @@ void translate_ec(struct EC* ec)
                 pA_mes("\\n");
                 pA_reg("stack_frame");
                 pA_mes("\\n");
-                debug_stack_frame(16);
+                debug_stackframe(16);
 #endif /* DEBUG_EC_PARAMETER_DECLARATION */
         } else if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
@@ -440,7 +441,7 @@ void translate_ec(struct EC* ec)
                         pA_mes("\\n");
                         pA_reg("stack_head");
                         pA_mes("\\n");
-                        debug_stack_frame(16);
+                        debug_stackframe(16);
 #endif /* DEBUG_EC_OPE_FUNCTION */
 
                         /* 現在の stack_frame をプッシュする。
@@ -471,7 +472,7 @@ void translate_ec(struct EC* ec)
                         pA_mes("\\n");
                         pA_reg("stack_head");
                         pA_mes("\\n");
-                        debug_stack_frame(16);
+                        debug_stackframe(16);
 #endif /* DEBUG_EC_OPE_FUNCTION */
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
@@ -500,7 +501,7 @@ void translate_ec(struct EC* ec)
                                 pA_mes("\\n");
                                 pA_reg("stack_head");
                                 pA_mes("\\n");
-                                debug_stack_frame(16);
+                                debug_stackframe(16);
 #endif /* DEBUG_EC_ARGUMENT_EXPRESSION_LIST */
                         }
                 }

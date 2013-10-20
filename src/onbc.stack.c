@@ -18,13 +18,12 @@
 
 #include "onbc.print.h"
 #include "onbc.mem.h"
+#include "onbc.stack.h"
 
 /* スタック構造関連
  * これはプッシュ・ポップだけの単純なスタック構造を提供する。
  * 実際には mem の STACK_BEGIN_ADDRESS 以降のメモリー領域を用いる。
  */
-
-#define STACK_BEGIN_ADDRESS (MEM_SIZE - 0x200000)
 
 /* 任意のレジスターの値をスタックにプッシュする。
  * 事前に stack_socket に値をセットせずに、ダイレクトで指定できるので、ソースが小さくなる
@@ -79,13 +78,9 @@ void pop_stack_dummy(void)
 void init_stack(void)
 {
         pA("SInt32 stack_head:R01;");
-        pA("SInt32 stack_frame:R02;");
         pA("SInt32 stack_socket:R03;");
 
-        pA("SInt32 stack_debug_tmp:R22;");
-
         pA("stack_head = %d;", STACK_BEGIN_ADDRESS);
-        pA("stack_frame = %d;", STACK_BEGIN_ADDRESS);
 }
 
 /* スタック関連の各種レジスターの値を、実行時に画面に印字する
@@ -99,31 +94,5 @@ void debug_stack(void)
         pA_mes(", ");
 
         pA_reg("stack_head");
-        pA_mes(", ");
-
-        pA_reg("stack_frame");
-        pA_mes("\\n");
-}
-
-/* スタックフレームから n 個分の内容を、実行時に画面に印字する
- * 主にデバッグ用
- */
-void debug_stack_frame(const int32_t n)
-{
-        pA_mes("debug_stack_frame: {");
-        pA_mes("\\n");
-
-        int32_t i;
-        for (i = 0; i < n; i++) {
-                pA("stack_debug_tmp = stack_frame + %d;", i);
-                pA_reg_noname("stack_debug_tmp");
-
-                read_mem("stack_debug_tmp", "stack_debug_tmp");
-                pA_reg_noname("stack_debug_tmp");
-
-                pA_mes("\\n");
-        }
-
-        pA_mes("}");
         pA_mes("\\n");
 }

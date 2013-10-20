@@ -27,6 +27,9 @@
 #include <math.h>
 #include "onbc.print.h"
 #include "onbc.iden.h"
+#include "onbc.mem.h"
+#include "onbc.stack.h"
+#include "onbc.stackframe.h"
 #include "onbc.var.h"
 #include "onbc.label.h"
 #include "onbc.eoe.h"
@@ -51,6 +54,7 @@ void init_all(void)
         init_mem();
         init_heap();
         init_stack();
+        init_stackframe();
         init_labelstack();
         init_eoe_arg();
 }
