@@ -12,6 +12,7 @@ libonbc_la_SOURCES = onbc.print.c onbc.print.h \
                      onbc.var.c onbc.var.h \
                      onbc.mem.c onbc.mem.h \
                      onbc.stack.c onbc.stack.h \
+                     onbc.stackframe.c onbc.stackframe.h \
                      onbc.label.c onbc.label.h \
                      onbc.eoe.c onbc.eoe.h \
                      onbc.func.c onbc.func.h \
@@ -30,6 +31,7 @@ CFLAGS = -O0 -g
 #CFLAGS += -DDISABLE_TUNE
 #CFLAGS += -DDEBUG_SCOPE
 #CFLAGS += -DDEBUG_STACK
+#CFLAGS += -DDEBUG_STACKFRAME
 #CFLAGS += -DDEBUG_VARLIST
 #CFLAGS += -DDEBUG_STRUCTSPEC_PTRLIST -DDEBUG_STRUCTSPEC
 #CFLAGS += -DDEBUG_VARIABLE
