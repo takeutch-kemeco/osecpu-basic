@@ -174,9 +174,12 @@ void translate_ec(struct EC* ec)
 
 #ifdef DEBUG_EC_PARAMETER_DECLARATION
                 pA_mes("after EC_PARAMETER_DECLARATION, ");
+                pA_mes("\\n");
                 pA_reg("stack_head");
+                pA_mes("\\n");
                 pA_reg("stack_frame");
-                debug_stack_frame();
+                pA_mes("\\n");
+                debug_stack_frame(16);
 #endif /* DEBUG_EC_PARAMETER_DECLARATION */
         } else if (ec->type_expression == EC_STATEMENT) {
                 /* 何もしない */
@@ -432,9 +435,12 @@ void translate_ec(struct EC* ec)
                 } else if (ec->type_operator == EC_OPE_FUNCTION) {
 #ifdef DEBUG_EC_OPE_FUNCTION
                         pA_mes("before OPE_FUNCTION, ");
+                        pA_mes("\\n");
                         pA_reg("stack_frame");
+                        pA_mes("\\n");
                         pA_reg("stack_head");
-                        debug_stack_frame();
+                        pA_mes("\\n");
+                        debug_stack_frame(16);
 #endif /* DEBUG_EC_OPE_FUNCTION */
 
                         /* 現在の stack_frame をプッシュする。
@@ -460,9 +466,12 @@ void translate_ec(struct EC* ec)
 
 #ifdef DEBUG_EC_OPE_FUNCTION
                         pA_mes("after OPE_FUNCTION, ");
+                        pA_mes("\\n");
                         pA_reg("stack_frame");
+                        pA_mes("\\n");
                         pA_reg("stack_head");
-                        debug_stack_frame();
+                        pA_mes("\\n");
+                        debug_stack_frame(16);
 #endif /* DEBUG_EC_OPE_FUNCTION */
                 } else {
                         yyerror("system err: translate_ec(), EC_POSTFIX");
@@ -482,11 +491,16 @@ void translate_ec(struct EC* ec)
 
 #ifdef DEBUG_EC_ARGUMENT_EXPRESSION_LIST
                                 pA_mes("after EC_ARGUMENT_EXPRESSION_LIST, ");
+                                pA_mes("\\n");
                                 pA_reg("fixR");
+                                pA_mes("\\n");
                                 pA_reg("fixL");
+                                pA_mes("\\n");
                                 pA_reg("stack_frame");
+                                pA_mes("\\n");
                                 pA_reg("stack_head");
-                                debug_stack_frame();
+                                pA_mes("\\n");
+                                debug_stack_frame(16);
 #endif /* DEBUG_EC_ARGUMENT_EXPRESSION_LIST */
                         }
                 }
