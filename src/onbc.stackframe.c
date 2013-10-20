@@ -31,7 +31,7 @@ void push_stackframe(const char* register_name)
 {
         write_mem("stack_frame", "stack_frame_stack_head");
         pA("stack_frame_stack_head++;");
-        pA("stack_frame = %d;", register_name);
+        pA("stack_frame = %s;", register_name);
 
 #ifdef DEBUG_STACKFRAME
         pA_mes("push_stackframe(): ");
@@ -50,7 +50,7 @@ void pop_stackframe(void)
         read_mem("stack_frame", "stack_frame_stack_head");
 
 #ifdef DEBUG_STACKFRAME
-        pA_mes("push_stackframe(): ");
+        pA_mes("pop_stackframe(): ");
         pA_reg("stack_frame_stack_head");
         pA_mes(", ");
         pA_reg("stack_frame");
