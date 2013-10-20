@@ -7,12 +7,7 @@
 
 void callF(const int32_t label);
 void retF(void);
-void __call_user_function(const char* iden);
-void __define_user_function_begin(const char* iden,
-                                  const int32_t arglen,
-                                  const int32_t skip_label);
 void __define_user_function_return(void);
-void __define_user_function_end(const int32_t skip_label);
 
 /* beginF, endF
  * プリセット関数及びアキュムレーターをサブルーチン命令化する仕掛け、を記したマクロ。
