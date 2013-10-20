@@ -35,9 +35,9 @@ void push_stack(const char* regname_data)
         pA("stack_head++;");
 
 #ifdef DEBUG_STACK
-        pA("junkApi_putConstString('push_stack(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
-        pA("junkApi_putConstString('\\n');");
+        pA_mes("push_stack(): ");
+        pA_reg("stack_head");
+        pA_mes("\\n");
 #endif /* DEBUG_STACK */
 }
 
@@ -50,9 +50,9 @@ void pop_stack(const char* regname_data)
         read_mem(regname_data, "stack_head");
 
 #ifdef DEBUG_STACK
-        pA("junkApi_putConstString('pop_stack(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
-        pA("junkApi_putConstString('\\n');");
+        pA_mes("pop_stack(): ");
+        pA_reg("stack_head");
+        pA_mes("\\n");
 #endif /* DEBUG_STACK */
 }
 
@@ -82,6 +82,8 @@ void init_stack(void)
         pA("SInt32 stack_frame:R02;");
         pA("SInt32 stack_socket:R03;");
 
+        pA("SInt32 stack_debug_tmp:R22;");
+
         pA("stack_head = %d;", STACK_BEGIN_ADDRESS);
         pA("stack_frame = %d;", STACK_BEGIN_ADDRESS);
 }
@@ -91,28 +93,37 @@ void init_stack(void)
  */
 void debug_stack(void)
 {
+        pA_mes("debug_stack: ");
+
         pA_reg("stack_socket");
+        pA_mes(", ");
+
         pA_reg("stack_head");
+        pA_mes(", ");
+
         pA_reg("stack_frame");
+        pA_mes("\\n");
 }
 
-/* スタックフレームから10個分の内容を、実行時に画面に印字する
+/* スタックフレームから n 個分の内容を、実行時に画面に印字する
  * 主にデバッグ用
- * fixA1, fixA2の値を破壊するので注意
  */
-void debug_stack_frame(void)
+void debug_stack_frame(const int32_t n)
 {
-        pA("junkApi_putConstString('debug_stack_frame:');");
+        pA_mes("debug_stack_frame: {");
+        pA_mes("\\n");
 
         int32_t i;
-        for (i = 0; i < 10; i++) {
-                pA("fixA1 = stack_frame + %d;", i);
-                read_mem("fixA2", "fixA1");
+        for (i = 0; i < n; i++) {
+                pA("stack_debug_tmp = stack_frame + %d;", i);
+                pA_reg_noname("stack_debug_tmp");
 
-                pA("junkApi_putConstString('[');");
-                pA("junkApi_putStringDec('\\1', fixA2, 11, 1);");
-                pA("junkApi_putConstString(']');");
+                read_mem("stack_debug_tmp", "stack_debug_tmp");
+                pA_reg_noname("stack_debug_tmp");
+
+                pA_mes("\\n");
         }
 
-        pA("junkApi_putConstString('\\n');");
+        pA_mes("}");
+        pA_mes("\\n");
 }
