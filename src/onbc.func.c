@@ -22,6 +22,7 @@
 #include "onbc.print.h"
 #include "onbc.label.h"
 #include "onbc.var.h"
+#include "onbc.stackframe.h"
 
 /* プリセット関数やアキュムレーターを呼び出し命令に対して、追加でさらに共通の定型命令を出力する。
  * すなわち、関数呼び出しのラッパ。
@@ -58,23 +59,18 @@ void retF(void)
  */
 void __define_user_function_return(void)
 {
-        /* スコープを1段戻す場合の定形処理
-         */
         /* stack_head 位置を stack_frame にする */
         pA("stack_head = stack_frame;");
 
-        /* ローカル変数 @stack_prev_frame の値を stack_frame へセットする。
-         * その後、stack_head を stack_frame
-         */
-        read_mem("fixA1", "stack_frame");
-        pA("stack_frame = fixA1;");
+        /* stack_frame を古い stack_frame へ置き換える */
+        pop_stackframe();
 
 #ifdef DEBUG_SCOPE
-        pA("junkApi_putConstString('dec_scope(),stack_head=');");
-        pA("junkApi_putStringDec('\\1', stack_head, 11, 1);");
-        pA("junkApi_putConstString(', stack_frame=');");
-        pA("junkApi_putStringDec('\\1', stack_frame, 11, 1);");
-        pA("junkApi_putConstString('\\n');");
+        pA_mes("__define_user_function_return(): ");
+        pA_reg("stack_frame");
+        pA_mes(", ");
+        pA_reg("stack_head");
+        pA_mes("\\n");
 #endif /* DEBUG_SCOPE */
 
         push_stack("fixA");

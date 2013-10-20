@@ -444,12 +444,10 @@ void translate_ec(struct EC* ec)
                         debug_stackframe(16);
 #endif /* DEBUG_EC_OPE_FUNCTION */
 
-                        /* 現在の stack_frame をプッシュする。
-                         * そして、ここには関数終了後にはリターン値が入った状態となる。
+                        /* 現在の stack_frame をプッシュし
+                         * stack_frame の値に現在の stack_head をセットする
                          */
-                        pA("stack_socket = stack_frame;");
-                        pA("stack_frame = stack_head;");
-                        push_stack("stack_socket");
+                        push_stackframe("stack_head");
 
                         struct Var* var = global_varlist_search(ec->var->iden);
                         if (var == NULL)
