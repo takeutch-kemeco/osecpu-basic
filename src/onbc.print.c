@@ -138,9 +138,18 @@ void pA_mes(const char* str)
 /* レジスターの内容を実行時にコンソールへ印字する命令を yyaskA へ書き出す
  * 主にデバッグ用
  */
+void pA_reg_noname(const char* register_name)
+{
+        pA_mes("[");
+        pA("junkApi_putStringDec('\\1', %s, 11, 0);", register_name);
+        pA_mes("]");
+}
+
+/* レジスターの名前と内容を実行時にコンソールへ印字する命令を yyaskA へ書き出す
+ * 主にデバッグ用
+ */
 void pA_reg(const char* register_name)
 {
-        pA("junkApi_putConstString('%s:[');", register_name);
-        pA("junkApi_putStringDec('\1', %s, 11, 0);", register_name);
-        pA("junkApi_putConstString(']\\n');");
+        pA_mes(register_name);
+        pA_reg_noname(register_name);
 }
