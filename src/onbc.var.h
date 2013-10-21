@@ -28,6 +28,7 @@
 
 /* 記憶領域クラス
  */
+#define TYPE_WIND       (1 << 23)
 #define TYPE_AUTO       (1 << 24)
 #define TYPE_REGISTER   (1 << 25)
 #define TYPE_STATIC     (1 << 26)

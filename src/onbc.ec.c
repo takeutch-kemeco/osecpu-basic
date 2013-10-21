@@ -24,6 +24,7 @@
 #include "onbc.mem.h"
 #include "onbc.stack.h"
 #include "onbc.stackframe.h"
+#include "onbc.windstack.h"
 #include "onbc.var.h"
 #include "onbc.label.h"
 #include "onbc.acm.h"
@@ -33,6 +34,11 @@
  * __new_var_initializer() の引数に用いることを想定。
  */
 static int32_t cur_declaration_specifiers = 0;
+
+/* これが真の場合は EC_DECLARATOR 時の変数インスタンス生成の場合に、
+ * 変数の値が格納されるメモリーアドレスとしてワインドスタックに積まれたアドレスを用いる。
+ */
+static int32_t wind_argument_flag = 0;
 
 /* 白紙のECインスタンスをメモリー領域を確保して生成
  */
@@ -135,6 +141,11 @@ void translate_ec(struct EC* ec)
                 if (ec->var->type & TYPE_FUNCTION)
                         cur_declaration_specifiers |= TYPE_FUNCTION;
 
+                if (wind_argument_flag) {
+                        cur_declaration_specifiers |= TYPE_WIND;
+                        wind_argument_flag = 0; /* フラグはこのタイミングでクリアする */
+                }
+
                 *(ec->var) = *(__new_var_initializer(ec->var, cur_declaration_specifiers));
 
                 if (ec->var->type & TYPE_FUNCTION) {
@@ -169,6 +180,12 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_PARAMETER_LIST) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_PARAMETER_DECLARATION) {
+                /* この後の EC_DECLARATION が、
+                 * 引数を関数ローカル変数へセットするための操作であることを示す。
+                 * この後の EC_DECLARATOR 内にて、このフラグはクリアされる。
+                 */
+                wind_argument_flag = 1;
+
                 cur_declaration_specifiers = ec->var->type;
                 translate_ec(ec->child_ptr[0]);
                 *(ec->var) = *(ec->child_ptr[0]->var);
@@ -477,6 +494,9 @@ void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_ARGUMENT_EXPRESSION_LIST) {
                 if (ec->child_len >= 1) {
+                        /* 現在のスタック位置をワインドスタックへプッシュする */
+                        push_windstack("stack_head");
+
                         translate_ec(ec->child_ptr[0]);
 
                         /* 引数が左辺値であれば右辺値へと変更してスタックへ積み直す
@@ -487,21 +507,21 @@ void translate_ec(struct EC* ec)
                                 push_stack("fixL");
 
                                 ec->child_ptr[0]->var->is_lvalue = 0;
+                        }
 
 #ifdef DEBUG_EC_ARGUMENT_EXPRESSION_LIST
-                                pA_mes("after EC_ARGUMENT_EXPRESSION_LIST, ");
-                                pA_mes("\\n");
-                                pA_reg("fixR");
-                                pA_mes("\\n");
-                                pA_reg("fixL");
-                                pA_mes("\\n");
-                                pA_reg("stack_frame");
-                                pA_mes("\\n");
-                                pA_reg("stack_head");
-                                pA_mes("\\n");
-                                debug_stackframe(16);
+                        pA_mes("after EC_ARGUMENT_EXPRESSION_LIST, ");
+                        pA_mes("\\n");
+                        pA_reg("fixR");
+                        pA_mes("\\n");
+                        pA_reg("fixL");
+                        pA_mes("\\n");
+                        pA_reg("stack_frame");
+                        pA_mes("\\n");
+                        pA_reg("stack_head");
+                        pA_mes("\\n");
+                        debug_stackframe(16);
 #endif /* DEBUG_EC_ARGUMENT_EXPRESSION_LIST */
-                        }
                 }
 
                 if (ec->child_len == 2)

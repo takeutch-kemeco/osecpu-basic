@@ -30,6 +30,7 @@
 #include "onbc.mem.h"
 #include "onbc.stack.h"
 #include "onbc.stackframe.h"
+#include "onbc.windstack.h"
 #include "onbc.var.h"
 #include "onbc.label.h"
 #include "onbc.eoe.h"
@@ -55,6 +56,7 @@ void init_all(void)
         init_heap();
         init_stack();
         init_stackframe();
+        init_windstack();
         init_labelstack();
         init_eoe_arg();
 }
@@ -399,8 +401,8 @@ parameter_list
         | parameter_list __OPE_COMMA parameter_declaration {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_PARAMETER_LIST;
-                ec->child_ptr[0] = $3; /* 引数順序を前後逆転するため */
-                ec->child_ptr[1] = $1;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
                 ec->child_len = 2;
                 $$ = ec;
         }

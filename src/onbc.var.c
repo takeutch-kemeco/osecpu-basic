@@ -23,6 +23,7 @@
 #include "onbc.print.h"
 #include "onbc.iden.h"
 #include "onbc.stack.h"
+#include "onbc.windstack.h"
 #include "onbc.var.h"
 
 /* ローカル、グローバル、それぞれの変数スペックのリスト。
@@ -325,13 +326,54 @@ void local_varlist_set_scope_head(void)
 /* 変数インスタンス関連
  */
 
+/* ローカル変数のインスタンス生成で、記憶域をスタックから新たに確保・設定する場合 */
+static struct Var* __new_var_initializer_local_alloc(struct Var* var)
+{
+        /* 現在のstack_headを変数への間接参照アドレスの格納位置とし、
+         * ここへ stack_head + 1 のアドレスをセットする
+         */
+        pA("stack_socket = stack_head + 1;");
+        write_mem("stack_socket", "stack_head");
+
+        /* スタック変数の為のメモリー領域確保を、その分だけスタックを進めることで行う。
+         * +1 はスタック変数において参照先アドレスの保存用に用いた分。
+         */
+        pA("stack_head += %d;", var->total_len + 1);
+
+        return var;
+}
+
+/* ローカル変数のインスタンス生成で、ワインドスタックからポップしたアドレスを用いて記憶域設定する場合 */
+static struct Var* __new_var_initializer_local_wind(struct Var* var)
+{
+        /* 現在のstack_headを変数への間接参照アドレスの格納位置とし、
+         * ここへ ワインドスタックからポップした値をセットする
+         */
+        pop_windstack("stack_socket");
+        write_mem("stack_socket", "stack_head");
+
+        /* スタック変数において参照先アドレスの保存用に用いた分、スタックを +1 進める */
+        push_stack_dummy();
+
+        return var;
+}
+
 /* ローカル変数のインスタンス生成
  *
  * ローカル変数の、スタック上でのメモリーイメージ:
- * 3 : ↑
- * 2 : 実際の値 x[1] の格納位置
- * 1 : 実際の値 x[0] の格納位置
- * 0 : 変数読み書き時に参照する位置。 ここにx[0](または間接参照)へのアドレスが入る
+ *      3 : ↑
+ *      2 : 実際の値 x[1] の格納位置
+ *      1 : 実際の値 x[0] の格納位置
+ *      0 : 変数読み書き時に参照する位置。 ここにx[0](または間接参照)へのアドレスが入る
+ *
+ * 関数引数の場合(ワインドの場合)のメモリーイメージ:
+ *      0 : 変数読み書き時に参照する位置。 ここに間接参照のアドレス (アドレス x + 0) が入る
+ *
+ *      x + 2 : ↑
+ *      x + 1 : どこかに存在する、実際の値 x[1]
+ *      x + 0 : どこかに存在する、実際の値 x[0]
+ *
+ *      p : ワインドスタックからポップした値。ここに x[0] のアドレスを得られる。
  */
 static struct Var* __new_var_initializer_local(struct Var* var, const int32_t type)
 {
@@ -354,18 +396,11 @@ static struct Var* __new_var_initializer_local(struct Var* var, const int32_t ty
         if (ret == NULL)
                 yyerror("system err: ローカル変数の作成に失敗しました");
 
-        /* 現在のstack_headを変数への間接参照アドレスの格納位置とし、
-         * ここへ stack_head + 1 のアドレスをセットする
-         */
-        pA("stack_socket = stack_head + 1;");
-        write_mem("stack_socket", "stack_head");
-
-        /* スタック変数の為のメモリー領域確保を、その分だけスタックを進めることで行う。
-         * +1 はスタック変数において参照先アドレスの保存用に用いた分。
-         */
-        pA("stack_head += %d;", ret->total_len + 1);
-
-        return ret;
+        /* 変数のメモリー領域の確保方法の違い */
+        if (type & TYPE_WIND)
+                return __new_var_initializer_local_wind(ret);
+        else
+                return __new_var_initializer_local_alloc(ret);
 }
 
 /* グローバル変数のインスタンス生成
@@ -407,7 +442,7 @@ struct Var* __new_var_initializer(struct Var* var, int32_t type)
         if ((type & TYPE_STATIC) || (type & TYPE_LITERAL) || (type & TYPE_FUNCTION))
                 type &= ~(TYPE_AUTO);
 
-        if (type & TYPE_AUTO)
+        if ((type & TYPE_AUTO) || (type & TYPE_WIND))
                 return __new_var_initializer_local(var, type);
         else
                 return __new_var_initializer_global(var, type);
