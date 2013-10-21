@@ -43,6 +43,18 @@ static int32_t local_varlist_head = 0;
 static int32_t local_varlist_scope[VARLIST_SCOPE_LEN] = {[0] = 0};
 static int32_t local_varlist_scope_head = 0;
 
+/* 次に呼び出される __local_varlist_add() によって変数を定義する際に、
+ * その変数を新しいスコープの先頭とみなして、それの base_ptr に0をセットして定義するように予約する
+ *
+ * 新しいスコープ内にて、新たにローカル変数 a, b, c を宣言する場合の例:
+ * next_local_varlist_add_set_new_scope = 1; // これで次に呼び出される __local_varlist_add() が、
+ *                                           // base_ptr = 0 の変数を定義するように動作する。
+ * local_varlist_add("a", unit, len, 0, TYPE_INT); // a は base_ptr = 0 として定義される
+ * local_varlist_add("b", unit, len, 0, TYPE_INT); // 以降の b, c は普通に宣言していけばいい
+ * local_varlist_add("c", unit, len, 0, TYPE_INT);
+ */
+int32_t next_local_varlist_add_set_new_scope = 0;
+
 /* Varの内容を印字する
  * 主にデバッグ用
  */
@@ -223,13 +235,16 @@ global_varlist_add(const char* iden,
                    const int32_t indirect_len,
                    const int32_t type)
 {
+        if (next_local_varlist_add_set_new_scope)
+                yyerror("system err: global_varlist_add()");
+
         struct Var* cur = global_varlist + global_varlist_head;
         struct Var* prev = global_varlist + global_varlist_head - 1;
 
         int32_t base_ptr = 0;
         if (global_varlist_head >= 1) {
-                /* 最後の +1 は、スタック変数において参照先アドレスに保存用に用いる */
-                base_ptr = prev->base_ptr + prev->total_len + 1;
+                /* +1 は、変数において参照先アドレス保存用の領域分 */
+                base_ptr = prev->base_ptr + 1 + prev->total_len;
         }
 
         global_varlist_head++;
@@ -255,9 +270,18 @@ local_varlist_add(const char* iden,
         struct Var* prev = local_varlist + local_varlist_head - 1;
 
         int32_t base_ptr = 0;
-        if (local_varlist_head >= 1) {
-                /* 最後の +1 は、スタック変数において参照先アドレスに保存用に用いる */
-                base_ptr = prev->base_ptr + prev->total_len + 1;
+
+        if (next_local_varlist_add_set_new_scope) {
+                base_ptr = 0;
+                next_local_varlist_add_set_new_scope = 0;
+        } else {
+                if (local_varlist_head >= 1) {
+                        /* +1 は、変数において参照先アドレス保存用の領域分 */
+                        if (prev->type & TYPE_WIND)
+                                base_ptr = prev->base_ptr + 1;
+                        else
+                                base_ptr = prev->base_ptr + 1 + prev->total_len;
+                }
         }
 
         local_varlist_head++;
@@ -287,7 +311,7 @@ varlist_add(const char* iden,
                 yyerror("syntax err: 配列の次元が高すぎます");
 
         struct Var* var;
-        if (type & TYPE_AUTO)
+        if ((type & TYPE_AUTO) || (type & TYPE_WIND))
                 var = local_varlist_add(iden, unit_len, dim_len, indirect_len, type);
         else
                 var = global_varlist_add(iden, unit_len, dim_len, indirect_len, type);
@@ -300,27 +324,11 @@ varlist_add(const char* iden,
         }
         printf(", ");
 
-        printf("total_len[%d], base_ptr[%d], indirect_len[%d]\n",
-                var->total_len, var->base_ptr, var->indirect_len);
+        printf("iden[%s], total_len[%d], base_ptr[%d], indirect_len[%d]\n",
+                var->iden, var->total_len, var->base_ptr, var->indirect_len);
 #endif /* DEBUG_VARLIST */
 
         return var;
-}
-
-/* ローカル変数リストの現在の最後の変数を、新しいスコープの先頭とみなして、それの base_ptr に0をセットする
- *
- * 新しいスコープ内にて、新たにローカル変数 a, b, c を宣言する場合の例:
- * local_varlist_add("a", unit, len, 0, TYPE_INT); // とりあえず a を宣言する
- * local_varlist_set_scope_head(); // これでヒープの最後の変数である a の base_ptr へ 0 がセットされる
- * local_varlist_add("b", unit, len, 0, TYPE_INT); // その後 b, c は普通に宣言していけばいい
- * local_varlist_add("c", unit, len, 0, TYPE_INT);
- */
-void local_varlist_set_scope_head(void)
-{
-        if (local_varlist_head >= 1) {
-                struct Var* prev = local_varlist + local_varlist_head - 1;
-                prev->base_ptr = 0;
-        }
 }
 
 /* 変数インスタンス関連

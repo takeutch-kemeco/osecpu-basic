@@ -165,18 +165,10 @@ void translate_ec(struct EC* ec)
                  */
                 local_varlist_scope_push();
 
-                /* ローカル変数として @stack_prev_frame を作成し、
-                 * その後、それのオフセットに 0 をセットする（コンパイル時）
-                 */
-                struct Var* var = new_var();
-                strcpy(var->iden, "@stack_prev_frame");
-                var->dim_len = 0;
-                var->indirect_len = 0;
-                *(var) = *(__new_var_initializer(var, TYPE_INT | TYPE_AUTO));
-                local_varlist_set_scope_head();
-
-                if (ec->child_len == 1)
+                if (ec->child_len == 1) {
+                        next_local_varlist_add_set_new_scope = 1;
                         translate_ec(ec->child_ptr[0]);
+                }
         } else if (ec->type_expression == EC_PARAMETER_LIST) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_PARAMETER_DECLARATION) {
