@@ -44,6 +44,19 @@
 
 #define YYMAXDEPTH 0x10000000
 
+void init_tmp(void)
+{
+        pA("SInt32 tmp00:R17;");
+        pA("SInt32 tmp01:R18;");
+        pA("SInt32 tmp02:R19;");
+        pA("SInt32 tmp03:R1A;");
+        pA("SInt32 tmp04:R1B;");
+        pA("SInt32 tmp05:R1C;");
+        pA("SInt32 tmp06:R1D;");
+        pA("SInt32 tmp07:R1E;");
+        pA("SInt32 tmp08:R1F;");
+}
+
 /* 全ての初期化
  */
 void init_all(void)
@@ -59,6 +72,7 @@ void init_all(void)
         init_windstack();
         init_labelstack();
         init_eoe_arg();
+        init_tmp();
 }
 
 %}
