@@ -126,11 +126,11 @@ void translate_ec(struct EC* ec)
                 *(ec->var) = *(ec->child_ptr[0]->var);
 
                 if (ec->var->type & TYPE_AUTO)
-                        pA("fixL = %d + stack_frame;", ec->var->base_ptr);
+                        pA("stack_socket = %d + stack_frame;", ec->var->base_ptr);
                 else
-                        pA("fixL = %d;", ec->var->base_ptr);
+                        pA("stack_socket = %d;", ec->var->base_ptr);
 
-                push_stack("fixL");
+                push_stack("stack_socket");
 
                 translate_ec(ec->child_ptr[1]);
 
@@ -405,8 +405,8 @@ pA_mes("\\n");
                                 ec->var->indirect_len--;
                         }
 
-                        var_pop_stack(ec->var, "fixL");
-                        push_stack("fixL");
+                        var_pop_stack(ec->var, "stack_socket");
+                        push_stack("stack_socket");
 
                         ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_INV) {
