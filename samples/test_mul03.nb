@@ -4,10 +4,10 @@
  */
 
 float a = -1;
-__print(a);
+__print_float(a);
 
 a = a * 0.5; a = a * 0.5; a = a * 0.5; a = a * 0.5; a = a * 0.5; a = a * 0.5; a = a * 0.5;
-__print(a);
+__print_float(a);
 
 a = a / 0.5; a = a / 0.5; a = a / 0.5; a = a / 0.5; a = a / 0.5; a = a / 0.5; a = a / 0.5;
-__print(a);
+__print_float(a);

@@ -4,16 +4,16 @@
  */
 
 float a = 2;
-__print(a);
+__print_float(a);
 
 a = a * 2; a = a * 2; a = a * 2; a = a * 2; a = a * 2; a = a * 2; a = a * 2; a = a * 2;
-__print(a);
+__print_float(a);
 
 a = a * 2; a = a * 2; a = a * 2; a = a * 2; a = a * 2;
-__print(a);
+__print_float(a);
 
 a = a / 2; a = a / 2; a = a / 2; a = a / 2; a = a / 2; a = a / 2; a = a / 2; a = a / 2;
-__print(a);
+__print_float(a);
 
 a = a / 2; a = a / 2; a = a / 2; a = a / 2; a = a / 2;
-__print(a);
+__print_float(a);
