@@ -1,38 +1,35 @@
 #include "stdoscp.nb"
 
-function __torgb(r, g, b)
-{
-        return (r >> 0) | (g >> 8) | (b >> 16);
-}
-
-float a[1000];
+int a[1000];
 a[10] = 123;
-__print(a[10]);
+__print_int(a[10]);
 
-float b;
-b = __peek(10 >> 16);
-__print(b);
+float fa = 123.456;
+__print_float(fa);
 
-__poke(&a[10] + (10 >> 16), 234);
-__print(a[20]);
+int b = __peek(&a[10]);
+__print_int(b);
+
+__poke(&a[0] + 10, 234);
+__print_int(a[10]);
 
 __openwin(480, 240);
 
-__fillrect(0, 10, 20, 100, 200, __torgb(255, 255, 255));
+__fillrect(0, 10, 20, 100, 200, 0x00ffffff);
 
-__drawrect(0, 20, 30, 200, 100, __torgb(0xff, 0xaa, 0x88));
+__drawrect(0, 20, 30, 200, 100, 0x0088aaff);
 
-__drawpoint(0, 150, 150, __torgb(0xff, 0xff, 0xff));
+__drawpoint(0, 150, 150, 0x00ffffff);
 
-__filloval(0, 100, 150, 10, 20, __torgb(0xff, 0x00, 0xff));
+__filloval(0, 100, 150, 10, 20, 0x00ff00ff);
 
-__drawoval(0, 100, 150, 30, 50, __torgb(0xff, 0xff, 0x00));
+__drawoval(0, 100, 150, 30, 50, 0x00ffff00);
 
-__drawline(0, 60, 70, 180, 200, __torgb(0xff, 0xaa, 0xff));
+__drawline(0, 60, 70, 180, 200, 0x00ffaaff);
 
 __flushwin(10, 10, 100, 100);
 
 __inkey(0);
 
-float x = __rand(100);
-__print(x);
+int x = __rand(100);
+__print_int(x);
