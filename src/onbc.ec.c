@@ -284,12 +284,16 @@ void translate_ec(struct EC* ec)
                          * これは、ユーザー定義関数は expression なので、
                          * 終了後に必ずスタックが +1 状態である必要があるため。
                          */
-                        if (ec->child_len == 0) {
+                        if (ec->child_len == 0)
                                 pA("fixA = 0;");
-                        } else {
-                                pop_stack("fixA");
-                        }
+                        else
+                                var_pop_stack(ec->child_ptr[0]->var, "fixA");
 
+#ifdef DEBUG_EC_JUMP_STATEMENT
+pA_mes("EC_JUMP_STATEMENT, EC_OPE_RETURN: ");
+pA_reg("fixA");
+pA_mes("\\n");
+#endif /* DEBUG_EC_JUMP_STATEMENT */
                         __define_user_function_return();
                 } else {
                         yyerror("system err: translate_ec(), EC_JUMP_STATEMENT");
