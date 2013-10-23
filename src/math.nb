@@ -19,68 +19,6 @@
 #ifndef __MATH_NB__
 #define __MATH_NB__
 
-/* sin
- *
- * 引数:
- * a: sin への引数
- *
- * 戻り値: sin(a) の結果
- */
-function __sin(a)
-{
-        float pi = 3.14159265358979;
-        float pi_2 = 3.14159265358979 * 2;
-        float pi_h = 3.14159265358979 / 2;
-
-        float b = a % pi_2;
-        if ((b >= 0) & (b < pi_h))
-                a = b;
-        else if ((b >= pi_h) & (b < pi))
-                a = pi - b;
-        else if ((b >= pi) & (b < pi + pi_h))
-                a = (-pi) - (b - pi_2);
-        else
-                a = b - pi_2;
-
-        b = a;
-        b = b - (__pow(a, 3) * 0.16666666666666);
-        b = b + (__pow(a, 5) * 0.00833333333333);
-        b = b - (__pow(a, 7) * 0.0001984126984127);
-
-        return b;
-}
-
-/* cos
- *
- * 引数:
- * a: cos への引数
- *
- * 戻り値: cos(a) の結果
- */
-function __cos(a)
-{
-        float pi_2 = 3.14159265358979 * 2;
-        float pi_h = 3.14159265358979 / 2;
-
-        return __sin((a % pi_2) + pi_h);
-}
-
-/* tan
- *
- * 引数:
- * a: tan への引数
- *
- * 戻り値: tan(a) の結果
- */
-function __tan(a)
-{
-        return a +
-               (__pow(a, 3) * 1) / 3 +
-               (__pow(a, 5) * 2) / 15 +
-               (__pow(a, 7) * 17) / 315 +
-               (__pow(a, 9) * 62) / 2835;
-}
-
 /* sqrt
  *
  * 引数:
@@ -88,23 +26,26 @@ function __tan(a)
  *
  * 戻り値: sqrt(a) の結果
  */
-function __sqrt(x)
+float __sqrt(float x)
 {
-        float xn = x / 2;
-        float i;
-        for (i = 0; i < 8; i = i + 1)
-                xn = xn - ((xn * xn) - x) / (2 * xn);
+        float xn = x / 2.0;
+        int i;
+        for (i = 0; i < 8; i = i + 1) {
+                xn = xn - ((xn * xn) - x) / (2.0 * xn);
+        }
 
         return xn;
 }
 
+#ifdef ZERO
+
 /* powのバックエンドに用いる ±a ^ +b (ただし b = 整数、かつ a != 0) 限定のpow。（bが正の場合限定のpow）
  */
-function __pow_p(a, b)
+float __pow_p(float a, float b)
 {
         float s = 1;
         float t = a;
-        float i;
+        int i;
         for (i = 0; i < 15; i = i + 1) {
                 if (b & (1 << i))
                         s = s * t;
@@ -125,7 +66,7 @@ function __pow_p(a, b)
 
 /* powのバックエンドに用いる ±a ^ -b (ただし b = 整数、かつ a != 0) 限定のpow。（bが負の場合限定のpow）
  */
-function __pow_m(a, b)
+float __pow_m(float a, float b)
 {
         return 1 / __pow_p(a, -b);
 }
@@ -133,7 +74,7 @@ function __pow_m(a, b)
 /* pow
  * a ^ b -> return
  */
-function __pow(a, b)
+float __pow(float a, float b)
 {
         if (a > 0) {
                 if (b >= 0) {
@@ -157,6 +98,80 @@ function __pow(a, b)
 
                 return 0;
         }
+}
+
+#endif /* ZERO */
+
+/* sin
+ *
+ * 引数:
+ * a: sin への引数
+ *
+ * 戻り値: sin(a) の結果
+ */
+float __sin(float a)
+{
+        float pi = 3.14159265358979;
+        float pi_2 = 3.14159265358979 * 2;
+        float pi_h = 3.14159265358979 / 2;
+
+        float b = a % pi_2;
+        if ((b >= 0) & (b < pi_h))
+                a = b;
+        else if ((b >= pi_h) & (b < pi))
+                a = pi - b;
+        else if ((b >= pi) & (b < pi + pi_h))
+                a = (-pi) - (b - pi_2);
+        else
+                a = b - pi_2;
+
+        float a2 = a * a;
+        float a3 = a2 * a;
+        float a5 = a3 * a2;
+        float a7 = a5 * a2;
+        b = a;
+        b = b - (a3 * 0.16666666666666);
+        b = b + (a5 * 0.00833333333333);
+        b = b - (a7 * 0.0001984126984127);
+
+        return b;
+}
+
+/* cos
+ *
+ * 引数:
+ * a: cos への引数
+ *
+ * 戻り値: cos(a) の結果
+ */
+float __cos(float a)
+{
+        float pi_2 = 3.14159265358979 * 2;
+        float pi_h = 3.14159265358979 / 2;
+
+        return __sin((a % pi_2) + pi_h);
+}
+
+/* tan
+ *
+ * 引数:
+ * a: tan への引数
+ *
+ * 戻り値: tan(a) の結果
+ */
+float __tan(float a)
+{
+        float a2 = a * a;
+        float a3 = a2 * a;
+        float a5 = a3 * a2;
+        float a7 = a5 * a2;
+        float a9 = a7 * a2;
+
+        return a +
+               (a3 * 1) / 3 +
+               (a5 * 2) / 15 +
+               (a7 * 17) / 315 +
+               (a9 * 62) / 2835;
 }
 
 #endif /* __MATH_NB__ */
