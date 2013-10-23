@@ -257,6 +257,7 @@ void translate_ec(struct EC* ec)
                         const int32_t loop_end = cur_label_index_head++;
 
                         translate_ec(ec->child_ptr[0]);
+                        pop_stack_dummy(); /* スタック+1の状態を0へ戻す */
 
                         pA("LB(0, %d);", loop_head);
 
