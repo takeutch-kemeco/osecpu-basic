@@ -98,8 +98,6 @@ void translate_ec(struct EC* ec)
                 translate_ec(ec->child_ptr[0]); /* 関数識別子、および引数 */
                 translate_ec(ec->child_ptr[1]); /* 関数のステートメント部 */
 
-                cur_declaration_specifiers = ec->var->type; /* 戻り値の型 */
-
                 /* 現在の関数からのリターン
                  * プログラムフローがこの位置へ至る状態は、関数内でreturnが実行されなかった場合。
                  * しかし、関数は expression なので、終了後に"必ず"スタックが +1 された状態でなければならないので、
@@ -457,6 +455,9 @@ pA_mes("\\n");
                         pA_mes("\\n");
                         debug_stackframe(16);
 #endif /* DEBUG_EC_OPE_FUNCTION */
+
+                        /* 以降で EC_OPE_FUNCTION を戻り値の型として扱う */
+                        ec->var->type = cur_declaration_specifiers;
 
                         /* 現在の stack_frame をプッシュし
                          * stack_frame の値に現在の stack_head をセットする

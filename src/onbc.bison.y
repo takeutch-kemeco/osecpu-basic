@@ -993,7 +993,7 @@ postfix_expression
                 ec->type_expression = EC_POSTFIX;
                 ec->type_operator = EC_OPE_FUNCTION;
 
-                ec->var->type = TYPE_FUNCTION | TYPE_SIGNED | TYPE_INT;
+                ec->var->type = TYPE_FUNCTION;
                 strcpy(ec->var->iden, $1);
 
                 ec->child_ptr[0] = $3;
