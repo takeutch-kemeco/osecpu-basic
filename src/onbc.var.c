@@ -190,7 +190,7 @@ static struct Var* local_varlist_search_common(const char* iden,
                                                const int32_t top,
                                                const int32_t bottom)
 {
-        struct Var* p = local_varlist;
+        struct Var* p = local_varlist + top;
         int i;
         for (i = top; i >= bottom; i--) {
                 if (strcmp(iden, p->iden) == 0)
