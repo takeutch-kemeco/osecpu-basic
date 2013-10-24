@@ -72,7 +72,6 @@ void var_pop_stack(struct Var* var, const char* register_name);
 void local_varlist_scope_push(void);
 void local_varlist_scope_pop(void);
 struct Var* global_varlist_search(const char* iden);
-struct Var* local_varlist_search(const char* iden);
 struct Var* varlist_search(const char* iden);
 struct Var* __new_var_initializer(struct Var* var, const int32_t type);
 

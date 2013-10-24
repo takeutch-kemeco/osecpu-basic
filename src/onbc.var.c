@@ -183,17 +183,43 @@ struct Var* global_varlist_search(const char* iden)
         return NULL;
 }
 
-/* ローカル変数リストに既に同名が登録されているかを、現在のローカル変数スコープの範囲内で確認する。
+/* ローカル変数リストに既に同名が登録されているかを検索する場合の共通ルーチン。
+ * 検索順序は top -> bottom の方向となる。
  */
-struct Var* local_varlist_search(const char* iden)
+static struct Var* local_varlist_search_common(const char* iden,
+                                               const int32_t top,
+                                               const int32_t bottom)
 {
-        int32_t i = local_varlist_head;
-        while (i-->0) {
-                if (strcmp(iden, local_varlist[i].iden) == 0)
-                        return local_varlist + i;
+        struct Var* p = local_varlist;
+        int i;
+        for (i = top; i >= bottom; i--) {
+                if (strcmp(iden, p->iden) == 0)
+                        return p;
+
+                p--;
         }
 
         return NULL;
+}
+
+/* ローカル変数リストに既に同名が登録されているかを、現在のローカル変数スコープ限定で確認する。
+ */
+static struct Var* local_varlist_search_scope(const char* iden)
+{
+        const int32_t top = local_varlist_head - 1;
+        const int32_t bottom = local_varlist_scope[local_varlist_scope_head];
+
+        return local_varlist_search_common(iden, top, bottom);
+}
+
+/* ローカル変数リストに既に同名が登録されているかを、現在のローカル変数スコープ以下の全スコープから確認する。
+ */
+static struct Var* local_varlist_search_all(const char* iden)
+{
+        const int32_t top = local_varlist_head - 1;
+        const int32_t bottom = 0;
+
+        return local_varlist_search_common(iden, top, bottom);
 }
 
 /* 変数リストに既に同名が登録されているかを、{local,global}_varlist_head以下から確認する。
@@ -203,7 +229,7 @@ struct Var* local_varlist_search(const char* iden)
  */
 struct Var* varlist_search(const char* iden)
 {
-        struct Var* var = local_varlist_search(iden);
+        struct Var* var = local_varlist_search_all(iden);
         if (var == NULL)
                 var = global_varlist_search(iden);
 
@@ -385,7 +411,7 @@ static struct Var* __new_var_initializer_local_wind(struct Var* var)
  */
 static struct Var* __new_var_initializer_local(struct Var* var, const int32_t type)
 {
-        if (local_varlist_search(var->iden) != NULL)
+        if (local_varlist_search_scope(var->iden) != NULL)
                yyerror("syntax err: 同名のローカル変数を重複して宣言しました");
 
         if (var->dim_len >= VAR_DIM_MAX)
@@ -400,7 +426,7 @@ static struct Var* __new_var_initializer_local(struct Var* var, const int32_t ty
                     var->indirect_len,
                     type | TYPE_AUTO);
 
-        struct Var* ret = local_varlist_search(var->iden);
+        struct Var* ret = local_varlist_search_scope(var->iden);
         if (ret == NULL)
                 yyerror("system err: ローカル変数の作成に失敗しました");
 
