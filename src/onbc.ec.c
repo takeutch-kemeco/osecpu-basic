@@ -462,7 +462,8 @@ pA_mes("\\n");
                         ec->var->type = cur_declaration_specifiers;
 
                         /* 現在の stack_frame をプッシュし
-                         * stack_frame の値に現在の stack_head をセットする
+                         * 関数引数をスタックに積む前の時点の stack_head を
+                         * stack_frame にセットする。
                          */
                         push_stackframe("stack_head");
 
@@ -471,6 +472,12 @@ pA_mes("\\n");
                                 yyerror("syntax err: 未定義の関数を呼び出そうとしました");
 
                         translate_ec(ec->child_ptr[0]);
+
+                        /* 現在の stack_frame をプッシュし
+                         * 関数引数をスタックに積んだ時点の stack_head を
+                         * stack_frame にセットする。
+                         */
+                        push_stackframe("stack_head");
 
                         const int32_t return_label = cur_label_index_head++;
 
