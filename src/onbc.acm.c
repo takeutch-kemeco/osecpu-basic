@@ -468,6 +468,14 @@ __var_func_assignment_new(struct Var* var1, struct Var* var2)
                 yyerror("syntax err: 有効な左辺値ではないので代入できません");
         }
 
+#ifdef DEBUG_VAR_FUNC_ASSIGNMENT_NEW
+        pA_mes("__var_func_assignment_new: ");
+        pA_reg("fixL");
+        pA_mes(", ");
+        pA_reg("fixR");
+        pA_mes("\\n");
+#endif /* DEBUG_VAR_FUNC_ASSIGNMENT_NEW */
+
         cast_regval("fixR", var0, var2);
         write_mem("fixR", "fixL");
 
