@@ -383,6 +383,9 @@ pA_mes("\\n");
                         else
                                 pA("stack_socket = %d;", ec->var->base_ptr);
 
+                        /* データ部への関節参照アドレスを得る */
+                        read_mem("stack_socket", "stack_socket");
+
                         push_stack("stack_socket");
                 } else {
                         yyerror("system err: translate_ec(), EC_PRIMARY");
