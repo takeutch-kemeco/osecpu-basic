@@ -540,10 +540,20 @@ pA_mes("\\n");
         } else if (ec->type_expression == EC_CONSTANT) {
                 struct Var* tmp = global_varlist_search(ec->var->iden);
                 if (tmp == NULL) {
+                        struct Var* tmp = __new_var_initializer(ec->var, ec->var->type);
+
+                        /* 定数を読み込んだ後に、tmpを代入する。
+                         * この順序で行う理由は、
+                         * const_variableは__new_var_initializer()では記録されない為。
+                         */
                         pA("fixR = %d;", *((int*)(ec->var->const_variable)));
+                        *(ec->var) = *tmp;
 
-                        *(ec->var) = *(__new_var_initializer(ec->var, ec->var->type));
-
+                        /* 値を値格納位置へと書き込む。
+                         * この値格納位置へのアドレスは、定数ならば base_ptr + 1 なので、
+                         * その数値で直接指定すれば read_mem() を省略できるが、
+                         * あえて、差は付けずに、通常の変数と同様の方法でアドレスを得てる。
+                         */
                         pA("fixL = %d;", ec->var->base_ptr);
                         read_mem("fixL", "fixL");
                         write_mem("fixR", "fixL");
