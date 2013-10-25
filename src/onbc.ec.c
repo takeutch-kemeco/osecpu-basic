@@ -538,16 +538,22 @@ pA_mes("\\n");
                         translate_ec(ec->child_ptr[1]);
 
         } else if (ec->type_expression == EC_CONSTANT) {
-                pA("fixR = %d;", *((int*)(ec->var->const_variable)));
-
                 struct Var* tmp = global_varlist_search(ec->var->iden);
-                if (tmp == NULL)
+                if (tmp == NULL) {
+                        pA("fixR = %d;", *((int*)(ec->var->const_variable)));
+
                         *(ec->var) = *(__new_var_initializer(ec->var, ec->var->type));
-                else
+
+                        pA("fixL = %d;", ec->var->base_ptr);
+                        read_mem("fixL", "fixL");
+                        write_mem("fixR", "fixL");
+                } else {
                         *(ec->var) = *tmp;
 
-                pA("fixL = %d;", ec->var->base_ptr);
-                write_mem("fixR", "fixL");
+                        pA("fixL = %d;", ec->var->base_ptr);
+                        read_mem("fixL", "fixL");
+                }
+
                 push_stack("fixL");
         } else {
                 yyerror("system err: translate_ec()");
