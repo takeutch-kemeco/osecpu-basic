@@ -130,6 +130,8 @@ void translate_ec(struct EC* ec)
                 else
                         pA("stack_socket = %d;", ec->var->base_ptr);
 
+                /* 代入先の値格納位置のアドレスを得て、それをスタックにプッシュ */
+                read_mem("stack_socket", "stack_socket");
                 push_stack("stack_socket");
 
                 translate_ec(ec->child_ptr[1]);
