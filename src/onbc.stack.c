@@ -79,6 +79,7 @@ void init_stack(void)
 {
         pA("SInt32 stack_head:R01;");
         pA("SInt32 stack_socket:R03;");
+        pA("SInt32 stack_tmp:R21;");
 
         pA("stack_head = %d;", STACK_BEGIN_ADDRESS);
 }
@@ -91,6 +92,9 @@ void debug_stack(void)
         pA_mes("debug_stack: ");
 
         pA_reg("stack_socket");
+        pA_mes(", ");
+
+        pA_reg("stack_tmp");
         pA_mes(", ");
 
         pA_reg("stack_head");
