@@ -14,6 +14,7 @@ libonbc_la_SOURCES = onbc.print.c onbc.print.h \
                      onbc.stack.c onbc.stack.h \
                      onbc.stackframe.c onbc.stackframe.h \
                      onbc.windstack.c onbc.windstack.h \
+                     onbc.callstack.c onbc.callstack.h \
                      onbc.label.c onbc.label.h \
                      onbc.eoe.c onbc.eoe.h \
                      onbc.func.c onbc.func.h \
@@ -34,6 +35,7 @@ CFLAGS = -O0 -g
 #CFLAGS += -DDEBUG_STACK
 #CFLAGS += -DDEBUG_STACKFRAME
 #CFLAGS += -DDEBUG_WINDSTACK
+#CFLAGS += -DDEBUG_CALLSTACK
 #CFLAGS += -DDEBUG_SCOPE
 #CFLAGS += -DDEBUG_VARLIST
 #CFLAGS += -DDEBUG_STRUCTSPEC_PTRLIST -DDEBUG_STRUCTSPEC
@@ -43,9 +45,10 @@ CFLAGS = -O0 -g
 #CFLAGS += -DDEBUG_ATTACHSTACK
 #CFLAGS += -DDEBUG_VAR_CAST
 #CFLAGS += -DDEBUG_CAST_REGVAL
-CFLAGS += -DDEBUG_EC_OPE_FUNCTION
-CFLAGS += -DDEBUG_EC_PARAMETER_DECLARATION
-CFLAGS += -DDEBUG_EC_ARGUMENT_EXPRESSION_LIST
-CFLAGS += -DEBUG_EC_JUMP_STATEMENT
+#CFLAGS += -DDEBUG_EC_OPE_FUNCTION
+#CFLAGS += -DDEBUG_EC_PARAMETER_DECLARATION
+#CFLAGS += -DDEBUG_EC_ARGUMENT_EXPRESSION_LIST
+#CFLAGS += -DEBUG_EC_JUMP_STATEMENT
+#CFLAGS += -DDEBUG_VAR_FUNC_ASSIGNMENT_NEW
 
 LIBS = -lm -lfl
