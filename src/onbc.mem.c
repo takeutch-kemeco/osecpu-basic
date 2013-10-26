@@ -32,16 +32,24 @@ void init_mem(void)
         pB("junkApi_malloc(mem_ptr, T_SINT32, %d);", MEM_SIZE);
 }
 
-void write_mem(const char* regname_data,
-               const char* regname_address)
+void write_mem(const char* regname_data, const char* regname_address)
 {
         pA("PASMEM0(%s, T_SINT32, mem_ptr, %s);", regname_data, regname_address);
 }
 
-void read_mem(const char* regname_data,
-              const char* regname_address)
+void read_mem(const char* regname_data, const char* regname_address)
 {
         pA("PALMEM0(%s, T_SINT32, mem_ptr, %s);", regname_data, regname_address);
+}
+
+void write_mem_pB(const char* regname_data, const char* regname_address)
+{
+        pB("PASMEM0(%s, T_SINT32, mem_ptr, %s);", regname_data, regname_address);
+}
+
+void read_mem_pB(const char* regname_data, const char* regname_address)
+{
+        pB("PALMEM0(%s, T_SINT32, mem_ptr, %s);", regname_data, regname_address);
 }
 
 /* ヒープメモリーの初期化
