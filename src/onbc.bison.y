@@ -47,24 +47,24 @@
 
 void init_tmp(void)
 {
-        pA("SInt32 tmp00:R17;");
-        pA("SInt32 tmp01:R18;");
-        pA("SInt32 tmp02:R19;");
-        pA("SInt32 tmp03:R1A;");
-        pA("SInt32 tmp04:R1B;");
-        pA("SInt32 tmp05:R1C;");
-        pA("SInt32 tmp06:R1D;");
-        pA("SInt32 tmp07:R1E;");
-        pA("SInt32 tmp08:R1F;");
+        pB("SInt32 tmp00:R17;");
+        pB("SInt32 tmp01:R18;");
+        pB("SInt32 tmp02:R19;");
+        pB("SInt32 tmp03:R1A;");
+        pB("SInt32 tmp04:R1B;");
+        pB("SInt32 tmp05:R1C;");
+        pB("SInt32 tmp06:R1D;");
+        pB("SInt32 tmp07:R1E;");
+        pB("SInt32 tmp08:R1F;");
 }
 
 /* 全ての初期化
  */
 void init_all(void)
 {
-        pA("#include \"osecpu_ask.h\"\n");
+        pB("#include \"osecpu_ask.h\"\n");
 
-        pA("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
+        pB("LOCALLABELS(%d);\n", LABEL_INDEX_LEN);
 
         init_mem();
         init_heap();
