@@ -31,6 +31,7 @@
 #include "onbc.stack.h"
 #include "onbc.stackframe.h"
 #include "onbc.windstack.h"
+#include "onbc.callstack.h"
 #include "onbc.var.h"
 #include "onbc.label.h"
 #include "onbc.eoe.h"
@@ -70,6 +71,7 @@ void init_all(void)
         init_stack();
         init_stackframe();
         init_windstack();
+        init_callstack();
         init_labelstack();
         init_eoe_arg();
         init_tmp();

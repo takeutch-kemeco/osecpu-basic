@@ -25,6 +25,7 @@
 #include "onbc.stack.h"
 #include "onbc.stackframe.h"
 #include "onbc.windstack.h"
+#include "onbc.callstack.h"
 #include "onbc.var.h"
 #include "onbc.label.h"
 #include "onbc.acm.h"
@@ -466,11 +467,8 @@ pA_mes("\\n");
                         /* 以降で EC_OPE_FUNCTION を戻り値の型として扱う */
                         ec->var->type = cur_declaration_specifiers;
 
-                        /* 現在の stack_frame をプッシュし
-                         * 関数引数をスタックに積む前の時点の stack_head を
-                         * stack_frame にセットする。
-                         */
-                        push_stackframe("stack_head");
+                        /* 関数呼び出し時のスタック位置をコールスタックへプッシュ */
+                        push_callstack("stack_head");
 
                         struct Var* var = global_varlist_search(ec->var->iden);
                         if (var == NULL)

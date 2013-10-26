@@ -59,14 +59,11 @@ void retF(void)
  */
 void __define_user_function_return(void)
 {
-        /* 引数をスタックに積む前の状態の stack_frame まで戻す */
+        /* 関数呼び出し以前のスタックフレームまで戻す */
         pop_stackframe();
 
-        /* stack_head 位置を stack_frame にする */
-        pA("stack_head = stack_frame;");
-
-        /* 関数実行前の状態の stack_frame まで戻す */
-        pop_stackframe();
+        /* 関数呼び出し時点のスタック位置まで戻す */
+        pop_callstack("stack_head");
 
 #ifdef DEBUG_SCOPE
         pA_mes("__define_user_function_return(): ");
