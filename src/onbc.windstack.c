@@ -63,7 +63,7 @@ void pop_windstack(const char* register_name)
  */
 void init_windstack(void)
 {
-        pA("SInt32 windstack_head:R16;");
+        pB("SInt32 windstack_head:R16;");
 
-        pA("windstack_head = %d;", WINDSTACK_BEGIN_ADDRESS);
+        pB("windstack_head = %d;", WINDSTACK_BEGIN_ADDRESS);
 }
