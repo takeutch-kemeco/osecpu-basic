@@ -77,11 +77,11 @@ void pop_stack_dummy(void)
  */
 void init_stack(void)
 {
-        pA("SInt32 stack_head:R01;");
-        pA("SInt32 stack_socket:R03;");
-        pA("SInt32 stack_tmp:R21;");
+        pB("SInt32 stack_head:R01;");
+        pB("SInt32 stack_socket:R03;");
+        pB("SInt32 stack_tmp:R21;");
 
-        pA("stack_head = %d;", STACK_BEGIN_ADDRESS);
+        pB("stack_head = %d;", STACK_BEGIN_ADDRESS);
 }
 
 /* スタック関連の各種レジスターの値を、実行時に画面に印字する
