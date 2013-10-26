@@ -62,13 +62,13 @@ void pop_stackframe(void)
  */
 void init_stackframe(void)
 {
-        pA("SInt32 stack_frame_stack_head:R15;");
-        pA("SInt32 stack_frame:R02;");
+        pB("SInt32 stack_frame_stack_head:R15;");
+        pB("SInt32 stack_frame:R02;");
 
-        pA("SInt32 stack_frame_debug_tmp:R22;");
+        pB("SInt32 stack_frame_debug_tmp:R22;");
 
-        pA("stack_frame_stack_head = %d;", STACKFRAME_BEGIN_ADDRESS);
-        pA("stack_frame = %d;", STACK_BEGIN_ADDRESS); /* 初期値はstack_headの初期値と同じ */
+        pB("stack_frame_stack_head = %d;", STACKFRAME_BEGIN_ADDRESS);
+        pB("stack_frame = %d;", STACK_BEGIN_ADDRESS); /* 初期値はstack_headの初期値と同じ */
 }
 
 /* スタックフレームから n 個分の内容を、実行時に画面に印字する
