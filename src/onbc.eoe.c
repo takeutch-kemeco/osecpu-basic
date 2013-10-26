@@ -111,18 +111,18 @@ void debug_eoe(void)
  */
 void init_eoe_arg(void)
 {
-        pA("SInt32 fixA:R07;");
-        pA("SInt32 fixL:R08;");
-        pA("SInt32 fixR:R09;");
-        pA("SInt32 fixLx:R0A;");
-        pA("SInt32 fixRx:R0B;");
-        pA("SInt32 fixS:R0C;");
-        pA("SInt32 fixT:R0D;");
-        pA("SInt32 fixT1:R0E;");
-        pA("SInt32 fixT2:R0F;");
-        pA("SInt32 fixT3:R10;");
-        pA("SInt32 fixT4:R11;");
-        pA("SInt32 fixA1:R12;");
-        pA("SInt32 fixA2:R13;");
-        pA("SInt32 fixA3:R14;");
+        pB("SInt32 fixA:R07;");
+        pB("SInt32 fixL:R08;");
+        pB("SInt32 fixR:R09;");
+        pB("SInt32 fixLx:R0A;");
+        pB("SInt32 fixRx:R0B;");
+        pB("SInt32 fixS:R0C;");
+        pB("SInt32 fixT:R0D;");
+        pB("SInt32 fixT1:R0E;");
+        pB("SInt32 fixT2:R0F;");
+        pB("SInt32 fixT3:R10;");
+        pB("SInt32 fixT4:R11;");
+        pB("SInt32 fixA1:R12;");
+        pB("SInt32 fixA2:R13;");
+        pB("SInt32 fixA3:R14;");
 }
