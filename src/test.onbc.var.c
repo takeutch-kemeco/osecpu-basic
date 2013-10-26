@@ -103,6 +103,7 @@ test06()
 }
 
 FILE* yyaskA;
+FILE* yyaskB;
 int32_t linenumber = 0;
 char filepath[] = "/dev/null";
 
