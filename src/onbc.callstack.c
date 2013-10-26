@@ -60,7 +60,7 @@ void pop_callstack(const char* register_name)
  */
 void init_callstack(void)
 {
-        pA("SInt32 callstack_head:R20;");
+        pB("SInt32 callstack_head:R20;");
 
-        pA("callstack_head = %d;", CALLSTACK_BEGIN_ADDRESS);
+        pB("callstack_head = %d;", CALLSTACK_BEGIN_ADDRESS);
 }
