@@ -28,8 +28,8 @@
 
 void init_mem(void)
 {
-        pA("VPtr mem_ptr:P01;");
-        pA("junkApi_malloc(mem_ptr, T_SINT32, %d);", MEM_SIZE);
+        pB("VPtr mem_ptr:P01;");
+        pB("junkApi_malloc(mem_ptr, T_SINT32, %d);", MEM_SIZE);
 }
 
 void write_mem(const char* regname_data,
@@ -48,10 +48,10 @@ void read_mem(const char* regname_data,
  */
 void init_heap(void)
 {
-        pA("SInt32 heap_base:R04;");
-        pA("SInt32 heap_socket:R05;");
-        pA("SInt32 heap_offset:R06;");
-        pA("heap_base = 0;");
+        pB("SInt32 heap_base:R04;");
+        pB("SInt32 heap_socket:R05;");
+        pB("SInt32 heap_offset:R06;");
+        pB("heap_base = 0;");
 };
 
 /* ヒープメモリー関連の各種レジスターの値を、実行時に画面に印字する
