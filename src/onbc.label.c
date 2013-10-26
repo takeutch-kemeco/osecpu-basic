@@ -119,7 +119,7 @@ void pop_labelstack(void)
  */
 void init_labelstack(void)
 {
-        pA("VPtr labelstack_ptr:P02;");
-        pA("junkApi_malloc(labelstack_ptr, T_VPTR, %d);", LABEL_INDEX_LEN);
-        pA("VPtr labelstack_socket:%s;", CUR_RETURN_LABEL);
+        pB("VPtr labelstack_ptr:P02;");
+        pB("junkApi_malloc(labelstack_ptr, T_VPTR, %d);", LABEL_INDEX_LEN);
+        pB("VPtr labelstack_socket:%s;", CUR_RETURN_LABEL);
 };
