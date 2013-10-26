@@ -101,16 +101,28 @@ extern FILE* yyout;
 extern FILE* yyaskA;
 extern FILE* yyaskB;
 
-/* 出力ファイル yyaskA へ文字列を書き出す関数 */
-void pA(const char* fmt, ...)
+/* 出力ファイルへ文字列を書き出す関数の共通ルーチン */
+static void p_common(FILE* fp, const char* fmt, ...)
 {
         va_list ap;
         va_start(ap, fmt);
 
-        vfprintf(yyaskA, fmt, ap);
+        vfprintf(fp, fmt, ap);
         va_end(ap);
 
-        fputs("\n", yyaskA);
+        fputs("\n", fp);
+}
+
+/* 出力ファイル yyaskA へ文字列を書き出す関数 */
+void pA(const char* fmt, ...)
+{
+        p_common(yyaskA, fmt);
+}
+
+/* 出力ファイル yyaskB へ文字列を書き出す関数 */
+void pB(const char* fmt, ...)
+{
+        p_common(yyaskB, fmt);
 }
 
 /* 出力ファイル yyaskA へ文字列を書き出す関数（改行無し）
