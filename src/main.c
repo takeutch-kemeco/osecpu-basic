@@ -57,9 +57,8 @@ static void print_file_open_err(const char* s)
 static FILE* open_in_file(const char* in_path)
 {
         FILE* fp = fopen(in_path, "rt");
-        if (fp == NULL) {
+        if (fp == NULL)
                 print_file_open_err(in_path);
-        }
 
         return fp;
 }
@@ -67,9 +66,8 @@ static FILE* open_in_file(const char* in_path)
 static FILE* open_null_out_file(void)
 {
         FILE* fp = fopen("/dev/null", "w");
-        if (fp == NULL) {
+        if (fp == NULL)
                 print_file_open_err("/dev/null");
-        }
 
         return fp;
 }
@@ -77,11 +75,39 @@ static FILE* open_null_out_file(void)
 static FILE* open_out_file(const char* out_path)
 {
         FILE* fp = fopen(out_path, "wt");
-        if (fp == NULL) {
+        if (fp == NULL)
                 print_file_open_err(out_path);
-        }
 
         return fp;
+}
+
+static void marge_file(const char* out_path,
+                       const char* in_path_a,
+                       const char* in_path_b)
+{
+        FILE* out = open_out_file(out_path);
+        FILE* in_a = open_in_file(in_path_a);
+        FILE* in_b = open_in_file(in_path_b);
+
+        while (1) {
+                int c = fgetc(in_a);
+                if (c == EOF)
+                        break;
+
+                fputc(c, out);
+        }
+
+        while (1) {
+                int c = fgetc(in_b);
+                if (c == EOF)
+                        break;
+
+                fputc(c, out);
+        }
+
+        fclose(out);
+        fclose(in_a);
+        fclose(in_b);
 }
 
 static int path_to_filename(char* dst, char* src)
@@ -131,6 +157,7 @@ int main(int argc, char** argv)
         yyin = open_in_file(in_path);
         yyout = open_null_out_file();
         yyaskA = open_out_file("onbc.tmp.0");
+        yyaskB = open_out_file("onbc.tmp.1");
 
         start_pre_process(in_path);
         while (yylex() != 0) {
@@ -144,10 +171,14 @@ int main(int argc, char** argv)
         yyparse();
 
         fclose(yyaskA);
+        fclose(yyaskB);
         fclose(yyin);
 
+        /* yyaskB -> yyaskA の順でファイルをマージする */
+        marge_file("onbc.tmp.2", "onbc.tmp.1", "onbc.tmp.0");
+
 #ifndef DISABLE_TUNE
-        yyin = open_in_file("onbc.tmp.0");
+        yyin = open_in_file("onbc.tmp.2");
         yyaskB = open_out_file(out_path);
 
         start_tune_process();
