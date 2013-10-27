@@ -460,10 +460,13 @@ static struct Var* __new_var_initializer_global(struct Var* var, const int32_t t
         if (ret == NULL)
                 yyerror("system err: グローバル変数の作成に失敗しました");
 
-        /* この変数用のヒープ上のメモリー領域に、値格納位置への関節参照アドレスを書き込む */
-        pA("stack_socket = %d;", ret->base_ptr);
-        pA("stack_tmp = %d;", ret->base_ptr + 1);
-        write_mem("stack_tmp", "stack_socket");
+        /* この変数用のヒープ上のメモリー領域に、
+         * 値格納位置への関節参照アドレスを書き込むコードを、
+         * ソースコードの上側(pB()による)へ出力する
+         */
+        pB("stack_socket = %d;", ret->base_ptr);
+        pB("stack_tmp = %d;", ret->base_ptr + 1);
+        write_mem_pB("stack_tmp", "stack_socket");
 
         return ret;
 }
