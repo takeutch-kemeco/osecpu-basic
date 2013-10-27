@@ -538,32 +538,39 @@ pA_mes("\\n");
                         translate_ec(ec->child_ptr[1]);
 
         } else if (ec->type_expression == EC_CONSTANT) {
+                /* 未定義の定数だった場合は、
+                 * pB()によってファイルの上側に定数設定処理を追加する
+                 */
                 struct Var* tmp = global_varlist_search(ec->var->iden);
                 if (tmp == NULL) {
-                        struct Var* tmp = __new_var_initializer(ec->var, ec->var->type);
+                        tmp = __new_var_initializer(ec->var, ec->var->type);
+                        if (tmp == NULL)
+                                yyerror("system err: EC_CONSTANT, __new_var_initializer()");
 
-                        /* 定数を読み込んだ後に、tmpを代入する。
-                         * この順序で行う理由は、
-                         * const_variableは__new_var_initializer()では記録されない為。
-                         */
-                        pA("fixR = %d;", *((int*)(ec->var->const_variable)));
-                        *(ec->var) = *tmp;
+                        /* const_variableは__new_var_initializer()では記録されない為 */
+                        pB("fixR = %d;", *((int*)(ec->var->const_variable)));
 
                         /* 値を値格納位置へと書き込む。
                          * この値格納位置へのアドレスは、定数ならば base_ptr + 1 なので、
                          * その数値で直接指定すれば read_mem() を省略できるが、
                          * あえて、差は付けずに、通常の変数と同様の方法でアドレスを得てる。
                          */
-                        pA("fixL = %d;", ec->var->base_ptr);
-                        read_mem("fixL", "fixL");
-                        write_mem("fixR", "fixL");
-                } else {
-                        *(ec->var) = *tmp;
-
-                        pA("fixL = %d;", ec->var->base_ptr);
-                        read_mem("fixL", "fixL");
+                        pB("fixL = %d;", tmp->base_ptr);
+                        read_mem_pB("fixL", "fixL");
+                        write_mem_pB("fixR", "fixL");
                 }
 
+                /* この時点では定数は必ず定義済みであるはずなので、
+                 * あとは通常の定数読み込み -> スタックへプッシュを行うだけ
+                 */
+                tmp = global_varlist_search(ec->var->iden);
+                if (tmp == NULL)
+                        yyerror("system err: EC_CONSTANT");
+
+                *(ec->var) = *tmp;
+
+                pA("fixL = %d;", ec->var->base_ptr);
+                read_mem("fixL", "fixL");
                 push_stack("fixL");
         } else {
                 yyerror("system err: translate_ec()");
