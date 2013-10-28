@@ -74,5 +74,9 @@ void local_varlist_scope_pop(void);
 struct Var* global_varlist_search(const char* iden);
 struct Var* varlist_search(const char* iden);
 struct Var* __new_var_initializer(struct Var* var, const int32_t type);
+struct Var* var_clear_type(struct Var* var);
+struct Var* var_normalization_type(struct Var* var);
+int32_t var_is_integral(struct Var* var);
+int32_t var_is_floating(struct Var* var);
 
 #endif /* __ONBC_VAR_H__ */

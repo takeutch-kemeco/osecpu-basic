@@ -489,3 +489,78 @@ struct Var* __new_var_initializer(struct Var* var, int32_t type)
         else
                 return __new_var_initializer_global(var, type);
 }
+
+/* 変数スペックの変数の型に関する type をクリアーする
+ */
+struct Var* var_clear_type(struct Var* var)
+{
+        var->type &= ~(TYPE_SIGNED | TYPE_UNSIGNED |
+                       TYPE_CHAR | TYPE_SHORT | TYPE_INT | TYPE_LONG |
+                       TYPE_FLOAT | TYPE_DOUBLE |
+                       TYPE_VOID);
+
+        return var;
+}
+
+/* 変数スペックの type を正規化する。
+ *
+ * ・signed と unsigned が同時に指定されてる場合は unsigned のみに修正する。
+ * ・変数型は double < float < int < long < short < char < void の優先度で修正する。
+ */
+struct Var* var_normalization_type(struct Var* var)
+{
+        int32_t signed_tmp;
+        if (var->type & TYPE_UNSIGNED)
+                signed_tmp = TYPE_UNSIGNED;
+        else
+                signed_tmp = TYPE_SIGNED;
+
+        int32_t type_tmp;
+        if (var->type & TYPE_DOUBLE)
+                type_tmp = TYPE_DOUBLE;
+        else if (var->type & TYPE_FLOAT)
+                type_tmp = TYPE_FLOAT;
+        else if (var->type & TYPE_INT)
+                type_tmp = TYPE_INT;
+        else if (var->type & TYPE_LONG)
+                type_tmp = TYPE_LONG;
+        else if (var->type & TYPE_SHORT)
+                type_tmp = TYPE_SHORT;
+        else if (var->type & TYPE_CHAR)
+                type_tmp &= TYPE_CHAR;
+        else if (var->type & TYPE_VOID)
+                type_tmp &= TYPE_VOID;
+        else
+                yyerror("var_normalization_type()");
+
+        var = var_clear_type(var);
+        var->type &= signed_tmp | type_tmp;
+
+        return var;
+}
+
+/* 変数スペックが整数型である場合は真を返す。
+ * あらかじめ var の型を var_normalization_type() で正規化してから渡すべき。
+ */
+int32_t var_is_integral(struct Var* var)
+{
+        if ((var->type & TYPE_CHAR) ||
+            (var->type & TYPE_SHORT) ||
+            (var->type & TYPE_INT) ||
+            (var->type & TYPE_LONG))
+                return 1;
+
+        return 0;
+}
+
+/* 変数スペックが浮動小数点数型である場合は真を返す。
+ * あらかじめ var の型を var_normalization_type() で正規化してから渡すべき。
+ */
+int32_t var_is_floating(struct Var* var)
+{
+        if ((var->type & TYPE_FLOAT) ||
+            (var->type & TYPE_DOUBLE))
+                return 1;
+
+        return 0;
+}
