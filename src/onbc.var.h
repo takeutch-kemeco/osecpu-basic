@@ -78,5 +78,6 @@ struct Var* var_clear_type(struct Var* var);
 struct Var* var_normalization_type(struct Var* var);
 int32_t var_is_integral(struct Var* var);
 int32_t var_is_floating(struct Var* var);
+int32_t var_is_void(struct Var* var);
 
 #endif /* __ONBC_VAR_H__ */

@@ -564,3 +564,14 @@ int32_t var_is_floating(struct Var* var)
 
         return 0;
 }
+
+/* 変数スペックがvoid型である場合は真を返す。
+ * あらかじめ var の型を var_normalization_type() で正規化してから渡すべき。
+ */
+int32_t var_is_void(struct Var* var)
+{
+        if (var->type & TYPE_VOID)
+                return 1;
+
+        return 0;
+}
