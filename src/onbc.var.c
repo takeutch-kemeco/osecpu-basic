@@ -531,10 +531,10 @@ struct Var* var_normalization_type(struct Var* var)
         else if (var->type & TYPE_VOID)
                 type_tmp &= TYPE_VOID;
         else
-                yyerror("var_normalization_type()");
+                yyerror("system err: var_normalization_type()");
 
         var = var_clear_type(var);
-        var->type &= signed_tmp | type_tmp;
+        var->type |= signed_tmp | type_tmp;
 
         return var;
 }
