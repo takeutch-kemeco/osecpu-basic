@@ -131,6 +131,15 @@ struct Var* new_var(void)
         return var;
 }
 
+/* Varインスタンスを開放する */
+void free_var(struct Var* var)
+{
+        if (var->const_variable != NULL)
+                free(var->const_variable);
+
+        free(var);
+}
+
 /* スタックからのポップ。
  * ただしVar->is_lvalue, Var->dim_lenに応じて間接参照・直接参照を切り替える
  */

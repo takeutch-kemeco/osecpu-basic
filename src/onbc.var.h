@@ -68,6 +68,7 @@ struct Var* var_set_param(struct Var* var,
                           const int32_t is_lvalue,
                           void* const_valiable);
 struct Var* new_var(void);
+void free_var(struct Var* var);
 void var_pop_stack(struct Var* var, const char* register_name);
 void local_varlist_scope_push(void);
 void local_varlist_scope_pop(void);
