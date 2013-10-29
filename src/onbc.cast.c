@@ -16,61 +16,35 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+#include <stdio.h>
 #include "onbc.print.h"
 #include "onbc.var.h"
 
 /* 型変換関連
  */
 
-/* 2項演算の場合のキャスト結果のVarを生成して返す
+/* 2つの変数スペックの型の共通の汎用型を生成して返す。
+ * var_a, var_b は type をあらかじめ正規化しておくべき。
  */
-struct Var* var_cast_new(struct Var* var1, struct Var* var2)
+struct Var* new_var_binary_type_promotion(struct Var* lvar, struct Var* rvar)
 {
-        struct Var* var0 = new_var();
+        struct Var* var = new_var();
 
-        /* より汎用性の高い方の型を var0 に得る。
-         * その際に、var0は非配列型とするので、var->total_lenには型の基本サイズが入る。
-         * 現状は実質的に SInt32 型のみなので、どの型も 1 となる。(void型も1)
-         */
-        if ((var1->type & TYPE_DOUBLE) || (var2->type & TYPE_DOUBLE)) {
-                var0->type = TYPE_DOUBLE;
-                var0->total_len = 1;
-        } else if ((var1->type & TYPE_FLOAT) || (var2->type & TYPE_FLOAT)) {
-                var0->type = TYPE_FLOAT;
-                var0->total_len = 1;
-        } else if ((var1->type & TYPE_INT) || (var2->type & TYPE_INT)) {
-                var0->type = TYPE_INT;
-                var0->total_len = 1;
-        } else if ((var1->type & TYPE_LONG) || (var2->type & TYPE_LONG)) {
-                var0->type = TYPE_LONG;
-                var0->total_len = 1;
-        } else if ((var1->type & TYPE_SHORT) || (var2->type & TYPE_SHORT)) {
-                var0->type = TYPE_SHORT;
-                var0->total_len = 1;
-        } else if ((var1->type & TYPE_CHAR) || (var2->type & TYPE_CHAR)) {
-                var0->type = TYPE_CHAR;
-                var0->total_len = 1;
-        } else if ((var1->type & TYPE_VOID) || (var2->type & TYPE_VOID)) {
-                var0->type = TYPE_VOID;
-                var0->total_len = 1;
+        if (var_is_void(lvar) || var_is_void(rvar)) {
+                var->type = TYPE_VOID;
+                var->total_len = 1;
+        } else if (var_is_floating(lvar) || var_is_floating(rvar)) {
+                var->type = TYPE_DOUBLE;
+                var->total_len = 1;
+        } else if (var_is_integral(lvar) || var_is_integral(rvar)) {
+                var->type = TYPE_SIGNED;
+                var->type = TYPE_INT;
+                var->total_len = 1;
         } else {
-                yyerror("system err: var_cast_new(), variable type not found");
+                yyerror("system err: new_var_binary_type_promotion()");
         }
 
-        var0->is_lvalue = 0; /* 右辺値とする */
-
-#ifdef DEBUG_VAR_CAST
-        printf("var0, ");
-        var_print(var0);
-
-        printf("var1, ");
-        var_print(var1);
-
-        printf("var2, ");
-        var_print(var2);
-#endif /* DEBUG_VAR_CAST */
-
-        return var0;
+        return var;
 }
 
 /* 任意レジスターの値を型変換する
@@ -99,8 +73,7 @@ void cast_regval(const char* register_name,
 
         /* 参照時のsrcが非ポインター型、dstがポインター型の場合 */
         } else if (src_var->indirect_len == 0 && dst_var->indirect_len >= 1) {
-                if (src_var->type & (TYPE_FLOAT | TYPE_DOUBLE))
-                        pA("%s >>= 16;", register_name); /* 固定小数点数から整数へ変換 */
+                /* 何もしない */
 
         /* 参照時のsrc,dstが非ポインター型の場合
          */
