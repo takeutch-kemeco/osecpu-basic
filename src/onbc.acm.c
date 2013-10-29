@@ -83,8 +83,8 @@ __var_common_operation_new(struct Var* var0,
  * __func_*() は fixL operator fixR -> fixA な動作を行う前提
  */
 struct Var*
-__var_binary_operation_new(struct Var* var1,
-                           struct Var* var2,
+__var_binary_operation_new(struct Var* lvar,
+                           struct Var* rvar,
                            void_func __func_int,
                            void_func __func_char,
                            void_func __func_short,
@@ -93,15 +93,29 @@ __var_binary_operation_new(struct Var* var1,
                            void_func __func_double,
                            void_func __func_ptr)
 {
-        struct Var* var0 = var_cast_new(var1, var2);
+        rvar = var_normalization_type(rvar);
+        var_pop_stack(rvar, "fixR");
 
-        var_pop_stack(var2, "fixR");
-        cast_regval("fixR", var0, var2);
+        lvar = var_normalization_type(lvar);
+        var_pop_stack(lvar, "fixL");
 
-        var_pop_stack(var1, "fixL");
-        cast_regval("fixL", var0, var1);
+        struct Var* var;
+        if (lvar->indirect_len >= 1 && rvar->indirect_len >= 1) {
+                var = new_var();
+                *var = *lvar;
+        } else if (lvar->indirect_len >= 1 && rvar->indirect_len >= 0) {
+                var = new_var();
+                *var = *lvar;
+        } else if (lvar->indirect_len >= 0 && rvar->indirect_len >= 1) {
+                var = new_var();
+                *var = *rvar;
+        } else {
+                var = new_var_binary_type_promotion(lvar, rvar);
+                cast_regval("fixR", var, rvar);
+                cast_regval("fixL", var, lvar);
+        }
 
-        __var_common_operation_new(var0,
+        __var_common_operation_new(var,
                                    __func_int,
                                    __func_char,
                                    __func_short,
@@ -110,7 +124,7 @@ __var_binary_operation_new(struct Var* var1,
                                    __func_double,
                                    __func_ptr);
 
-        return var0;
+        return var;
 }
 
 /* 単項演算の共通ルーチン
@@ -363,7 +377,9 @@ __var_func_not_new(struct Var* var1)
 
 static void __var_func_eq_common(struct Var* var1, struct Var* var2)
 {
-        struct Var* var0 = var_cast_new(var1, var2);
+        var1 = var_normalization_type(var1);
+        var2 = var_normalization_type(var2);
+        struct Var* var0 = new_var_binary_type_promotion(var1, var2);
 
         var_pop_stack(var2, "fixR");
         cast_regval("fixR", var0, var2);
