@@ -78,8 +78,8 @@ var_binary_implicit_type_promotion(struct Var* avar,
                                    struct Var* rvar, const char* rreg)
 {
         if ((lvar->indirect_len == 0) && (rvar->indirect_len == 0)) {
-                cast_regval(lreg, avar, lvar);
-                cast_regval(rreg, avar, rvar);
+                cast_regval(avar, lvar, lreg);
+                cast_regval(avar, rvar, rreg);
         }
 }
 
@@ -493,7 +493,7 @@ __var_func_assignment_new(const char* areg,
         pA_mes("\\n");
 #endif /* DEBUG_VAR_FUNC_ASSIGNMENT_NEW */
 
-        cast_regval(rreg, avar, rvar);
+        cast_regval(avar, rvar, rreg);
         write_mem(rreg, lreg);
 
         push_stack(rreg);
