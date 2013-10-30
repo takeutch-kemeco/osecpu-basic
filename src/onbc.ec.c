@@ -441,12 +441,10 @@ pA_mes("\\n");
                 } else if (ec->type_operator == EC_OPE_POINTER) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
-                        if (ec->var->is_lvalue) {
-                                if (ec->var->indirect_len <= 0)
-                                        yyerror("syntax err: 間接参照の深さが不正です");
+                        if (ec->var->indirect_len <= 0)
+                                yyerror("syntax err: 間接参照の深さが不正です");
 
-                                ec->var->indirect_len--;
-                        }
+                        ec->var->indirect_len--;
 
                         var_pop_stack(ec->var, "stack_socket");
                         push_stack("stack_socket");
