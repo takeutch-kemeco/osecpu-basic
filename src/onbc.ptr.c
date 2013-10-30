@@ -162,40 +162,54 @@ void __func_not_ptr(struct Var* avar, const char* areg,
                     const char* lreg, const char* rreg)
 {
         pA("if (%s != 0) {%s = 0;} else {%s = 1;}", lreg, areg, areg);
+        var_clear_type(avar);
+        avar->type |= TYPE_SIGNED | TYPE_INT;
 }
 
 void __func_eq_ptr(struct Var* avar, const char* areg,
                    const char* lreg, const char* rreg)
 {
         pA("if (%s == %s) {%s = 1;} else {%s = 0;}", lreg, rreg, areg, areg);
+        var_clear_type(avar);
+        avar->type |= TYPE_SIGNED | TYPE_INT;
 }
 
 void __func_ne_ptr(struct Var* avar, const char* areg,
                    const char* lreg, const char* rreg)
 {
         pA("if (%s != %s) {%s = 1;} else {%s = 0;}", lreg, rreg, areg, areg);
+        var_clear_type(avar);
+        avar->type |= TYPE_SIGNED | TYPE_INT;
 }
 
 void __func_lt_ptr(struct Var* avar, const char* areg,
                    const char* lreg, const char* rreg)
 {
         pA("if (%s < %s) {%s = 1;} else {%s = 0;}", lreg, rreg, areg, areg);
+        var_clear_type(avar);
+        avar->type |= TYPE_SIGNED | TYPE_INT;
 }
 
 void __func_gt_ptr(struct Var* avar, const char* areg,
                    const char* lreg, const char* rreg)
 {
         pA("if (%s > %s) {%s = 1;} else {%s = 0;}", lreg, rreg, areg, areg);
+        var_clear_type(avar);
+        avar->type |= TYPE_SIGNED | TYPE_INT;
 }
 
 void __func_le_ptr(struct Var* avar, const char* areg,
                    const char* lreg, const char* rreg)
 {
         pA("if (%s <= %s) {%s = 1;} else {%s = 0;}", lreg, rreg, areg, areg);
+        var_clear_type(avar);
+        avar->type |= TYPE_SIGNED | TYPE_INT;
 }
 
 void __func_ge_ptr(struct Var* avar, const char* areg,
                    const char* lreg, const char* rreg)
 {
         pA("if (%s >= %s) {%s = 1;} else {%s = 0;}", lreg, rreg, areg, areg);
+        var_clear_type(avar);
+        avar->type |= TYPE_SIGNED | TYPE_INT;
 }
