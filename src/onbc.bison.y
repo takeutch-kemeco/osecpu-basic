@@ -419,8 +419,8 @@ parameter_list
         | parameter_list __OPE_COMMA parameter_declaration {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_PARAMETER_LIST;
-                ec->child_ptr[0] = $3;
-                ec->child_ptr[1] = $1;
+                ec->child_ptr[0] = $1;
+                ec->child_ptr[1] = $3;
                 ec->child_len = 2;
                 $$ = ec;
         }
