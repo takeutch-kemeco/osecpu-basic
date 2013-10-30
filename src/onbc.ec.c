@@ -138,7 +138,9 @@ void translate_ec(struct EC* ec)
                 translate_ec(ec->child_ptr[1]);
 
                 ec->var->is_lvalue = 1;
-                *(ec->var) = *(__var_func_assignment_new(ec->var, ec->child_ptr[1]->var));
+                *(ec->var) = *(__var_func_assignment_new("fixA",
+                                                         ec->var, "fixL",
+                                                         ec->child_ptr[1]->var, "fixR"));
                 pop_stack_dummy();
         } else if (ec->type_expression == EC_DECLARATOR) {
                 if (ec->var->type & TYPE_FUNCTION)
@@ -323,7 +325,9 @@ pA_mes("\\n");
                 /* 何もしない */
         } else if (ec->type_expression == EC_ASSIGNMENT) {
                 if (ec->type_operator == EC_OPE_SUBST) {
-                        *(ec->var) = *(__var_func_assignment_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var));
+                        *(ec->var) = *(__var_func_assignment_new("fixA",
+                                                                 ec->child_ptr[0]->var, "fixL",
+                                                                 ec->child_ptr[1]->var, "fixR"));
                 } else if (ec->type_operator == EC_OPE_LIST) {
                         /* 何もしない */
                 } else {
@@ -331,37 +335,69 @@ pA_mes("\\n");
                 }
         } else if (ec->type_expression == EC_CALC) {
                 if (ec->type_operator == EC_OPE_ADD) {
-                        ec->var = __var_func_add_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_add_new("fixA",
+                                                     ec->child_ptr[0]->var, "fixL",
+                                                     ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_SUB) {
-                        ec->var = __var_func_sub_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_sub_new("fixA",
+                                                     ec->child_ptr[0]->var, "fixL",
+                                                     ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_MUL) {
-                        ec->var = __var_func_mul_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_mul_new("fixA",
+                                                     ec->child_ptr[0]->var, "fixL",
+                                                     ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_DIV) {
-                        ec->var = __var_func_div_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_div_new("fixA",
+                                                     ec->child_ptr[0]->var, "fixL",
+                                                     ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_MOD) {
-                        ec->var = __var_func_mod_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_mod_new("fixA",
+                                                     ec->child_ptr[0]->var, "fixL",
+                                                     ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_OR) {
-                        ec->var = __var_func_or_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_or_new("fixA",
+                                                    ec->child_ptr[0]->var, "fixL",
+                                                    ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_AND) {
-                        ec->var = __var_func_and_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_and_new("fixA",
+                                                     ec->child_ptr[0]->var, "fixL",
+                                                     ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_XOR) {
-                        ec->var = __var_func_xor_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_xor_new("fixA",
+                                                     ec->child_ptr[0]->var, "fixL",
+                                                     ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_LSHIFT) {
-                        ec->var = __var_func_lshift_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_lshift_new("fixA",
+                                                        ec->child_ptr[0]->var, "fixL",
+                                                        ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_RSHIFT) {
-                        ec->var = __var_func_rshift_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_rshift_new("fixA",
+                                                        ec->child_ptr[0]->var, "fixL",
+                                                        ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_EQ) {
-                        ec->var = __var_func_eq_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_eq_new("fixA",
+                                                    ec->child_ptr[0]->var, "fixL",
+                                                    ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_NE) {
-                        ec->var = __var_func_ne_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_ne_new("fixA",
+                                                    ec->child_ptr[0]->var, "fixL",
+                                                    ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_LT) {
-                        ec->var = __var_func_lt_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_lt_new("fixA",
+                                                    ec->child_ptr[0]->var, "fixL",
+                                                    ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_LE) {
-                        ec->var = __var_func_le_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_le_new("fixA",
+                                                    ec->child_ptr[0]->var, "fixL",
+                                                    ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_GT) {
-                        ec->var = __var_func_gt_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_gt_new("fixA",
+                                                    ec->child_ptr[0]->var, "fixL",
+                                                    ec->child_ptr[1]->var, "fixR");
                 } else if (ec->type_operator == EC_OPE_GE) {
-                        ec->var = __var_func_ge_new(ec->child_ptr[0]->var, ec->child_ptr[1]->var);
+                        ec->var = __var_func_ge_new("fixA",
+                                                    ec->child_ptr[0]->var, "fixL",
+                                                    ec->child_ptr[1]->var, "fixR");
                 } else {
                         yyerror("system err: translate_ec(), EC_CALC");
                 }
@@ -417,11 +453,14 @@ pA_mes("\\n");
 
                         ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_INV) {
-                        ec->var = __var_func_invert_new(ec->child_ptr[0]->var);
+                        ec->var = __var_func_invert_new("fixA",
+                                                        ec->child_ptr[0]->var, "fixL");
                 } else if (ec->type_operator == EC_OPE_NOT) {
-                        ec->var = __var_func_not_new(ec->child_ptr[0]->var);
+                        ec->var = __var_func_not_new("fixA",
+                                                     ec->child_ptr[0]->var, "fixL");
                 } else if (ec->type_operator == EC_OPE_SUB) {
-                        ec->var = __var_func_minus_new(ec->child_ptr[0]->var);
+                        ec->var = __var_func_minus_new("fixA",
+                                                       ec->child_ptr[0]->var, "fixL");
                 } else if (ec->type_operator == EC_OPE_SIZEOF) {
                         ec->var = ec->child_ptr[0]->var;
                         pA("stack_socket = %d;", ec->var->total_len);

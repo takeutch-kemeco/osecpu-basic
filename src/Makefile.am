@@ -18,8 +18,10 @@ libonbc_la_SOURCES = onbc.print.c onbc.print.h \
                      onbc.label.c onbc.label.h \
                      onbc.eoe.c onbc.eoe.h \
                      onbc.func.c onbc.func.h \
-                     onbc.int.c onbc.int.h \
-                     onbc.float.c onbc.float.h \
+                     onbc.sint.c onbc.sint.h \
+                     onbc.uint.c onbc.uint.h \
+                     onbc.double.c onbc.double.h \
+                     onbc.ptr.c onbc.ptr.h \
                      onbc.cast.c onbc.cast.h \
                      onbc.acm.c onbc.acm.h \
                      onbc.struct.c onbc.struct.h

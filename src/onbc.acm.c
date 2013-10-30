@@ -22,8 +22,10 @@
 #include "onbc.mem.h"
 #include "onbc.cast.h"
 #include "onbc.var.h"
-#include "onbc.int.h"
-#include "onbc.float.h"
+#include "onbc.sint.h"
+#include "onbc.uint.h"
+#include "onbc.double.h"
+#include "onbc.ptr.h"
 #include "onbc.acm.h"
 
 /* 共通アキュムレーター
@@ -31,100 +33,93 @@
 
 /* x項演算の共通ルーチン
  *
- * 各 __func_*() には、その型の場合における演算を行う関数を渡す。
+ * 各 __func_*() には、その型の場合における演算を行う acm_func 関数を渡す。
  */
 static void
-__var_common_operation_new(struct Var* var0,
-                           void_func __func_int,
-                           void_func __func_char,
-                           void_func __func_short,
-                           void_func __func_long,
-                           void_func __func_float,
-                           void_func __func_double,
-                           void_func __func_ptr)
+var_common_operation_new(struct Var* avar,
+                         const char* areg,
+                         const char* lreg,
+                         const char* rreg,
+                         acm_func __func_sint,
+                         acm_func __func_uint,
+                         acm_func __func_double,
+                         acm_func __func_ptr)
 {
-        /* var0が非ポインター型の場合
+        /* avarの型に応じて分岐
          */
-        if (var0->indirect_len == 0) {
-                if (var0->type & TYPE_INT)
-                        __func_int();
-                else if (var0->type & TYPE_CHAR)
-                        __func_char();
-                else if (var0->type & TYPE_SHORT)
-                        __func_short();
-                else if (var0->type & TYPE_LONG)
-                        __func_long();
-                else if (var0->type & TYPE_FLOAT)
-                        __func_float();
-                else if (var0->type & TYPE_DOUBLE)
-                        __func_double();
-                else if (var0->type & TYPE_VOID)
-                        yyerror("syntax err: void型に対して演算を行ってます");
-                else
-                        yyerror("system err: __var_binary_operation_new()");
-
-        /* var0がポインター型の場合
-         */
+        if (avar->indirect_len >= 1) {
+                __func_ptr(avar, areg, lreg, rreg);
+        } else if (var_is_integral(avar)) {
+                if (avar->type & TYPE_SIGNED) {
+                        __func_sint(avar, areg, lreg, rreg);
+                } else if (avar->type & TYPE_UNSIGNED) {
+                        __func_uint(avar, areg, lreg, rreg);
+                } else {
+                        yyerror("__var_common_operation_new(), integral type err");
+                }
+        } else if (var_is_floating(avar)) {
+                __func_double(avar, areg, lreg, rreg);
+        } else if (var_is_void(avar)) {
+                yyerror("syntax err: void 型への演算を行いました");
         } else {
-                if (__func_ptr != NULL)
-                        __func_ptr();
-                else
-                        yyerror("syntax err: ポインター型に対して不正な演算を行ってます");
+                yyerror("__var_common_operation_new(), type err");
         }
 
-        var0->is_lvalue = 0; /* 右辺値とする */
+        avar->is_lvalue = 0; /* 右辺値とする */
 
-        push_stack("fixA");
+        push_stack(areg);
+}
+
+/* 二項の暗黙の型変換を行う
+ */
+static void
+var_binary_implicit_type_promotion(struct Var* avar,
+                                   struct Var* lvar, const char* lreg,
+                                   struct Var* rvar, const char* rreg)
+{
+        if ((lvar->indirect_len == 0) && (rvar->indirect_len == 0)) {
+                cast_regval(lreg, avar, lvar);
+                cast_regval(rreg, avar, rvar);
+        }
 }
 
 /* 二項演算の共通ルーチン
  *
  * 各 __func_*() には、その型の場合における演算を行う関数を渡す。
- * __func_*() は fixL operator fixR -> fixA な動作を行う前提
+ * __func_*() は a = l ope r な動作を行う前提
  */
-struct Var*
-__var_binary_operation_new(struct Var* lvar,
-                           struct Var* rvar,
-                           void_func __func_int,
-                           void_func __func_char,
-                           void_func __func_short,
-                           void_func __func_long,
-                           void_func __func_float,
-                           void_func __func_double,
-                           void_func __func_ptr)
+static struct Var*
+var_binary_operation_new(const char* areg,
+                         struct Var* lvar, const char* lreg,
+                         struct Var* rvar, const char* rreg,
+                         acm_func __func_sint,
+                         acm_func __func_uint,
+                         acm_func __func_double,
+                         acm_func __func_ptr)
 {
         rvar = var_normalization_type(rvar);
-        var_pop_stack(rvar, "fixR");
+        var_pop_stack(rvar, rreg);
 
         lvar = var_normalization_type(lvar);
-        var_pop_stack(lvar, "fixL");
+        var_pop_stack(lvar, lreg);
 
-        struct Var* var;
-        if (lvar->indirect_len >= 1 && rvar->indirect_len >= 1) {
-                var = new_var();
-                *var = *lvar;
-        } else if (lvar->indirect_len >= 1 && rvar->indirect_len >= 0) {
-                var = new_var();
-                *var = *lvar;
-        } else if (lvar->indirect_len >= 0 && rvar->indirect_len >= 1) {
-                var = new_var();
-                *var = *rvar;
-        } else {
-                var = new_var_binary_type_promotion(lvar, rvar);
-                cast_regval("fixR", var, rvar);
-                cast_regval("fixL", var, lvar);
+        struct Var* avar = new_var_binary_type_promotion(lvar, rvar);
+        var_binary_implicit_type_promotion(avar, lvar, lreg, rvar, rreg);
+
+        /* r のみがポインター型の場合は、
+         * l と r を入れ替えて a = r ope l を計算するため。
+         */
+        if (lvar->indirect_len >= 0 && rvar->indirect_len >= 1) {
+                struct Var* tmp = lvar;
+                lvar = rvar;
+                rvar = lvar;
         }
 
-        __var_common_operation_new(var,
-                                   __func_int,
-                                   __func_char,
-                                   __func_short,
-                                   __func_long,
-                                   __func_float,
-                                   __func_double,
-                                   __func_ptr);
+        var_common_operation_new(avar, areg, lreg, rreg,
+                                 __func_sint, __func_uint,
+                                 __func_double, __func_ptr);
 
-        return var;
+        return avar;
 }
 
 /* 単項演算の共通ルーチン
@@ -133,369 +128,375 @@ __var_binary_operation_new(struct Var* lvar,
  * __func_*() は fixL -> fixA な動作を行う前提
  */
 
-struct Var*
-__var_unary_operation_new(struct Var* var1,
-                          void_func __func_int,
-                          void_func __func_char,
-                          void_func __func_short,
-                          void_func __func_long,
-                          void_func __func_float,
-                          void_func __func_double,
-                          void_func __func_ptr)
+static struct Var*
+var_unary_operation_new(const char* areg,
+                        struct Var* lvar, const char* lreg,
+                        acm_func __func_sint,
+                        acm_func __func_uint,
+                        acm_func __func_double,
+                        acm_func __func_ptr)
 {
-        struct Var* var0 = new_var();
-        *var0 = *var1;
+        lvar = var_normalization_type(lvar);
+        var_pop_stack(lvar, lreg);
 
-        var_pop_stack(var1, "fixL");
+        struct Var* avar = new_var();
+        *avar = *lvar;
+        var_pop_stack(lvar, lreg);
 
-        __var_common_operation_new(var0,
-                                   __func_int,
-                                   __func_char,
-                                   __func_short,
-                                   __func_long,
-                                   __func_float,
-                                   __func_double,
-                                   __func_ptr);
+        var_common_operation_new(avar, areg, lreg, NULL,
+                                 __func_sint, __func_uint,
+                                 __func_double, __func_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_add_new(struct Var* var1, struct Var* var2)
+__var_func_add_new(const char* areg,
+                   struct Var* lvar, const char* lreg,
+                   struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 =
-                __var_binary_operation_new(var1,
-                                           var2,
-                                           __func_add_int,
-                                           __func_add_int,
-                                           __func_add_int,
-                                           __func_add_int,
-                                           __func_add_float,
-                                           __func_add_float,
-                                           __func_add_int);
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_add_sint,
+                                         __func_add_uint,
+                                         __func_add_double,
+                                         __func_add_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_sub_new(struct Var* var1, struct Var* var2)
+__var_func_sub_new(const char* areg,
+                   struct Var* lvar, const char* lreg,
+                   struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 =
-                __var_binary_operation_new(var1,
-                                           var2,
-                                           __func_sub_int,
-                                           __func_sub_int,
-                                           __func_sub_int,
-                                           __func_sub_int,
-                                           __func_sub_float,
-                                           __func_sub_float,
-                                           __func_sub_int);
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_sub_sint,
+                                         __func_sub_uint,
+                                         __func_sub_double,
+                                         __func_sub_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_mul_new(struct Var* var1, struct Var* var2)
+__var_func_mul_new(const char* areg,
+                   struct Var* lvar, const char* lreg,
+                   struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 =
-                __var_binary_operation_new(var1,
-                                           var2,
-                                           __func_mul_int,
-                                           __func_mul_int,
-                                           __func_mul_int,
-                                           __func_mul_int,
-                                           __func_mul_float,
-                                           __func_mul_float,
-                                           NULL);
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_mul_sint,
+                                         __func_mul_uint,
+                                         __func_mul_double,
+                                         __func_mul_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_div_new(struct Var* var1, struct Var* var2)
+__var_func_div_new(const char* areg,
+                   struct Var* lvar, const char* lreg,
+                   struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 =
-                __var_binary_operation_new(var1,
-                                           var2,
-                                           __func_div_int,
-                                           __func_div_int,
-                                           __func_div_int,
-                                           __func_div_int,
-                                           __func_div_float,
-                                           __func_div_float,
-                                           NULL);
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_div_sint,
+                                         __func_div_uint,
+                                         __func_div_double,
+                                         __func_div_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_mod_new(struct Var* var1, struct Var* var2)
+__var_func_mod_new(const char* areg,
+                   struct Var* lvar, const char* lreg,
+                   struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 =
-                __var_binary_operation_new(var1,
-                                           var2,
-                                           __func_mod_int,
-                                           __func_mod_int,
-                                           __func_mod_int,
-                                           __func_mod_int,
-                                           __func_mod_float,
-                                           __func_mod_float,
-                                           NULL);
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_mod_sint,
+                                         __func_mod_uint,
+                                         __func_mod_double,
+                                         __func_mod_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_minus_new(struct Var* var1)
+__var_func_minus_new(const char* areg,
+                     struct Var* lvar, const char* lreg)
 {
-        struct Var* var0 =
-                __var_unary_operation_new(var1,
-                                          __func_minus_int,
-                                          __func_minus_int,
-                                          __func_minus_int,
-                                          __func_minus_int,
-                                          __func_minus_float,
-                                          __func_minus_float,
-                                          NULL);
+        struct Var* avar =
+                var_unary_operation_new(areg,
+                                        lvar, lreg,
+                                        __func_minus_sint,
+                                        __func_minus_uint,
+                                        __func_minus_double,
+                                        __func_minus_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_and_new(struct Var* var1, struct Var* var2)
+__var_func_and_new(const char* areg,
+                   struct Var* lvar, const char* lreg,
+                   struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 =
-                __var_binary_operation_new(var1,
-                                           var2,
-                                           __func_and_int,
-                                           __func_and_int,
-                                           __func_and_int,
-                                           __func_and_int,
-                                           __func_and_float,
-                                           __func_and_float,
-                                           NULL);
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_and_sint,
+                                         __func_and_uint,
+                                         __func_and_double,
+                                         __func_and_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_or_new(struct Var* var1, struct Var* var2)
+__var_func_or_new(const char* areg,
+                  struct Var* lvar, const char* lreg,
+                  struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 =
-                __var_binary_operation_new(var1,
-                                           var2,
-                                           __func_or_int,
-                                           __func_or_int,
-                                           __func_or_int,
-                                           __func_or_int,
-                                           __func_or_float,
-                                           __func_or_float,
-                                           NULL);
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_or_sint,
+                                         __func_or_uint,
+                                         __func_or_double,
+                                         __func_or_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_xor_new(struct Var* var1, struct Var* var2)
+__var_func_xor_new(const char* areg,
+                   struct Var* lvar, const char* lreg,
+                   struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 =
-                __var_binary_operation_new(var1,
-                                           var2,
-                                           __func_xor_int,
-                                           __func_xor_int,
-                                           __func_xor_int,
-                                           __func_xor_int,
-                                           __func_xor_float,
-                                           __func_xor_float,
-                                           NULL);
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_xor_sint,
+                                         __func_xor_uint,
+                                         __func_xor_double,
+                                         __func_xor_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_invert_new(struct Var* var1)
+__var_func_invert_new(const char* areg,
+                      struct Var* lvar, const char* lreg)
 {
-        struct Var* var0 =
-                __var_unary_operation_new(var1,
-                                          __func_invert_int,
-                                          __func_invert_int,
-                                          __func_invert_int,
-                                          __func_invert_int,
-                                          __func_invert_float,
-                                          __func_invert_float,
-                                          NULL);
+        struct Var* avar =
+                var_unary_operation_new(areg,
+                                        lvar, lreg,
+                                        __func_invert_sint,
+                                        __func_invert_uint,
+                                        __func_invert_double,
+                                        __func_invert_ptr);
 
-        return var0;
+
+        return avar;
 }
 
 struct Var*
-__var_func_lshift_new(struct Var* var1, struct Var* var2)
+__var_func_lshift_new(const char* areg,
+                      struct Var* lvar, const char* lreg,
+                      struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 =
-                __var_binary_operation_new(var1,
-                                           var2,
-                                           __func_lshift_int,
-                                           __func_lshift_int,
-                                           __func_lshift_int,
-                                           __func_lshift_int,
-                                           __func_lshift_float,
-                                           __func_lshift_float,
-                                           NULL);
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_lshift_sint,
+                                         __func_lshift_uint,
+                                         __func_lshift_double,
+                                         __func_lshift_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_rshift_new(struct Var* var1, struct Var* var2)
+__var_func_rshift_new(const char* areg,
+                      struct Var* lvar, const char* lreg,
+                      struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 =
-                __var_binary_operation_new(var1,
-                                           var2,
-                                           __func_arithmetic_rshift_int,
-                                           __func_arithmetic_rshift_int,
-                                           __func_arithmetic_rshift_int,
-                                           __func_arithmetic_rshift_int,
-                                           __func_arithmetic_rshift_float,
-                                           __func_arithmetic_rshift_float,
-                                           NULL);
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_rshift_sint,
+                                         __func_rshift_uint,
+                                         __func_rshift_double,
+                                         __func_rshift_ptr);
 
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_not_new(struct Var* var1)
+__var_func_not_new(const char* areg,
+                   struct Var* lvar, const char* lreg)
 {
-        struct Var* var0 = new_var();
+        struct Var* avar =
+                var_unary_operation_new(areg,
+                                        lvar, lreg,
+                                        __func_not_sint,
+                                        __func_not_uint,
+                                        __func_not_double,
+                                        __func_not_ptr);
 
-        var_pop_stack(var1, "fixL");
-
-        pA("if (fixL != 0) {fixA = 0;} else {fixA = 1;}");
-        push_stack("fixA");
-
-        return var0;
-}
-
-static void __var_func_eq_common(struct Var* var1, struct Var* var2)
-{
-        var1 = var_normalization_type(var1);
-        var2 = var_normalization_type(var2);
-        struct Var* var0 = new_var_binary_type_promotion(var1, var2);
-
-        var_pop_stack(var2, "fixR");
-        cast_regval("fixR", var0, var2);
-
-        var_pop_stack(var1, "fixL");
-        cast_regval("fixL", var0, var1);
-
-        free(var0);
+        return avar;
 }
 
 struct Var*
-__var_func_eq_new(struct Var* var1, struct Var* var2)
+__var_func_eq_new(const char* areg,
+                  struct Var* lvar, const char* lreg,
+                  struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 = new_var();
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_eq_sint,
+                                         __func_eq_uint,
+                                         __func_eq_double,
+                                         __func_eq_ptr);
 
-        __var_func_eq_common(var1, var2);
-
-        pA("if (fixL == fixR) {fixA = 1;} else {fixA = 0;}");
-        push_stack("fixA");
-
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_ne_new(struct Var* var1, struct Var* var2)
+__var_func_ne_new(const char* areg,
+                  struct Var* lvar, const char* lreg,
+                  struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 = new_var();
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_ne_sint,
+                                         __func_ne_uint,
+                                         __func_ne_double,
+                                         __func_ne_ptr);
 
-        __var_func_eq_common(var1, var2);
-
-        pA("if (fixL != fixR) {fixA = 1;} else {fixA = 0;}");
-        push_stack("fixA");
-
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_lt_new(struct Var* var1, struct Var* var2)
+__var_func_lt_new(const char* areg,
+                  struct Var* lvar, const char* lreg,
+                  struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 = new_var();
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_lt_sint,
+                                         __func_lt_uint,
+                                         __func_lt_double,
+                                         __func_lt_ptr);
 
-        __var_func_eq_common(var1, var2);
-
-        pA("if (fixL < fixR) {fixA = 1;} else {fixA = 0;}");
-        push_stack("fixA");
-
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_gt_new(struct Var* var1, struct Var* var2)
+__var_func_gt_new(const char* areg,
+                  struct Var* lvar, const char* lreg,
+                  struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 = new_var();
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_gt_sint,
+                                         __func_gt_uint,
+                                         __func_gt_double,
+                                         __func_gt_ptr);
 
-        __var_func_eq_common(var1, var2);
-
-        pA("if (fixL > fixR) {fixA = 1;} else {fixA = 0;}");
-        push_stack("fixA");
-
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_le_new(struct Var* var1, struct Var* var2)
+__var_func_le_new(const char* areg,
+                  struct Var* lvar, const char* lreg,
+                  struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 = new_var();
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_le_sint,
+                                         __func_le_uint,
+                                         __func_le_double,
+                                         __func_le_ptr);
 
-        __var_func_eq_common(var1, var2);
-
-        pA("if (fixL <= fixR) {fixA = 1;} else {fixA = 0;}");
-        push_stack("fixA");
-
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_ge_new(struct Var* var1, struct Var* var2)
+__var_func_ge_new(const char* areg,
+                  struct Var* lvar, const char* lreg,
+                  struct Var* rvar, const char* rreg)
 {
-        struct Var* var0 = new_var();
+        struct Var* avar =
+                var_binary_operation_new(areg,
+                                         lvar, lreg,
+                                         rvar, rreg,
+                                         __func_ge_sint,
+                                         __func_ge_uint,
+                                         __func_ge_double,
+                                         __func_ge_ptr);
 
-        __var_func_eq_common(var1, var2);
-
-        pA("if (fixL >= fixR) {fixA = 1;} else {fixA = 0;}");
-        push_stack("fixA");
-
-        return var0;
+        return avar;
 }
 
 struct Var*
-__var_func_assignment_new(struct Var* var1, struct Var* var2)
+__var_func_assignment_new(const char* areg,
+                          struct Var* lvar, const char* lreg,
+                          struct Var* rvar, const char* rreg)
 {
-        /* var0 = var1
+        /* avar = lvar
          */
-        struct Var* var0 = new_var();
-        *var0 = *var1;
+        struct Var* avar = new_var();
+        *avar = *lvar;
 
-        var_pop_stack(var2, "fixR");
+        var_pop_stack(rvar, rreg);
 
-        if (var1->is_lvalue && (var1->dim_len == 0)) {
-                pop_stack("fixL");
-        } else {
+        if (lvar->is_lvalue && (lvar->dim_len == 0))
+                pop_stack(lreg);
+        else
                 yyerror("syntax err: 有効な左辺値ではないので代入できません");
-        }
 
 #ifdef DEBUG_VAR_FUNC_ASSIGNMENT_NEW
         pA_mes("__var_func_assignment_new: ");
-        pA_reg("fixL");
+        pA_reg(lreg);
         pA_mes(", ");
-        pA_reg("fixR");
+        pA_reg(rreg);
         pA_mes("\\n");
 #endif /* DEBUG_VAR_FUNC_ASSIGNMENT_NEW */
 
-        cast_regval("fixR", var0, var2);
-        write_mem("fixR", "fixL");
+        cast_regval(rreg, avar, rvar);
+        write_mem(rreg, lreg);
 
-        push_stack("fixR");
+        push_stack(rreg);
 
-        return var0;
+        return avar;
 }

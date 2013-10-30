@@ -28,23 +28,29 @@
  */
 struct Var* new_var_binary_type_promotion(struct Var* lvar, struct Var* rvar)
 {
-        struct Var* var = new_var();
+        struct Var* avar = new_var();
 
-        if (var_is_void(lvar) || var_is_void(rvar)) {
-                var->type = TYPE_VOID;
-                var->total_len = 1;
-        } else if (var_is_floating(lvar) || var_is_floating(rvar)) {
-                var->type = TYPE_DOUBLE;
-                var->total_len = 1;
-        } else if (var_is_integral(lvar) || var_is_integral(rvar)) {
-                var->type = TYPE_SIGNED;
-                var->type = TYPE_INT;
-                var->total_len = 1;
+        if (lvar->indirect_len >= 1) {
+                *avar = *lvar;
+        } else if (rvar->indirect_len >= 1) {
+                *avar = *rvar;
         } else {
-                yyerror("system err: new_var_binary_type_promotion()");
+                if (var_is_void(lvar) || var_is_void(rvar)) {
+                        avar->type = TYPE_VOID;
+                        avar->total_len = 1;
+                } else if (var_is_floating(lvar) || var_is_floating(rvar)) {
+                        avar->type = TYPE_DOUBLE;
+                        avar->total_len = 1;
+                } else if (var_is_integral(lvar) || var_is_integral(rvar)) {
+                        avar->type = TYPE_SIGNED;
+                        avar->type = TYPE_INT;
+                        avar->total_len = 1;
+                } else {
+                        yyerror("system err: new_var_binary_type_promotion()");
+                }
         }
 
-        return var;
+        return avar;
 }
 
 /* 任意レジスターの値を型変換する
