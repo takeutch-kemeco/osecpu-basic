@@ -42,8 +42,7 @@ struct Var* new_var_binary_type_promotion(struct Var* lvar, struct Var* rvar)
                         avar->type = TYPE_DOUBLE;
                         avar->total_len = 1;
                 } else if (var_is_integral(lvar) || var_is_integral(rvar)) {
-                        avar->type = TYPE_SIGNED;
-                        avar->type = TYPE_INT;
+                        avar->type = TYPE_SIGNED | TYPE_INT;
                         avar->total_len = 1;
                 } else {
                         yyerror("system err: new_var_binary_type_promotion()");
