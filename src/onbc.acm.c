@@ -141,7 +141,6 @@ var_unary_operation_new(const char* areg,
 
         struct Var* avar = new_var();
         *avar = *lvar;
-        var_pop_stack(lvar, lreg);
 
         var_common_operation_new(avar, areg, lreg, NULL,
                                  __func_sint, __func_uint,
