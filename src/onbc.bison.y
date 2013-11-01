@@ -917,7 +917,6 @@ cast_expression
         | __LB type_specifier pointer __RB cast_expression {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_CAST;
-                ec->type_operator = EC_OPE_CAST;
                 ec->var->indirect_len = $3;
                 ec->var->type = $2;
                 ec->child_ptr[0] = $5;

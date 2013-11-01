@@ -82,7 +82,8 @@ void translate_ec(struct EC* ec)
             (ec->type_expression != EC_INIT_DECLARATOR) &&
             (ec->type_expression != EC_DECLARATOR) &&
             (ec->type_expression != EC_PARAMETER_TYPE_LIST) &&
-            (ec->type_expression != EC_ARGUMENT_EXPRESSION_LIST)) {
+            (ec->type_expression != EC_ARGUMENT_EXPRESSION_LIST) &&
+            (ec->type_expression != EC_CAST)) {
                 int32_t i;
                 for (i = 0; i < ec->child_len; i++) {
                         translate_ec(ec->child_ptr[i]);
@@ -402,11 +403,11 @@ pA_mes("\\n");
                         yyerror("system err: translate_ec(), EC_CALC");
                 }
         } else if (ec->type_expression == EC_CAST) {
-                if (ec->type_operator == EC_OPE_CAST) {
-                        /* 何もしない */
-                } else {
-                        yyerror("system err: translate_ec(), EC_CAST");
-                }
+                translate_ec(ec->child_ptr[0]);
+                var_normalization_type(ec->var);
+                ec->var->base_ptr = ec->child_ptr[0]->var->base_ptr;
+                ec->var->total_len = ec->child_ptr[0]->var->total_len;
+                ec->var->is_lvalue = ec->child_ptr[0]->var->is_lvalue;
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
                         struct Var* tmp = varlist_search(ec->var->iden);

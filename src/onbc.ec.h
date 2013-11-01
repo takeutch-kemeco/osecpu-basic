@@ -73,7 +73,6 @@
 #define EC_OPE_VARIABLE         29      /* 変数アクセス */
 #define EC_OPE_SUBST            30      /* = */
 #define EC_OPE_LIST             31      /* , によって列挙されたリスト */
-#define EC_OPE_CAST             32      /* 型変換 */
 #define EC_OPE_GOTO             33
 #define EC_OPE_RETURN           34
 #define EC_OPE_ASM_STATEMENT    35      /* アセンブラ命令リスト */
