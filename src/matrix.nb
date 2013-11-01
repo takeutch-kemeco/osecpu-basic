@@ -19,59 +19,77 @@
 #ifndef __MATRIX_NB__
 #define __MATRIX_NB__
 
-/* 3x3単位行列
- * 単位行列 -> m0
+/* 3x3行列の内容を印字
  */
-function idn_matrix3(m0)
+void print_matrix3(float *m)
 {
-        *m0 = 1; m0 = m0 + 1;
-        *m0 = 0; m0 = m0 + 0;
-        *m0 = 0; m0 = m0 + 0;
+        int j;
+        for (j = 0; j < 3; j = j + 1) {
+                int i;
+                for (i = 0; i < 3; i = i + 1) {
+                        __print_float(*m);
+                        m = m + 1;
+                }
+        }
 
-        *m0 = 0; m0 = m0 + 0;
-        *m0 = 1; m0 = m0 + 1;
-        *m0 = 0; m0 = m0 + 0;
+        asm("junkApi_putConstString('\n');");
+}
 
-        *m0 = 0; m0 = m0 + 0;
-        *m0 = 0; m0 = m0 + 0;
-        *m0 = 1; m0 = m0 + 1;
+/* 3x3単位行列
+ * 単位行列 -> m
+ */
+void idn_matrix3(float *m)
+{
+        int j;
+        for (j = 0; j < 3; j = j + 1) {
+                int i;
+                for (i = 0; i < 3; i = i + 1) {
+                        if (i == j)
+                                *m = 1.0;
+                        else
+                                *m = 0;
+
+                        m = m + 1;
+                }
+        }
 }
 
 /* 3x3行列のスカラー倍
- * scale * m0 -> m0
+ * scale * m -> m
  */
-function scale_matrix3(m0, scale)
+void scale_matrix3(float *m, float scale)
 {
-        float j;
+        int j;
         for (j = 0; j < 3; j = j + 1) {
-                float i;
+                int i;
                 for (i = 0; i < 3; i = i + 1) {
-                        *m0 = *m0 * scale;
-                        m0 = m0 + 1;
+                        *m = *m * scale;
+                        m = m + 1;
                 }
         }
 }
 
 /* 3次元ベクトルのスカラー倍
- * scale * v0 -> v0
+ * scale * v -> v
  */
-function scale_vector3(v0, scale)
+void scale_vector3(float *v, float scale)
 {
-        float i;
+        int i;
         for (i = 0; i < 3; i = i + 1) {
-                *v0 = *v0 * scale;
-                v0 = v0 + 1;
+                *v = *v * scale;
+                v = v + 1;
         }
 }
 
 /* 3次元ベクトルの加算
  * v1 + v2 -> v0
  */
-function add_vector3(v0, v1, v2)
+void add_vector3(float *v0, float *v1, float *v2)
 {
-        float i;
+        int i;
         for (i = 0; i < 3; i = i + 1) {
                 *v0 = *v1 + *v2;
+                v0 = v0 + 1;
                 v1 = v1 + 1;
                 v2 = v2 + 1;
         }
@@ -80,152 +98,30 @@ function add_vector3(v0, v1, v2)
 /* 3次元ベクトルの減算
  * v1 - v2 -> v0
  */
-function sub_vector3(v0, v1, v2)
+void sub_vector3(float *v0, float *v1, float *v2)
 {
-        float i;
+        int i;
         for (i = 0; i < 3; i = i + 1) {
-                *v0 = *v1 + *v2;
+                *v0 = *v1 - *v2;
+                v0 = v0 + 1;
                 v1 = v1 + 1;
                 v2 = v2 + 1;
-        }
-}
-
-/* 3x3行列の乗算
- * m1 * m2 -> m0
- */
-function mul_matrix3(m0, m1, m2)
-{
-        float *t1;
-        float *t2;
-
-        float j;
-        for (j = 0; j < 3; j = j + 1) {
-                float i;
-                for (i = 0; i < 3; i = i + 1) {
-                        t0 =
-                        *m0 =
-                        m0@ma[j][i] = m1@ma[j][0] * m2@ma[0][i] +
-                                      m1@ma[j][1] * m2@ma[1][i] +
-                                      m1@ma[j][2] * m2@ma[2][i];
-                }
-        }
-}
-
-/* 3x3行列と3次元ベクトルの乗算
- * m0 * v1 -> v0
- */
-function mul_m3v3(v0, m0, v1)
-{
-        float ma[3][3];
-        float va[3];
-
-        float j;
-        for (j = 0; j < 3; j = j + 1) {
-                v0@va[j] = m0@ma[j][0] * v1@va[0] +
-                           m0@ma[j][1] * v1@va[1] +
-                           m0@ma[j][2] * v1@va[2];
-        }
-}
-
-/* 3次元ベクトルと3x3行列の乗算
- * m0 * v1 -> v0
- */
-function mul_v3m3(v0, m0, v1)
-{
-        float ma[3][3];
-        float va[3];
-
-        float i;
-        for (i = 0; i < 3; i = i + 1) {
-                v0@va[i] = m0@ma[0][i] * v1@va[0] +
-                           m0@ma[1][i] * v1@va[1] +
-                           m0@ma[2][i] * v1@va[2];
-        }
-}
-
-/* (x,y,z)ベクトルから3x3回転行列を得る。
- * mz * my * mx -> m
- */
-function rot_matrix3(m, v)
-{
-        float mx[3][3], my[3][3], mz[3][3], mt[3][3];
-        float va[3];
-        rot_x_matrix3(&mx, v@va[0]);
-        rot_y_matrix3(&my, v@va[1]);
-        rot_z_matrix3(&mz, v@va[2]);
-
-        mul_matrix3(&mt, &mz, &my);
-        mul_matrix3(m, &mt, &mx);
-}
-
-/* x軸回りの回転行列を得る
- */
-function rot_x_matrix3(m, r)
-{
-        float st = __sin(r);
-        float ct = __cos(r);
-        float a[3][3];
-        idn_matrix3(m);
-        m@a[1][1] = ct;
-        m@a[1][2] = -st;
-        m@a[2][1] = st;
-        m@a[2][2] = ct;
-}
-
-/* y軸回りの回転行列を得る
- */
-function rot_y_matrix3(m, r)
-{
-        float st = __sin(r);
-        float ct = __cos(r);
-        float a[3][3];
-        idn_matrix3(m);
-        m@a[0][0] = ct;
-        m@a[0][2] = st;
-        m@a[2][0] = -st;
-        m@a[2][2] = ct;
-}
-
-/* z軸回りの回転行列を得る
- */
-function rot_z_matrix3(m, r)
-{
-        float st = __sin(r);
-        float ct = __cos(r);
-        float a[3][3];
-        idn_matrix3(m);
-        m@a[0][0] = ct;
-        m@a[0][1] = -st;
-        m@a[1][0] = st;
-        m@a[1][1] = ct;
-}
-
-/* 3x3行列の内容を印字
- */
-function print_matrix3(m)
-{
-        float ma[3][3];
-
-        float j;
-        for (j = 0; j < 3; j = j + 1) {
-                float i;
-                for (i = 0; i < 3; i = i + 1) {
-                        __print(m@ma[j][i]);
-                }
         }
 }
 
 /* 3次元ベクトルの内積
  * v1 * v2 -> return
  */
-function inner_product_vector3(v1, v2)
+float inner_product_vector3(float *v1, float *v2)
 {
-        float va[3];
         float tmp = 0;
 
-        float i;
-        for (i = 0; i < 3; i = i + 1)
-                tmp = tmp + (v1@va[i] * v2@va[i]);
+        int i;
+        for (i = 0; i < 3; i = i + 1) {
+                tmp = tmp + *v1 * *v2;
+                v1 = v1 + 1;
+                v2 = v2 + 1;
+        }
 
         return tmp;
 }
@@ -233,62 +129,171 @@ function inner_product_vector3(v1, v2)
 /* 3次元ベクトルのクロス積
  * v1 . v2 -> v0
  */
-function cross_product_vector3(v0, v1, v2)
+void cross_product_vector3(float *v0, float *v1, float *v2)
 {
-        float va[3];
-
-        v0@va[0] = v1@va[1] * v2@va[2] - v1@va[2] * v2@va[1];
-        v0@va[1] = v1@va[2] * v2@va[0] - v1@va[0] * v2@va[2];
-        v0@va[2] = v1@va[0] * v2@va[1] - v1@va[1] * v2@va[0];
+        *(v0 + 0) = *(v1 + 1) * *(v2 + 2) - *(v1 + 2) * *(v2 + 1);
+        *(v0 + 1) = *(v1 + 2) * *(v2 + 0) - *(v1 + 0) * *(v2 + 2);
+        *(v0 + 2) = *(v1 + 0) * *(v2 + 1) - *(v1 + 1) * *(v2 + 0);
 }
 
 /* 3x3行列のコピー
  * m1 -> m0
  */
-function copy_matrix3(m0, m1)
+void copy_matrix3(float *m0, float *m1)
 {
-        float ma[3][3];
-
-        float j;
+        int j;
         for (j = 0; j < 3; j = j + 1) {
-                float i;
+                int i;
                 for (i = 0; i < 3; i = i + 1) {
-                        m0@ma[j][i] = m1@ma[j][i];
+                        *m0 = *m1;
+                        m0 = m0 + 1;
+                        m1 = m1 + 1;
                 }
         }
 }
 
 /* 3x3行列の全ての要素に任意のスカラー値をセットする
- * acalar -> m0
+ * scalar -> m
  */
-function set_scalar_matrix3(m0, scalar)
+void set_scalar_matrix3(float *m, float scalar)
 {
-        float ma[3][3];
-
-        float j;
+        int j;
         for (j = 0; j < 3; j = j + 1) {
-                float i;
+                int i;
                 for (i = 0; i < 3; i = i + 1) {
-                        m0@ma[j][i] = scalar;
+                        *m = scalar;
+                        m = m + 1;
                 }
         }
 }
 
-/* 3x3行列の転置行列を得る
+/* 3x3行列を転置する
  */
-function transpose_matrix3(m0)
+void transpose_matrix3(float *m)
 {
-        float ma[3][3];
-
-        float j;
+        int j;
         for (j = 0; j < 3; j = j + 1) {
-                float i;
+                int i;
                 for (i = j; i < 3; i = i + 1) {
-                        float tmp = m0@ma[j][i];
-                        m0@ma[j][i] = m0@ma[i][j];
-                        m0@ma[i][j] = tmp;
+                        float tmp = *(m + ((j * 3) + i));
+                        *(m + ((j * 3) + i)) = *(m + ((i * 3) + j));
+                        *(m + ((i * 3) + j)) = tmp;
                 }
         }
+}
+
+/* 3x3行列の乗算
+ * m1 * m2 -> m0
+ */
+void mul_matrix3(float *m0, float *m1, float *m2)
+{
+        float tmp[3][3];
+        float *m2t = &tmp[0][0];
+        copy_matrix3(m2t, m2);
+        transpose_matrix3(m2t);
+
+        int j;
+        for (j = 0; j < 3; j = j + 1) {
+                float *v1 = m1 + (j * 3);
+
+                int i;
+                for (i = 0; i < 3; i = i + 1) {
+                        float *v2 = m2t + (i * 3);
+                        float tmp = inner_product_vector3(v1, v2);
+                        *m0 = tmp;
+                        m0 = m0 + 1;
+                }
+        }
+}
+
+/* 3x3行列と3次元ベクトルの乗算
+ * m0 * v1 -> v0
+ * (行列は左側、列ベクトルは右側による乗算)
+ */
+void mul_m3v3(float *v0, float *m0, float *v1)
+{
+        int i;
+        for (i = 0; i < 3; i = i + 1) {
+                float *m0v = m0 + (i * 3);
+                float tmp = inner_product_vector3(m0v, v1);
+                *v0 = tmp;
+                v0 = v0 + 1;
+        }
+}
+
+/* 3次元ベクトルと3x3行列の乗算
+ * v1 * m0 -> v0
+ * (行ベクトルは左側、行列は右側による乗算)
+ */
+void mul_v3m3(float *v0, float *v1, float *m0)
+{
+        float tmp[3][3];
+        float *m0t = &tmp[0][0];
+        copy_matrix3(m0t, m0);
+        transpose_matrix3(m0t);
+
+        int i;
+        for (i = 0; i < 3; i = i + 1) {
+                float *m0tv = m0t + (i * 3);
+                float tmp = inner_product_vector3(v1, m0tv);
+                *v0 = tmp;
+                v0 = v0 + 1;
+        }
+}
+
+/* x軸回りの回転行列を得る
+ */
+void rot_x_matrix3(float *m, float r)
+{
+        float st = __sin(r);
+        float ct = __cos(r);
+        idn_matrix3(m);
+        *(m + (1 * 3) + 1) = ct;
+        *(m + (1 * 3) + 2) = -st;
+        *(m + (2 * 3) + 1) = st;
+        *(m + (2 * 3) + 2) = ct;
+}
+
+/* y軸回りの回転行列を得る
+ */
+void rot_y_matrix3(float *m, float r)
+{
+        float st = __sin(r);
+        float ct = __cos(r);
+        idn_matrix3(m);
+        *(m + (0 * 3) + 0) = ct;
+        *(m + (0 * 3) + 2) = st;
+        *(m + (2 * 3) + 0) = -st;
+        *(m + (2 * 3) + 2) = ct;
+}
+
+/* z軸回りの回転行列を得る
+ */
+void rot_z_matrix3(float *m, float r)
+{
+        float st = __sin(r);
+        float ct = __cos(r);
+        idn_matrix3(m);
+        *(m + (0 * 3) + 0) = ct;
+        *(m + (0 * 3) + 1) = -st;
+        *(m + (1 * 3) + 0) = st;
+        *(m + (1 * 3) + 1) = ct;
+}
+
+/* (x,y,z)ベクトルから3x3回転行列を得る。
+ * mz * my * mx -> m
+ */
+void rot_matrix3(float *m, float *v)
+{
+        float mx[3][3], my[3][3], mz[3][3], mt[3][3];
+        float va[3];
+
+        rot_x_matrix3(&mx[0][0], *(v + 0));
+        rot_y_matrix3(&my[0][0], *(v + 1));
+        rot_z_matrix3(&mz[0][0], *(v + 2));
+
+        mul_matrix3(&mt[0][0], &mz[0][0], &my[0][0]);
+        mul_matrix3(m, &mt[0][0], &mx[0][0]);
 }
 
 #endif /* __MATRIX_NB__ */
