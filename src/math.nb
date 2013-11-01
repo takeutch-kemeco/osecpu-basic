@@ -111,6 +111,8 @@ float __pow(float a, float b)
  */
 float __sin(float a)
 {
+        float a2, a3, a5, a7;
+
         float pi = 3.14159265358979;
         float pi_2 = 3.14159265358979 * 2;
         float pi_h = 3.14159265358979 / 2;
@@ -125,10 +127,11 @@ float __sin(float a)
         else
                 a = b - pi_2;
 
-        float a2 = a * a;
-        float a3 = a2 * a;
-        float a5 = a3 * a2;
-        float a7 = a5 * a2;
+        a2 = a * a;
+        a3 = a2 * a;
+        a5 = a3 * a2;
+        a7 = a5 * a2;
+
         b = a;
         b = b - (a3 * 0.16666666666666);
         b = b + (a5 * 0.00833333333333);
