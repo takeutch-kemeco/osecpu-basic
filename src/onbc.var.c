@@ -140,16 +140,48 @@ void free_var(struct Var* var)
         free(var);
 }
 
-/* スタックからのポップ。
- * ただしVar->is_lvalue, Var->dim_lenに応じて間接参照・直接参照を切り替える
+/* A read value from variable.
+ * In the case RValue, We make a pop from stack.
+ * In the case LValue, We diverege to indirect reference or direct reference
+ * depending on a value of Var->is_lvalue and Var->base_ptr.
  */
-void var_pop_stack(struct Var* var, const char* register_name)
+void var_read_value(struct Var* var, const char* register_name)
 {
-        if (var->is_lvalue && (var->dim_len <= 0)) {
-                pop_stack("stack_socket");
-                read_mem(register_name, "stack_socket");
+        if (var->is_lvalue && (var->base_ptr != -1)) {
+                pA("%s = %d;", register_name, var->base_ptr);
+
+                if (var->type & TYPE_AUTO)
+                        pA("%s += stack_frame;", register_name);
+
+                read_mem(register_name, register_name);
         } else {
                 pop_stack(register_name);
+        }
+}
+
+/* A dummy of read value from variable
+ */
+void var_read_value_dummy(struct Var* var)
+{
+        if (!(var->is_lvalue && (var->base_ptr != -1)))
+                pop_stack_dummy();
+}
+
+/* A read address from variable.
+ * In the case RValue, We make a pop from stack.
+ * In the case LValue, We diverege to indirect reference or direct reference
+ * depending on a value of Var->is_lvalue and Var->base_ptr.
+ */
+void var_read_address(struct Var* var, const char* register_name)
+{
+        if (var->is_lvalue && (var->base_ptr != -1)) {
+                pA("%s = %d;", register_name, var->base_ptr);
+
+                if (var->type & TYPE_AUTO)
+                        pA("%s += stack_frame;", register_name);
+        } else {
+                pA("%s = stack_head;", register_name);
+                pop_stack_dummy();
         }
 }
 
@@ -372,16 +404,24 @@ varlist_add(const char* iden,
 /* ローカル変数のインスタンス生成で、記憶域をスタックから新たに確保・設定する場合 */
 static struct Var* __new_var_initializer_local_alloc(struct Var* var)
 {
-        /* 現在のstack_headを変数への間接参照アドレスの格納位置とし、
-         * ここへ stack_head + 1 のアドレスをセットする
+        /* 配列変数の場合
          */
-        pA("stack_socket = stack_head + 1;");
-        write_mem("stack_socket", "stack_head");
+        if (var->dim_len >= 1) {
+                /* 現在のstack_headを変数への間接参照アドレスの格納位置とし、
+                 * ここへ stack_head + 1 のアドレスをセットする
+                 */
+                pA("stack_socket = stack_head + 1;");
+                write_mem("stack_socket", "stack_head");
 
-        /* スタック変数の為のメモリー領域確保を、その分だけスタックを進めることで行う。
-         * +1 はスタック変数において参照先アドレスの保存用に用いた分。
+                /* 配列変数の為のメモリー領域確保を、その分だけスタックを進めることで行う */
+                pA("stack_head += %d;", var->total_len + 1);
+
+        /* スカラー変数の場合
          */
-        pA("stack_head += %d;", var->total_len + 1);
+        } else {
+                 /* スカラー変数のメモリー領域確保を、その分だけスタックを進めることで行う */
+                pA("stack_head += %d;", 1);
+        }
 
         return var;
 }
@@ -389,25 +429,23 @@ static struct Var* __new_var_initializer_local_alloc(struct Var* var)
 /* ローカル変数のインスタンス生成で、ワインドスタックからポップしたアドレスを用いて記憶域設定する場合 */
 static struct Var* __new_var_initializer_local_wind(struct Var* var)
 {
-        /* 現在のstack_headを変数への間接参照アドレスの格納位置とし、
-         * ここへ ワインドスタックからポップした値をセットする
-         */
+        /* ワインドスタックからポップした値をローカル変数の初期値としてセットする */
         pop_windstack("stack_socket");
         write_mem("stack_socket", "stack_head");
 
-        /* スタック変数において参照先アドレスの保存用に用いた分、スタックを +1 進める */
-        push_stack_dummy();
+        /* ローカル変数において参照先アドレスの保存用に用いた分だけスタックを進める */
+        pA("stack_head += %d;", 1);
 
         return var;
 }
 
 /* ローカル変数のインスタンス生成
  *
- * ローカル変数の、スタック上でのメモリーイメージ:
+ * 配列型ローカル変数の、スタック上でのメモリーイメージ:
  *      3 : ↑
  *      2 : 実際の値 x[1] の格納位置
  *      1 : 実際の値 x[0] の格納位置
- *      0 : 変数読み書き時に参照する位置。 ここにx[0](または間接参照)へのアドレスが入る
+ *      0 : 変数読み書き時に参照する位置。 ここにx[0]へのアドレスが入る
  *
  * 関数引数の場合(ワインドの場合)のメモリーイメージ:
  *      0 : 変数読み書き時に参照する位置。 ここに間接参照のアドレス (アドレス x + 0) が入る
@@ -469,13 +507,14 @@ static struct Var* __new_var_initializer_global(struct Var* var, const int32_t t
         if (ret == NULL)
                 yyerror("system err: グローバル変数の作成に失敗しました");
 
-        /* この変数用のヒープ上のメモリー領域に、
-         * 値格納位置への関節参照アドレスを書き込むコードを、
-         * ソースコードの上側(pB()による)へ出力する
+        /* 配列変数として宣言した場合は、変数自体は実際にはポインターとなる。
+         * そのポインターに、実際の値の格納領域の先頭アドレスをセットする。
          */
-        pB("stack_socket = %d;", ret->base_ptr);
-        pB("stack_tmp = %d;", ret->base_ptr + 1);
-        write_mem_pB("stack_tmp", "stack_socket");
+        if (var->dim_len >= 1) {
+                pB("stack_socket = %d;", ret->base_ptr);
+                pB("stack_tmp = %d;", ret->base_ptr + 1);
+                write_mem_pB("stack_tmp", "stack_socket");
+        }
 
         return ret;
 }

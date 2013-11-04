@@ -69,7 +69,8 @@ struct Var* var_set_param(struct Var* var,
                           void* const_valiable);
 struct Var* new_var(void);
 void free_var(struct Var* var);
-void var_pop_stack(struct Var* var, const char* register_name);
+void var_read_value(struct Var* var, const char* register_name);
+void var_read_address(struct Var* var, const char* register_name);
 void local_varlist_scope_push(void);
 void local_varlist_scope_pop(void);
 struct Var* global_varlist_search(const char* iden);

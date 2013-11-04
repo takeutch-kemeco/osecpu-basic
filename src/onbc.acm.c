@@ -65,7 +65,11 @@ var_common_operation_new(struct Var* avar,
                 yyerror("__var_common_operation_new(), type err");
         }
 
-        avar->is_lvalue = 0; /* 右辺値とする */
+        /* We assume it the RValue which is in condition that
+         * an value was acquired in stack.
+         */
+        avar->base_ptr = -1;
+        avar->is_lvalue = 0;
 
         push_stack(areg);
 }
@@ -98,10 +102,10 @@ var_binary_operation_new(const char* areg,
                          acm_func __func_ptr)
 {
         rvar = var_normalization_type(rvar);
-        var_pop_stack(rvar, rreg);
+        var_read_value(rvar, rreg);
 
         lvar = var_normalization_type(lvar);
-        var_pop_stack(lvar, lreg);
+        var_read_value(lvar, lreg);
 
         struct Var* avar = new_var_binary_type_promotion(lvar, rvar);
         var_binary_implicit_type_promotion(avar, lvar, lreg, rvar, rreg);
@@ -137,7 +141,7 @@ var_unary_operation_new(const char* areg,
                         acm_func __func_ptr)
 {
         lvar = var_normalization_type(lvar);
-        var_pop_stack(lvar, lreg);
+        var_read_value(lvar, lreg);
 
         struct Var* avar = new_var();
         *avar = *lvar;
@@ -472,15 +476,10 @@ __var_func_assignment_new(const char* areg,
                           struct Var* lvar, const char* lreg,
                           struct Var* rvar, const char* rreg)
 {
-        /* avar = lvar
-         */
-        struct Var* avar = new_var();
-        *avar = *lvar;
+        var_read_value(rvar, rreg);
 
-        var_pop_stack(rvar, rreg);
-
-        if (lvar->is_lvalue && (lvar->dim_len == 0))
-                pop_stack(lreg);
+        if (lvar->is_lvalue)
+                var_read_address(lvar, lreg);
         else
                 yyerror("syntax err: 有効な左辺値ではないので代入できません");
 
@@ -492,10 +491,19 @@ __var_func_assignment_new(const char* areg,
         pA_mes("\\n");
 #endif /* DEBUG_VAR_FUNC_ASSIGNMENT_NEW */
 
+        struct Var* avar = new_var();
+        *avar = *lvar;
+
         cast_regval(avar, rvar, rreg);
         write_mem(rreg, lreg);
 
         push_stack(rreg);
+
+        /* We assume it the RValue which is in condition that
+         * an value was acquired in stack.
+         */
+        avar->base_ptr = -1;
+        avar->is_lvalue = 0;
 
         return avar;
 }

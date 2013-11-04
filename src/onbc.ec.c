@@ -79,7 +79,6 @@ void translate_ec(struct EC* ec)
             (ec->type_expression != EC_DIRECT_DECLARATOR) &&
             (ec->type_expression != EC_FUNCTION_DEFINITION) &&
             (ec->type_expression != EC_PARAMETER_DECLARATION) &&
-            (ec->type_expression != EC_INIT_DECLARATOR) &&
             (ec->type_expression != EC_DECLARATOR) &&
             (ec->type_expression != EC_PARAMETER_TYPE_LIST) &&
             (ec->type_expression != EC_ARGUMENT_EXPRESSION_LIST) &&
@@ -124,25 +123,10 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_INIT_DECLARATOR_LIST) {
                 /* 何もしない */
         } else if (ec->type_expression == EC_INIT_DECLARATOR) {
-                translate_ec(ec->child_ptr[0]);
-                *(ec->var) = *(ec->child_ptr[0]->var);
-
-                if (ec->var->type & TYPE_AUTO)
-                        pA("stack_socket = %d + stack_frame;", ec->var->base_ptr);
-                else
-                        pA("stack_socket = %d;", ec->var->base_ptr);
-
-                /* 代入先の値格納位置のアドレスを得て、それをスタックにプッシュ */
-                read_mem("stack_socket", "stack_socket");
-                push_stack("stack_socket");
-
-                translate_ec(ec->child_ptr[1]);
-
-                ec->var->is_lvalue = 1;
                 *(ec->var) = *(__var_func_assignment_new("fixA",
-                                                         ec->var, "fixL",
+                                                         ec->child_ptr[0]->var, "fixL",
                                                          ec->child_ptr[1]->var, "fixR"));
-                pop_stack_dummy();
+                var_read_value_dummy(ec->var); /* We return a state of stack +1 to 0. */
         } else if (ec->type_expression == EC_DECLARATOR) {
                 if (ec->var->type & TYPE_FUNCTION)
                         cur_declaration_specifiers |= TYPE_FUNCTION;
@@ -212,10 +196,11 @@ void translate_ec(struct EC* ec)
                 pA("LB(1, %d);", labellist_search(ec->var->iden));
         } else if (ec->type_expression == EC_EXPRESSION_STATEMENT) {
                 if (ec->child_len != 0) {
-                        /* expression に属するステートメントは、
-                         * 終了時点で”必ず”スタックへのプッシュが1個だけ余計に残ってる為、それを掃除する。
+                        /* As for the statement to belong to expression,
+                         * push may be left in the stack on end of time.
+                         * When a push to stack is left, We clean it.
                          */
-                        pop_stack_dummy();
+                        var_read_value_dummy(ec->child_ptr[0]->var);
                 }
         } else if (ec->type_expression == EC_STATEMENT_LIST) {
                 /* 何もしない */
@@ -226,7 +211,7 @@ void translate_ec(struct EC* ec)
                         const int32_t else_label = cur_label_index_head++;
                         const int32_t end_label = cur_label_index_head++;
 
-                        pop_stack("stack_socket");
+                        var_read_value(ec->child_ptr[0]->var, "stack_socket");
                         pA("if (stack_socket == 0) {PLIMM(P3F, %d);}", else_label);
 
                         translate_ec(ec->child_ptr[1]);
@@ -249,8 +234,7 @@ void translate_ec(struct EC* ec)
                         pA("LB(0, %d);", loop_head);
 
                         translate_ec(ec->child_ptr[0]);
-
-                        pop_stack("stack_socket");
+                        var_read_value(ec->child_ptr[0]->var, "stack_socket");
                         pA("if (stack_socket == 0) {PLIMM(P3F, %d);}", loop_end);
 
                         translate_ec(ec->child_ptr[1]);
@@ -263,19 +247,18 @@ void translate_ec(struct EC* ec)
                         const int32_t loop_end = cur_label_index_head++;
 
                         translate_ec(ec->child_ptr[0]);
-                        pop_stack_dummy(); /* スタック+1の状態を0へ戻す */
+                        var_read_value_dummy(ec->child_ptr[0]->var); /* We return a state of stack +1 to 0. */
 
                         pA("LB(0, %d);", loop_head);
 
                         translate_ec(ec->child_ptr[1]);
-
-                        pop_stack("stack_socket");
+                        var_read_value(ec->child_ptr[1]->var, "stack_socket");
                         pA("if (stack_socket == 0) {PLIMM(P3F, %d);}", loop_end);
 
                         translate_ec(ec->child_ptr[3]);
 
                         translate_ec(ec->child_ptr[2]);
-                        pop_stack_dummy(); /* スタック+1の状態を0へ戻す */
+                        var_read_value_dummy(ec->child_ptr[2]->var); /* We return a state of stack +1 to 0. */
 
                         pA("PLIMM(P3F, %d);", loop_head);
 
@@ -287,14 +270,14 @@ void translate_ec(struct EC* ec)
                 if (ec->type_operator == EC_OPE_GOTO) {
                         pA("PLIMM(P3F, %d);", labellist_search(ec->var->iden));
                 } else if (ec->type_operator == EC_OPE_RETURN) {
-                        /* 空の return の場合は return 0 として動作させる。
-                         * これは、ユーザー定義関数は expression なので、
-                         * 終了後に必ずスタックが +1 状態である必要があるため。
+                        /* In the case of empty return, We operate it as return 0.
+                         * Because the user definition function is expression,
+                         * this has to do stack +1 after the end by all meanes.
                          */
                         if (ec->child_len == 0)
                                 pA("fixA = 0;");
                         else
-                                var_pop_stack(ec->child_ptr[0]->var, "fixA");
+                                var_read_value(ec->child_ptr[0]->var, "fixA");
 
 #ifdef DEBUG_EC_JUMP_STATEMENT
 pA_mes("EC_JUMP_STATEMENT, EC_OPE_RETURN: ");
@@ -310,11 +293,11 @@ pA_mes("\\n");
                         pA("%s", (char*)ec->var->const_variable);
                 } else if (ec->type_operator == EC_OPE_ASM_SUBST_VTOR) {
                         translate_ec(ec->child_ptr[0]);
-                        var_pop_stack(ec->child_ptr[0]->var, (char*)ec->var->const_variable);
+                        var_read_value(ec->child_ptr[0]->var, (char*)ec->var->const_variable);
                 } else if (ec->type_operator == EC_OPE_ASM_SUBST_RTOV) {
                         translate_ec(ec->child_ptr[0]);
                         if (ec->child_ptr[0]->var->is_lvalue) {
-                                pop_stack("stack_socket");
+                                var_read_address(ec->child_ptr[0]->var, "stack_socket");
                                 write_mem((char*)ec->var->const_variable, "stack_socket");
                         } else {
                                 yyerror("syntax err: 有効な左辺値ではありません");
@@ -417,16 +400,6 @@ pA_mes("\\n");
                         }
 
                         *(ec->var) = *tmp;
-
-                        if (ec->var->type & TYPE_AUTO)
-                                pA("stack_socket = %d + stack_frame;", ec->var->base_ptr);
-                        else
-                                pA("stack_socket = %d;", ec->var->base_ptr);
-
-                        /* データ部への関節参照アドレスを得る */
-                        read_mem("stack_socket", "stack_socket");
-
-                        push_stack("stack_socket");
                 } else {
                         yyerror("system err: translate_ec(), EC_PRIMARY");
                 }
@@ -438,6 +411,11 @@ pA_mes("\\n");
                                 yyerror("syntax err: 有効な左辺値ではないのでアドレス取得できません");
 
                         ec->var->indirect_len++;
+
+                        /* We assume it the RValue which is in condition that
+                         * an value was acquired in stack.
+                         */
+                        ec->var->base_ptr = -1;
                         ec->var->is_lvalue = 0;
                 } else if (ec->type_operator == EC_OPE_POINTER) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
@@ -447,9 +425,13 @@ pA_mes("\\n");
 
                         ec->var->indirect_len--;
 
-                        var_pop_stack(ec->var, "stack_socket");
+                        var_read_address(ec->var, "stack_socket");
                         push_stack("stack_socket");
 
+                        /* We assume it the LValue which is in condition that
+                         * an address was acquired in stack.
+                         */
+                        ec->var->base_ptr = -1;
                         ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_INV) {
                         ec->var = __var_func_invert_new("fixA",
@@ -472,15 +454,14 @@ pA_mes("\\n");
                         if (ec->var->dim_len <= 0)
                                 yyerror("syntax err: 配列の添字次元が不正です");
 
-                        /* この時点でスタックには "変数アドレス -> 添字" の順で積まれてる前提。
-                         * fixLに変数アドレス、fixRに添字をポップする。
-                         */
-
                         if (ec->child_ptr[0]->var->is_lvalue == 0)
                                 yyerror("system err: 有効な左辺値ではありません");
 
-                        var_pop_stack(ec->child_ptr[1]->var, "fixR");
-                        var_pop_stack(ec->child_ptr[0]->var, "fixL");
+                        /* Pop of a array subscript in fixR.
+                         * Pop of a variable address in fixL.
+                         */
+                        var_read_value(ec->child_ptr[1]->var, "fixR");
+                        var_read_address(ec->child_ptr[0]->var, "fixL");
 
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
@@ -490,6 +471,10 @@ pA_mes("\\n");
                         pA("fixL += fixR * %d;", ec->var->total_len);
                         push_stack("fixL");
 
+                        /* We assume it the LValue which is in condition that
+                         * an address was acquired in stack.
+                         */
+                        ec->var->base_ptr = -1;
                         ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_FUNCTION) {
 #ifdef DEBUG_EC_OPE_FUNCTION
@@ -502,10 +487,9 @@ pA_mes("\\n");
                         debug_stackframe(16);
 #endif /* DEBUG_EC_OPE_FUNCTION */
 
-                        /* 以降で EC_OPE_FUNCTION を戻り値の型として扱う */
-                        ec->var->type = cur_declaration_specifiers;
-
-                        /* 関数呼び出し時のスタック位置をコールスタックへプッシュ */
+                        /* We push to the stack position at time of the function
+                         * call to call stack.
+                         */
                         push_callstack("stack_head");
 
                         struct Var* var = global_varlist_search(ec->var->iden);
@@ -514,19 +498,28 @@ pA_mes("\\n");
 
                         translate_ec(ec->child_ptr[0]);
 
-                        /* 現在の stack_frame をプッシュし
-                         * 関数引数をスタックに積んだ時点の stack_head を
-                         * stack_frame にセットする。
+                        /* We push current Stack-Frame.
+                         * And We set Stack-Head of the point time when We
+                         * acquired a function argument in stack to
+                         * Stack-Frame.
                          */
                         push_stackframe("stack_head");
 
                         const int32_t return_label = cur_label_index_head++;
-
                         pA("PLIMM(labelstack_socket, %d);", return_label);
                         push_labelstack();
 
                         pA("PLIMM(P3F, %d);", var->base_ptr);
                         pA("LB(1, %d);", return_label);
+
+                        /* EC_OPE_FUNCTION is Return-Value after here.
+                         * Because return variable is stack variable, it is a
+                         * RValue. Because it is a RValue, We assumes it
+                         * base_ptr = -1.
+                         */
+                        ec->var->type = cur_declaration_specifiers;
+                        ec->var->base_ptr = -1;
+                        ec->var->is_lvalue = 0;
 
 #ifdef DEBUG_EC_OPE_FUNCTION
                         pA_mes("after OPE_FUNCTION, ");
@@ -542,27 +535,13 @@ pA_mes("\\n");
                 }
         } else if (ec->type_expression == EC_ARGUMENT_EXPRESSION_LIST) {
                 if (ec->child_len >= 1) {
-                        /* 現在のスタック位置をワインドスタックへプッシュする */
+                        /* We push a current stack position to wind stack. */
                         push_windstack("stack_head");
 
                         translate_ec(ec->child_ptr[0]);
 
-                        /* 引数が左辺値であれば右辺値へと変更してスタックへ積み直す
-                         */
-                        if (ec->child_ptr[0]->var->is_lvalue) {
-                                pop_stack("fixR");
-                                read_mem("fixL", "fixR");
-                                push_stack("fixL");
-
-                                ec->child_ptr[0]->var->is_lvalue = 0;
-                        }
-
 #ifdef DEBUG_EC_ARGUMENT_EXPRESSION_LIST
                         pA_mes("after EC_ARGUMENT_EXPRESSION_LIST, ");
-                        pA_mes("\\n");
-                        pA_reg("fixR");
-                        pA_mes("\\n");
-                        pA_reg("fixL");
                         pA_mes("\\n");
                         pA_reg("stack_frame");
                         pA_mes("\\n");
@@ -576,8 +555,8 @@ pA_mes("\\n");
                         translate_ec(ec->child_ptr[1]);
 
         } else if (ec->type_expression == EC_CONSTANT) {
-                /* 未定義の定数だった場合は、
-                 * pB()によってファイルの上側に定数設定処理を追加する
+                /* Adding a constant setting process on the upper side of the
+                 * file by using the pB(). if an undefined constant.
                  */
                 struct Var* tmp = global_varlist_search(ec->var->iden);
                 if (tmp == NULL) {
@@ -585,21 +564,19 @@ pA_mes("\\n");
                         if (tmp == NULL)
                                 yyerror("system err: EC_CONSTANT, __new_var_initializer()");
 
-                        /* const_variableは__new_var_initializer()では記録されない為 */
+                        /* const_variable because it is not recorded in
+                         * __new_var_initializer()
+                         */
                         pB("fixR = %d;", *((int*)(ec->var->const_variable)));
 
-                        /* 値を値格納位置へと書き込む。
-                         * この値格納位置へのアドレスは、定数ならば base_ptr + 1 なので、
-                         * その数値で直接指定すれば read_mem() を省略できるが、
-                         * あえて、差は付けずに、通常の変数と同様の方法でアドレスを得てる。
+                        /* To write a value to a position to store the value.
                          */
                         pB("fixL = %d;", tmp->base_ptr);
-                        read_mem_pB("fixL", "fixL");
                         write_mem_pB("fixR", "fixL");
                 }
 
-                /* この時点では定数は必ず定義済みであるはずなので、
-                 * あとは通常の定数読み込み -> スタックへプッシュを行うだけ
+                /* Because constant should be defined always at this point,
+                 * to perform "constant reading" to "push to stack".
                  */
                 tmp = global_varlist_search(ec->var->iden);
                 if (tmp == NULL)
@@ -608,8 +585,12 @@ pA_mes("\\n");
                 *(ec->var) = *tmp;
 
                 pA("fixL = %d;", ec->var->base_ptr);
-                read_mem("fixL", "fixL");
-                push_stack("fixL");
+                read_mem("fixR", "fixL");
+                push_stack("fixR");
+
+                /* To the RValue side. */
+                ec->var->base_ptr = -1;
+                ec->var->is_lvalue = 0;
         } else {
                 yyerror("system err: translate_ec()");
         }
