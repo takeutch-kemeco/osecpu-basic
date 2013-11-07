@@ -280,10 +280,11 @@ void translate_ec(struct EC* ec)
                                 var_read_value(ec->child_ptr[0]->var, "fixA");
 
 #ifdef DEBUG_EC_JUMP_STATEMENT
-pA_mes("EC_JUMP_STATEMENT, EC_OPE_RETURN: ");
-pA_reg("fixA");
-pA_mes("\\n");
+                        pA_mes("EC_JUMP_STATEMENT, EC_OPE_RETURN: ");
+                        pA_reg("fixA");
+                        pA_mes("\\n");
 #endif /* DEBUG_EC_JUMP_STATEMENT */
+
                         __define_user_function_return();
                 } else {
                         yyerror("system err: translate_ec(), EC_JUMP_STATEMENT");
@@ -293,6 +294,8 @@ pA_mes("\\n");
                         pA("%s", (char*)ec->var->const_variable);
                 } else if (ec->type_operator == EC_OPE_ASM_SUBST_VTOR) {
                         translate_ec(ec->child_ptr[0]);
+var_print(ec->child_ptr[0]->var);
+pA_mes("INLINE ARRAY\\n");
                         var_read_value(ec->child_ptr[0]->var, (char*)ec->var->const_variable);
                 } else if (ec->type_operator == EC_OPE_ASM_SUBST_RTOV) {
                         translate_ec(ec->child_ptr[0]);
@@ -460,12 +463,6 @@ pA_mes("\\n");
                         if (ec->var->dim_len <= 0)
                                 yyerror("syntax err: 配列の添字次元が不正です");
 
-                        if (ec->child_ptr[0]->var->is_lvalue == 0)
-                                yyerror("system err: 有効な左辺値ではありません");
-
-                        /* Pop of a array subscript in fixR.
-                         * Pop of a variable address in fixL.
-                         */
                         var_read_value(ec->child_ptr[1]->var, "fixR");
                         var_read_address(ec->child_ptr[0]->var, "fixL");
 
@@ -477,11 +474,12 @@ pA_mes("\\n");
                         pA("fixL += fixR * %d;", ec->var->unit_total_len);
                         push_stack("fixL");
 
-                        /* This assume it the LValue which is in condition that
-                         * an address was acquired in stack.
-                         */
+                        if (ec->var->dim_len == 0)
+                                ec->var->is_lvalue = 1;
+                        else
+                                ec->var->is_lvalue = 0;
+
                         ec->var->base_ptr = -1;
-                        ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_FUNCTION) {
 #ifdef DEBUG_EC_OPE_FUNCTION
                         pA_mes("before OPE_FUNCTION, ");

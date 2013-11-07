@@ -367,6 +367,7 @@ direct_declarator
         }
         | direct_declarator __ARRAY_LB __INTEGER_CONSTANT __ARRAY_RB {
                 struct EC* ec = $1;
+                ec->var->type |= TYPE_ARRAY;
                 ec->var->unit_len[ec->var->dim_len] = $3;
                 ec->var->dim_len++;
                 $$ = ec;
