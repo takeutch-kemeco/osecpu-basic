@@ -37,13 +37,13 @@ struct Var* new_var_binary_type_promotion(struct Var* lvar, struct Var* rvar)
         } else {
                 if (var_is_void(lvar) || var_is_void(rvar)) {
                         avar->type = TYPE_VOID;
-                        avar->total_len = 1;
+                        avar->unit_total_len = 1;
                 } else if (var_is_floating(lvar) || var_is_floating(rvar)) {
                         avar->type = TYPE_DOUBLE;
-                        avar->total_len = 1;
+                        avar->unit_total_len = 1;
                 } else if (var_is_integral(lvar) || var_is_integral(rvar)) {
                         avar->type = TYPE_SIGNED | TYPE_INT;
-                        avar->total_len = 1;
+                        avar->unit_total_len = 1;
                 } else {
                         yyerror("system err: new_var_binary_type_promotion()");
                 }

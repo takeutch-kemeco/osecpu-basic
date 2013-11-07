@@ -23,11 +23,13 @@
 
 /* 型ルール
  */
-#define TYPE_CONST      (1 << 20)
-#define TYPE_VOLATILE   (1 << 21)
+#define TYPE_CONST      (1 << 18)
+#define TYPE_CONST_PTR  (1 << 19)
+#define TYPE_VOLATILE   (1 << 20)
 
 /* 記憶領域クラス
  */
+#define TYPE_ARRAY      (1 << 22)
 #define TYPE_WIND       (1 << 23)
 #define TYPE_AUTO       (1 << 24)
 #define TYPE_REGISTER   (1 << 25)
@@ -42,8 +44,8 @@
 #define VAR_DIM_MAX 0x100
 struct Var {
         char iden[IDENLIST_STR_LEN];
-        int32_t base_ptr;       /* ベースアドレス */
-        int32_t total_len;      /* 配列変数全体の長さ */
+        int32_t base_ptr;       /* この変数が値の記録に用いる記憶域の先頭アドレス */
+        int32_t unit_total_len; /* 配列変数全体の長さ */
         int32_t unit_len[VAR_DIM_MAX];  /* 各配列次元の長さ */
         int32_t dim_len;        /* 配列の次元数 */
         int32_t indirect_len;   /* 間接参照の深さ。直接参照(非ポインター型)ならば0 */
@@ -62,7 +64,7 @@ struct Var* var_set_param(struct Var* var,
                           const int32_t base_ptr,
                           int32_t* unit_len,
                           const int32_t dim_len,
-                          const int32_t total_len,
+                          const int32_t unit_total_len,
                           const int32_t indirect_len,
                           const int32_t type,
                           const int32_t is_lvalue,
@@ -70,12 +72,14 @@ struct Var* var_set_param(struct Var* var,
 struct Var* new_var(void);
 void free_var(struct Var* var);
 void var_read_value(struct Var* var, const char* register_name);
+void var_read_value_dummy(struct Var* var);
 void var_read_address(struct Var* var, const char* register_name);
 void local_varlist_scope_push(void);
 void local_varlist_scope_pop(void);
+int32_t var_get_type_to_size(struct Var* var);
 struct Var* global_varlist_search(const char* iden);
 struct Var* varlist_search(const char* iden);
-struct Var* __new_var_initializer(struct Var* var, const int32_t type);
+struct Var* var_initializer_new(struct Var* var, const int32_t type);
 struct Var* var_clear_type(struct Var* var);
 struct Var* var_normalization_type(struct Var* var);
 int32_t var_is_integral(struct Var* var);

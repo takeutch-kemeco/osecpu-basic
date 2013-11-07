@@ -44,7 +44,7 @@ test02()
 
 test05()
 {
-        puts("__new_var_initializer()で、指定したスペックのグローバル変数が作成されるかのテスト");
+        puts("var_initializer_new()で、指定したスペックのグローバル変数が作成されるかのテスト");
 
         struct Var* var = new_var();
         strcpy(var->iden, "global_float_x");
@@ -61,7 +61,7 @@ test05()
                "var->indirect_len[%d], var->type[%d]\n",
                var->iden, var->dim_len, var->indirect_len, var->type);
 
-        __new_var_initializer(var, var->type);
+        var_initializer_new(var, var->type);
 
         puts("実際に作成されたスペック:");
         struct Var* dst = varlist_search(var->iden);
@@ -74,7 +74,7 @@ test05()
 
 test06()
 {
-        puts("__new_var_initializer()で、指定したスペックのローカル変数が作成されるかのテスト");
+        puts("var_initializer_new()で、指定したスペックのローカル変数が作成されるかのテスト");
 
         struct Var* var = new_var();
         strcpy(var->iden, "local_int_x");
@@ -91,7 +91,7 @@ test06()
                "var->indirect_len[%d], var->type[%d]\n",
                var->iden, var->dim_len, var->indirect_len, var->type);
 
-        __new_var_initializer(var, var->type);
+        var_initializer_new(var, var->type);
 
         puts("実際に作成されたスペック:");
         struct Var* dst = varlist_search(var->iden);

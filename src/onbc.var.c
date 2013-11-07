@@ -65,8 +65,8 @@ void var_print(struct Var* var)
                 return;
         }
 
-        printf("struct Var, iden[%s], is_lvalue[%d], base_ptr[%d], total_len[%d], unit_len",
-               var->iden, var->is_lvalue, var->base_ptr, var->total_len);
+        printf("struct Var, iden[%s], is_lvalue[%d], base_ptr[%d], unit_total_len[%d], unit_len",
+               var->iden, var->is_lvalue, var->base_ptr, var->unit_total_len);
 
         int32_t i;
         for (i = 0; i < var->dim_len; i++) {
@@ -89,7 +89,7 @@ struct Var* var_set_param(struct Var* var,
                           const int32_t base_ptr,
                           int32_t* unit_len,
                           const int32_t dim_len,
-                          const int32_t total_len,
+                          const int32_t unit_total_len,
                           const int32_t indirect_len,
                           const int32_t type,
                           const int32_t is_lvalue,
@@ -103,7 +103,7 @@ struct Var* var_set_param(struct Var* var,
                 var->unit_len[i] = unit_len[i];
 
         var->dim_len = dim_len;
-        var->total_len = total_len;
+        var->unit_total_len = unit_total_len;
         var->indirect_len = indirect_len;
         var->type = type;
         var->is_lvalue = is_lvalue;
@@ -121,10 +121,10 @@ struct Var* new_var(void)
 
         var->iden[0] = '\0';
         var->base_ptr = 0;
-        var->total_len = 0;
+        var->unit_total_len = 0;
         var->dim_len = 0;
         var->indirect_len = 0;
-        var->type = TYPE_SIGNED | TYPE_INT; /* デフォルトは符号付きint */
+        var->type = 0;
         var->is_lvalue = 0;
         var->const_variable = NULL;
 
@@ -140,25 +140,6 @@ void free_var(struct Var* var)
         free(var);
 }
 
-/* A read value from variable.
- * In the case RValue, We make a pop from stack.
- * In the case LValue, We diverege to indirect reference or direct reference
- * depending on a value of Var->is_lvalue and Var->base_ptr.
- */
-void var_read_value(struct Var* var, const char* register_name)
-{
-        if (var->is_lvalue && (var->base_ptr != -1)) {
-                pA("%s = %d;", register_name, var->base_ptr);
-
-                if (var->type & TYPE_AUTO)
-                        pA("%s += stack_frame;", register_name);
-
-                read_mem(register_name, register_name);
-        } else {
-                pop_stack(register_name);
-        }
-}
-
 /* A dummy of read value from variable
  */
 void var_read_value_dummy(struct Var* var)
@@ -167,12 +148,7 @@ void var_read_value_dummy(struct Var* var)
                 pop_stack_dummy();
 }
 
-/* A read address from variable.
- * In the case RValue, We make a pop from stack.
- * In the case LValue, We diverege to indirect reference or direct reference
- * depending on a value of Var->is_lvalue and Var->base_ptr.
- */
-void var_read_address(struct Var* var, const char* register_name)
+static void var_read_array_address(struct Var* var, const char* register_name)
 {
         if (var->is_lvalue && (var->base_ptr != -1)) {
                 pA("%s = %d;", register_name, var->base_ptr);
@@ -180,9 +156,61 @@ void var_read_address(struct Var* var, const char* register_name)
                 if (var->type & TYPE_AUTO)
                         pA("%s += stack_frame;", register_name);
         } else {
-                pA("%s = stack_head;", register_name);
-                pop_stack_dummy();
+                pop_stack(register_name);
         }
+}
+
+static void var_read_scalar_address(struct Var* var, const char* register_name)
+{
+        if (var->is_lvalue && (var->base_ptr != -1)) {
+                pA("%s = %d;", register_name, var->base_ptr);
+
+                if (var->type & TYPE_AUTO)
+                        pA("%s += stack_frame;", register_name);
+        } else {
+                pop_stack_dummy();
+                pA("%s = stack_head;", register_name);
+        }
+}
+
+/* A read address from variable.
+ * In the case RValue, Make a pop from stack.
+ * In the case LValue, Diverege to indirect reference or direct reference
+ * depending on a value of Var->is_lvalue and Var->base_ptr.
+ */
+void var_read_address(struct Var* var, const char* register_name)
+{
+        if (var->type & TYPE_ARRAY)
+                var_read_array_address(var, register_name);
+        else
+                var_read_scalar_address(var, register_name);
+}
+
+static void var_read_array_value(struct Var* var, const char* register_name)
+{
+        var_read_array_address(var, register_name);
+
+        if (var->dim_len == 0)
+                read_mem(register_name, register_name);
+}
+
+static void var_read_scalar_value(struct Var* var, const char* register_name)
+{
+        var_read_scalar_address(var, register_name);
+        read_mem(register_name, register_name);
+}
+
+/* A read value from variable.
+ * In the case RValue, Make a pop from stack.
+ * In the case LValue, Diverege to indirect reference or direct reference
+ * depending on a value of Var->is_lvalue and Var->base_ptr.
+ */
+void var_read_value(struct Var* var, const char* register_name)
+{
+        if (var->type & TYPE_ARRAY)
+                var_read_array_value(var, register_name);
+        else
+                var_read_scalar_value(var, register_name);
 }
 
 /* 現在のlocal_varlist_headの値をlocal_varlist_scopeへプッシュする
@@ -277,23 +305,59 @@ struct Var* varlist_search(const char* iden)
         return var;
 }
 
-/* unit_len[], dim_len から total_len を計算する
+/* This get the byte syze with the type.
  */
-static int32_t get_total_len(int32_t* unit_len, const int32_t dim_len)
+static int32_t get_type_to_size(const int32_t type, const int32_t indirect_len)
 {
-        int32_t total_len = 1;
+        if (indirect_len >= 1)
+                return 1;
+
+        if (type & TYPE_INT)
+                return 1;
+        else if (type & TYPE_CHAR)
+                return 1;
+        else if (type & TYPE_SHORT)
+                return 1;
+        else if (type & TYPE_LONG)
+                return 1;
+        else if (type & TYPE_VOID)
+                return 1;
+        else if (type & TYPE_FLOAT)
+                return 1;
+        else if (type & TYPE_DOUBLE)
+                return 1;
+        else
+                yyerror("system err: var_get_type_size()");
+}
+
+/* This get the byte syze with the type from struct Var.
+ * We should transmit it after being normalize.
+ */
+int32_t var_get_type_to_size(struct Var* var)
+{
+        return get_type_to_size(var->type, var->indirect_len);
+}
+
+/* This get the length of the whole array from a dimentional number (dim_len)
+ * and each array index (unit_len[]).
+ */
+static int32_t
+get_unit_total_len(int32_t* unit_len, const int32_t dim_len)
+{
+        int32_t unit_total_len = 1;
         int32_t i;
         for (i = 0; i < dim_len; i++) {
                 if (unit_len[i] <= 0)
                         yyerror("syntax err: 配列サイズに0以下を指定しました");
 
-                total_len *= unit_len[i];
+                unit_total_len *= unit_len[i];
         }
 
-        return total_len;
+        return unit_total_len;
 }
 
-/* グローバル変数リストに新たに変数を追加する。
+/* This adds a variable to a list of global variable newly.
+ * The global variable pool is made stating from 0x00001000.
  */
 static struct Var*
 global_varlist_add(const char* iden,
@@ -308,23 +372,24 @@ global_varlist_add(const char* iden,
         struct Var* cur = global_varlist + global_varlist_head;
         struct Var* prev = global_varlist + global_varlist_head - 1;
 
-        int32_t base_ptr = 0;
+        int32_t base_ptr = 0x00001000;
         if (global_varlist_head >= 1) {
-                /* +1 は、変数において参照先アドレス保存用の領域分 */
-                base_ptr = prev->base_ptr + 1 + prev->total_len;
+                const int32_t prev_type_size = get_type_to_size(prev->type, prev->indirect_len);
+                const int32_t prev_total_size = prev->unit_total_len * prev_type_size;
+
+                base_ptr = prev->base_ptr + prev_total_size;
         }
 
         global_varlist_head++;
 
-        const int32_t total_len = get_total_len(unit_len, dim_len);
-        const int32_t is_lvalue = 1; /* 左辺値 */
+        const int32_t unit_total_len = get_unit_total_len(unit_len, dim_len);
+        const int32_t is_lvalue = 1;
 
-        return var_set_param(cur, iden, base_ptr, unit_len, dim_len, total_len,
+        return var_set_param(cur, iden, base_ptr, unit_len, dim_len, unit_total_len,
                              indirect_len, type, is_lvalue, NULL);
-
 }
 
-/* ローカル変数リストに新たに変数を追加する。
+/* This adds a variable to a list of local variable newly.
  */
 static struct Var*
 local_varlist_add(const char* iden,
@@ -337,35 +402,37 @@ local_varlist_add(const char* iden,
         struct Var* prev = local_varlist + local_varlist_head - 1;
 
         int32_t base_ptr = 0;
-
         if (next_local_varlist_add_set_new_scope) {
                 base_ptr = 0;
                 next_local_varlist_add_set_new_scope = 0;
         } else {
                 if (local_varlist_head >= 1) {
-                        /* +1 は、変数において参照先アドレス保存用の領域分 */
-                        if (prev->type & TYPE_WIND)
-                                base_ptr = prev->base_ptr + 1;
-                        else
-                                base_ptr = prev->base_ptr + 1 + prev->total_len;
+                        const int32_t prev_type_size = get_type_to_size(prev->type, prev->indirect_len);
+                        const int32_t prev_total_size = prev->unit_total_len * prev_type_size;
+
+                        base_ptr = prev->base_ptr + prev_total_size;
                 }
         }
 
         local_varlist_head++;
 
-        const int32_t total_len = get_total_len(unit_len, dim_len);
-        const int32_t is_lvalue = 1; /* 左辺値 */
+        const int32_t unit_total_len = get_unit_total_len(unit_len, dim_len);
+        const int32_t is_lvalue = 1;
 
-        return var_set_param(cur, iden, base_ptr, unit_len, dim_len, total_len,
+        return var_set_param(cur, iden, base_ptr, unit_len, dim_len, unit_total_len,
                              indirect_len, type, is_lvalue, NULL);
 }
 
-/* 変数リストに新たに変数を追加する。
- * unit_len: この変数の配列の各要素の長さを指定する。
- * dim_len: この変数の次元数を指定する。 スカラーならば0。
- * indirect_len: この変数の間接参照の深さを指定する。 非ポインター型ならば0。
+/* This add a variable to a list of variables newly.
  *
- * これらの値はint32型。（fix32型ではないので注意)
+ * unit_len:
+ *      This appoint the length of each element of the sequence of valiable.
+ * dim_len:
+ *      This appoint the number of the dimentions of this variable.
+ *      If is a scalar; 0.
+ * indirect_len:
+ *      This appoint depth of the indirect reference of this variable.
+ *      If is a non-pointer type; 0.
  */
 static struct Var*
 varlist_add(const char* iden,
@@ -391,50 +458,40 @@ varlist_add(const char* iden,
         }
         printf(", ");
 
-        printf("iden[%s], total_len[%d], base_ptr[%d], indirect_len[%d]\n",
-                var->iden, var->total_len, var->base_ptr, var->indirect_len);
+        printf("iden[%s], unit_total_len[%d], base_ptr[%d], indirect_len[%d]\n",
+                var->iden, var->unit_total_len, var->base_ptr, var->indirect_len);
 #endif /* DEBUG_VARLIST */
 
         return var;
 }
 
-/* 変数インスタンス関連
+/* Generate instance of the local variable.
+ * Secure a working space from satck newly and set it.
  */
-
-/* ローカル変数のインスタンス生成で、記憶域をスタックから新たに確保・設定する場合 */
-static struct Var* __new_var_initializer_local_alloc(struct Var* var)
+static struct Var* var_initializer_local_alloc(struct Var* var)
 {
-        /* 配列変数の場合
-         */
-        if (var->dim_len >= 1) {
-                /* 現在のstack_headを変数への間接参照アドレスの格納位置とし、
-                 * ここへ stack_head + 1 のアドレスをセットする
-                 */
-                pA("stack_socket = stack_head + 1;");
-                write_mem("stack_socket", "stack_head");
+        const int32_t type_size = get_type_to_size(var->type, var->indirect_len);
+        const int32_t total_size = var->unit_total_len * type_size;
 
-                /* 配列変数の為のメモリー領域確保を、その分だけスタックを進めることで行う */
-                pA("stack_head += %d;", var->total_len + 1);
-
-        /* スカラー変数の場合
-         */
-        } else {
-                 /* スカラー変数のメモリー領域確保を、その分だけスタックを進めることで行う */
-                pA("stack_head += %d;", 1);
-        }
+        pA("stack_head = stack_frame + %d;", var->base_ptr + total_size);
 
         return var;
 }
 
-/* ローカル変数のインスタンス生成で、ワインドスタックからポップしたアドレスを用いて記憶域設定する場合 */
-static struct Var* __new_var_initializer_local_wind(struct Var* var)
+/* Generate instance of local variable.
+ * When working space setting using the address that performed pop from wind stack.
+ */
+static struct Var* var_initializer_local_wind(struct Var* var)
 {
-        /* ワインドスタックからポップした値をローカル変数の初期値としてセットする */
-        pop_windstack("stack_socket");
-        write_mem("stack_socket", "stack_head");
+        const int32_t type_size = get_type_to_size(var->type, var->indirect_len);
+        const int32_t total_size = var->unit_total_len * type_size;
 
-        /* ローカル変数において参照先アドレスの保存用に用いた分だけスタックを進める */
-        pA("stack_head += %d;", 1);
+        pop_windstack("stack_tmp");
+        pA("stack_socket = stack_frame + %d;", var->base_ptr);
+        read_mem("stack_tmp", "stack_tmp");
+        write_mem("stack_tmp", "stack_socket");
+
+        pA("stack_head = stack_frame + %d;", var->base_ptr + total_size);
 
         return var;
 }
@@ -456,7 +513,7 @@ static struct Var* __new_var_initializer_local_wind(struct Var* var)
  *
  *      p : ワインドスタックからポップした値。ここに x[0] のアドレスを得られる。
  */
-static struct Var* __new_var_initializer_local(struct Var* var, const int32_t type)
+static struct Var* var_initializer_local_new(struct Var* var, const int32_t type)
 {
         if (local_varlist_search_scope(var->iden) != NULL)
                yyerror("syntax err: 同名のローカル変数を重複して宣言しました");
@@ -479,14 +536,14 @@ static struct Var* __new_var_initializer_local(struct Var* var, const int32_t ty
 
         /* 変数のメモリー領域の確保方法の違い */
         if (type & TYPE_WIND)
-                return __new_var_initializer_local_wind(ret);
+                return var_initializer_local_wind(ret);
         else
-                return __new_var_initializer_local_alloc(ret);
+                return var_initializer_local_alloc(ret);
 }
 
 /* グローバル変数のインスタンス生成
  */
-static struct Var* __new_var_initializer_global(struct Var* var, const int32_t type)
+static struct Var* var_initializer_global_new(struct Var* var, const int32_t type)
 {
         if (global_varlist_search(var->iden) != NULL)
                 yyerror("syntax err: 同名のグローバル変数を重複して宣言しました");
@@ -507,19 +564,10 @@ static struct Var* __new_var_initializer_global(struct Var* var, const int32_t t
         if (ret == NULL)
                 yyerror("system err: グローバル変数の作成に失敗しました");
 
-        /* 配列変数として宣言した場合は、変数自体は実際にはポインターとなる。
-         * そのポインターに、実際の値の格納領域の先頭アドレスをセットする。
-         */
-        if (var->dim_len >= 1) {
-                pB("stack_socket = %d;", ret->base_ptr);
-                pB("stack_tmp = %d;", ret->base_ptr + 1);
-                write_mem_pB("stack_tmp", "stack_socket");
-        }
-
         return ret;
 }
 
-struct Var* __new_var_initializer(struct Var* var, int32_t type)
+struct Var* var_initializer_new(struct Var* var, int32_t type)
 {
         /* スコープが 1 以上(ブロックに入ってる状態)であれば、
          * デフォルトを TYPE_AUTO とする。
@@ -533,9 +581,9 @@ struct Var* __new_var_initializer(struct Var* var, int32_t type)
                 type &= ~(TYPE_AUTO);
 
         if ((type & TYPE_AUTO) || (type & TYPE_WIND))
-                return __new_var_initializer_local(var, type);
+                return var_initializer_local_new(var, type);
         else
-                return __new_var_initializer_global(var, type);
+                return var_initializer_global_new(var, type);
 }
 
 /* 変数スペックの変数の型に関する type をクリアーする

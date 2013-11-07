@@ -43,14 +43,14 @@ structmemberspec_new(const char* iden,
         member->indirect_len = indirect_len;
         member->type = type;
 
-        int32_t total_len = 1;
+        int32_t unit_total_len = 1;
         int32_t i;
         for (i = 0; i < dim_len; i++) {
                 member->unit_len[i] = unit_len[i];
-                total_len *= unit_len[i];
+                unit_total_len *= unit_len[i];
         }
 
-        member->total_len = total_len;
+        member->unit_total_len = unit_total_len;
 
         return member;
 }
@@ -124,7 +124,7 @@ void structspec_add_member(struct StructSpec* spec, struct Var* member)
         spec->member_offset[spec->member_len] = spec->struct_len;
 
         /* メンバーを追加したので、その分だけ増えた構造体サイズを更新する */
-        spec->struct_len += member->total_len;
+        spec->struct_len += member->unit_total_len;
 
         /* メンバーを追加したので、構造体に含まれるメンバー個数を更新する */
         spec->member_len++;

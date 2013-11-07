@@ -126,7 +126,7 @@ void translate_ec(struct EC* ec)
                 *(ec->var) = *(__var_func_assignment_new("fixA",
                                                          ec->child_ptr[0]->var, "fixL",
                                                          ec->child_ptr[1]->var, "fixR"));
-                var_read_value_dummy(ec->var); /* We return a state of stack +1 to 0. */
+                var_read_value_dummy(ec->var); /* This return a state of stack +1 to 0. */
         } else if (ec->type_expression == EC_DECLARATOR) {
                 if (ec->var->type & TYPE_FUNCTION)
                         cur_declaration_specifiers |= TYPE_FUNCTION;
@@ -136,7 +136,7 @@ void translate_ec(struct EC* ec)
                         wind_argument_flag = 0; /* フラグはこのタイミングでクリアする */
                 }
 
-                *(ec->var) = *(__new_var_initializer(ec->var, cur_declaration_specifiers));
+                *(ec->var) = *(var_initializer_new(ec->var, cur_declaration_specifiers));
 
                 if (ec->var->type & TYPE_FUNCTION) {
                         const int32_t func_label = cur_label_index_head++;
@@ -247,7 +247,7 @@ void translate_ec(struct EC* ec)
                         const int32_t loop_end = cur_label_index_head++;
 
                         translate_ec(ec->child_ptr[0]);
-                        var_read_value_dummy(ec->child_ptr[0]->var); /* We return a state of stack +1 to 0. */
+                        var_read_value_dummy(ec->child_ptr[0]->var); /* This return a state of stack +1 to 0. */
 
                         pA("LB(0, %d);", loop_head);
 
@@ -258,7 +258,7 @@ void translate_ec(struct EC* ec)
                         translate_ec(ec->child_ptr[3]);
 
                         translate_ec(ec->child_ptr[2]);
-                        var_read_value_dummy(ec->child_ptr[2]->var); /* We return a state of stack +1 to 0. */
+                        var_read_value_dummy(ec->child_ptr[2]->var); /* This return a state of stack +1 to 0. */
 
                         pA("PLIMM(P3F, %d);", loop_head);
 
@@ -389,7 +389,7 @@ pA_mes("\\n");
                 translate_ec(ec->child_ptr[0]);
                 var_normalization_type(ec->var);
                 ec->var->base_ptr = ec->child_ptr[0]->var->base_ptr;
-                ec->var->total_len = ec->child_ptr[0]->var->total_len;
+                ec->var->unit_total_len = ec->child_ptr[0]->var->unit_total_len;
                 ec->var->is_lvalue = ec->child_ptr[0]->var->is_lvalue;
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
@@ -412,7 +412,7 @@ pA_mes("\\n");
 
                         ec->var->indirect_len++;
 
-                        /* We assume it the RValue which is in condition that
+                        /* This assume it the RValue which is in condition that
                          * an value was acquired in stack.
                          */
                         ec->var->base_ptr = -1;
@@ -428,7 +428,7 @@ pA_mes("\\n");
                         var_read_address(ec->var, "stack_socket");
                         push_stack("stack_socket");
 
-                        /* We assume it the LValue which is in condition that
+                        /* This assume it the LValue which is in condition that
                          * an address was acquired in stack.
                          */
                         ec->var->base_ptr = -1;
@@ -444,7 +444,10 @@ pA_mes("\\n");
                                                        ec->child_ptr[0]->var, "fixL");
                 } else if (ec->type_operator == EC_OPE_SIZEOF) {
                         ec->var = ec->child_ptr[0]->var;
-                        pA("stack_socket = %d;", ec->var->total_len);
+                        var_normalization_type(ec->var);
+                        const int32_t type_size = var_get_type_to_size(ec->var);
+                        const int32_t total_size = ec->var->unit_total_len * type_size;
+                        pA("stack_socket = %d;", total_size);
                         push_stack("stack_socket");
                 } else {
                         yyerror("system err: translate_ec(), EC_UNARY");
@@ -466,12 +469,12 @@ pA_mes("\\n");
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
                         ec->var->dim_len--;
-                        ec->var->total_len /= ec->var->unit_len[ec->var->dim_len];
+                        ec->var->unit_total_len /= ec->var->unit_len[ec->var->dim_len];
 
-                        pA("fixL += fixR * %d;", ec->var->total_len);
+                        pA("fixL += fixR * %d;", ec->var->unit_total_len);
                         push_stack("fixL");
 
-                        /* We assume it the LValue which is in condition that
+                        /* This assume it the LValue which is in condition that
                          * an address was acquired in stack.
                          */
                         ec->var->base_ptr = -1;
@@ -487,7 +490,7 @@ pA_mes("\\n");
                         debug_stackframe(16);
 #endif /* DEBUG_EC_OPE_FUNCTION */
 
-                        /* We push to the stack position at time of the function
+                        /* This push to the stack position at time of the function
                          * call to call stack.
                          */
                         push_callstack("stack_head");
@@ -498,7 +501,7 @@ pA_mes("\\n");
 
                         translate_ec(ec->child_ptr[0]);
 
-                        /* We push current Stack-Frame.
+                        /* This push current Stack-Frame.
                          * And We set Stack-Head of the point time when We
                          * acquired a function argument in stack to
                          * Stack-Frame.
@@ -535,7 +538,7 @@ pA_mes("\\n");
                 }
         } else if (ec->type_expression == EC_ARGUMENT_EXPRESSION_LIST) {
                 if (ec->child_len >= 1) {
-                        /* We push a current stack position to wind stack. */
+                        /* This push a current stack position to wind stack. */
                         push_windstack("stack_head");
 
                         translate_ec(ec->child_ptr[0]);
@@ -560,12 +563,12 @@ pA_mes("\\n");
                  */
                 struct Var* tmp = global_varlist_search(ec->var->iden);
                 if (tmp == NULL) {
-                        tmp = __new_var_initializer(ec->var, ec->var->type);
+                        tmp = var_initializer_new(ec->var, ec->var->type);
                         if (tmp == NULL)
-                                yyerror("system err: EC_CONSTANT, __new_var_initializer()");
+                                yyerror("system err: EC_CONSTANT, new_var_initializer_new()");
 
                         /* const_variable because it is not recorded in
-                         * __new_var_initializer()
+                         * var_initializer_new()
                          */
                         pB("fixR = %d;", *((int*)(ec->var->const_variable)));
 
