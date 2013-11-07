@@ -410,6 +410,9 @@ pA_mes("\\n");
                         if (ec->var->is_lvalue == 0)
                                 yyerror("syntax err: 有効な左辺値ではないのでアドレス取得できません");
 
+                        var_read_address(ec->var, "stack_socket");
+                        push_stack("stack_socket");
+
                         ec->var->indirect_len++;
 
                         /* This assume it the RValue which is in condition that
@@ -423,10 +426,10 @@ pA_mes("\\n");
                         if (ec->var->indirect_len <= 0)
                                 yyerror("syntax err: 間接参照の深さが不正です");
 
-                        ec->var->indirect_len--;
-
-                        var_read_address(ec->var, "stack_socket");
+                        var_indirect_read_value(ec->var, "stack_socket");
                         push_stack("stack_socket");
+
+                        ec->var->indirect_len--;
 
                         /* This assume it the LValue which is in condition that
                          * an address was acquired in stack.

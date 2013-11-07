@@ -213,6 +213,12 @@ void var_read_value(struct Var* var, const char* register_name)
                 var_read_scalar_value(var, register_name);
 }
 
+void var_indirect_read_value(struct Var* var, const char* register_name)
+{
+        var_read_value(var, register_name);
+        read_mem(register_name, register_name);
+}
+
 /* 現在のlocal_varlist_headの値をlocal_varlist_scopeへプッシュする
  *
  * スコープが異なっていれば、同名のローカル変数を作成できる。

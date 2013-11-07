@@ -74,6 +74,7 @@ void free_var(struct Var* var);
 void var_read_value(struct Var* var, const char* register_name);
 void var_read_value_dummy(struct Var* var);
 void var_read_address(struct Var* var, const char* register_name);
+void var_indirect_read_value(struct Var* var, const char* register_name);
 void local_varlist_scope_push(void);
 void local_varlist_scope_pop(void);
 int32_t var_get_type_to_size(struct Var* var);
