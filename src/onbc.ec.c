@@ -464,33 +464,52 @@ void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_POSTFIX) {
                 if (ec->type_operator == EC_OPE_ARRAY) {
-                        if (ec->var->dim_len <= 0)
-                                yyerror("syntax err: 配列の添字次元が不正です");
+                        if (ec->child_ptr[0]->var->type & TYPE_ARRAY) {
+                                if (ec->child_ptr[0]->var->dim_len <= 0)
+                                        yyerror("syntax err: 配列の添字次元が不正です");
 
-                        var_read_value(ec->child_ptr[1]->var, "fixR");
-                        var_read_address(ec->child_ptr[0]->var, "fixL");
+                                var_read_value(ec->child_ptr[1]->var, "fixR");
+                                var_read_address(ec->child_ptr[0]->var, "fixL");
 
-                        *(ec->var) = *(ec->child_ptr[0]->var);
+                                *(ec->var) = *(ec->child_ptr[0]->var);
 
-                        ec->var->unit_total_len /= ec->var->unit_len[0];
+                                ec->var->unit_total_len /= ec->var->unit_len[0];
 
-                        /* To remove the subscript of the most high-dimentional
-                         * side, To reconfigure the var->unit_len[].
-                         */
-                        ec->var->dim_len--;
-                        int32_t i;
-                        for (i = 0; i < ec->var->dim_len; i++)
-                                ec->var->unit_len[i] = ec->var->unit_len[i + 1];
+                                /* To remove the subscript of the most high-dimentional
+                                 * side, To reconfigure the var->unit_len[].
+                                 */
+                                ec->var->dim_len--;
+                                int32_t i;
+                                for (i = 0; i < ec->var->dim_len; i++)
+                                        ec->var->unit_len[i] = ec->var->unit_len[i + 1];
 
-                        pA("fixL += fixR * %d;", ec->var->unit_total_len);
-                        push_stack("fixL");
+                                pA("fixL += fixR * %d;", ec->var->unit_total_len);
+                                push_stack("fixL");
 
-                        if (ec->var->dim_len == 0)
+                                if (ec->var->dim_len == 0)
+                                        ec->var->is_lvalue = 1;
+                                else
+                                        ec->var->is_lvalue = 0;
+
+                                ec->var->base_ptr = -1;
+                        } else if (ec->child_ptr[0]->var->indirect_len >= 1) {
+                                ec->var = __var_func_add_new("fixA",
+                                                             ec->child_ptr[0]->var, "fixL",
+                                                             ec->child_ptr[1]->var, "fixR");
+
+                                var_indirect_read_value(ec->var, "stack_socket");
+                                push_stack("stack_socket");
+
+                                ec->var->indirect_len--;
+
+                                /* This assume it the LValue which is in condition that
+                                 * an address was acquired in stack.
+                                 */
+                                ec->var->base_ptr = -1;
                                 ec->var->is_lvalue = 1;
-                        else
-                                ec->var->is_lvalue = 0;
-
-                        ec->var->base_ptr = -1;
+                        } else {
+                                yyerror("syntax err: 非ポインター型スカラー変数への添字によるアクセスは不正です");
+                        }
                 } else if (ec->type_operator == EC_OPE_FUNCTION) {
 #ifdef DEBUG_EC_OPE_FUNCTION
                         pA_mes("before OPE_FUNCTION, ");
