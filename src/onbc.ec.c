@@ -414,7 +414,7 @@ void translate_ec(struct EC* ec)
                 if (ec->type_operator == EC_OPE_ADDRESS) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
-                        if (ec->var->is_lvalue == 0)
+                        if (ec->var->is_lvalue == 0 && ((ec->var->type & TYPE_ARRAY) == 0))
                                 yyerror("syntax err: 有効な左辺値ではないのでアドレス取得できません");
 
                         var_read_address(ec->var, "stack_socket");
@@ -427,6 +427,11 @@ void translate_ec(struct EC* ec)
                          */
                         ec->var->base_ptr = -1;
                         ec->var->is_lvalue = 0;
+
+                        /* Array-Type is Non-Array-Type by address acquisition.
+                         */
+                        ec->var->type &= ~TYPE_ARRAY;
+                        ec->var->dim_len = var_get_type_to_size(ec->var);
                 } else if (ec->type_operator == EC_OPE_POINTER) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
