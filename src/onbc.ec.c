@@ -472,8 +472,15 @@ void translate_ec(struct EC* ec)
 
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
+                        ec->var->unit_total_len /= ec->var->unit_len[0];
+
+                        /* To remove the subscript of the most high-dimentional
+                         * side, To reconfigure the var->unit_len[].
+                         */
                         ec->var->dim_len--;
-                        ec->var->unit_total_len /= ec->var->unit_len[ec->var->dim_len];
+                        int32_t i;
+                        for (i = 0; i < ec->var->dim_len; i++)
+                                ec->var->unit_len[i] = ec->var->unit_len[i + 1];
 
                         pA("fixL += fixR * %d;", ec->var->unit_total_len);
                         push_stack("fixL");
