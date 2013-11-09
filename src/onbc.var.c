@@ -188,7 +188,6 @@ void var_read_address(struct Var* var, const char* register_name)
 
 static void var_read_array_value(struct Var* var, const char* register_name)
 {
-pA_mes("ARRAY\\n");
         var_read_array_address(var, register_name);
 
         if (var->dim_len == 0)

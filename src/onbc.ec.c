@@ -294,8 +294,12 @@ void translate_ec(struct EC* ec)
                         pA("%s", (char*)ec->var->const_variable);
                 } else if (ec->type_operator == EC_OPE_ASM_SUBST_VTOR) {
                         translate_ec(ec->child_ptr[0]);
-var_print(ec->child_ptr[0]->var);
-pA_mes("INLINE ARRAY\\n");
+
+#ifdef DEBUG_EC_INLINE_ASSEMBLER_STATEMENT
+                        var_print(ec->child_ptr[0]->var);
+                        pA_mes("INLINE ARRAY\\n");
+#endif /* DEBUG_EC_INLINE_ASSEMBLER_STATEMENT */
+
                         var_read_value(ec->child_ptr[0]->var, (char*)ec->var->const_variable);
                 } else if (ec->type_operator == EC_OPE_ASM_SUBST_RTOV) {
                         translate_ec(ec->child_ptr[0]);
