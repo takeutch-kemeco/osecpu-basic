@@ -150,26 +150,33 @@ void var_read_value_dummy(struct Var* var)
 
 static void var_read_array_address(struct Var* var, const char* register_name)
 {
-        if (var->is_lvalue && (var->base_ptr != -1)) {
-                pA("%s = %d;", register_name, var->base_ptr);
+        if (var->is_lvalue) {
+                if (var->base_ptr != -1) {
+                        pA("%s = %d;", register_name, var->base_ptr);
 
-                if (var->type & TYPE_AUTO)
-                        pA("%s += stack_frame;", register_name);
+                        if (var->type & TYPE_AUTO)
+                                pA("%s += stack_frame;", register_name);
+                } else {
+                        pop_stack(register_name);
+                }
         } else {
-                pop_stack(register_name);
+                yyerror("syntax err: 左辺値ではない配列変数のアドレスを得ようとしました");
         }
 }
 
 static void var_read_scalar_address(struct Var* var, const char* register_name)
 {
-        if (var->is_lvalue && (var->base_ptr != -1)) {
-                pA("%s = %d;", register_name, var->base_ptr);
+        if (var->is_lvalue) {
+                if (var->base_ptr != -1) {
+                        pA("%s = %d;", register_name, var->base_ptr);
 
-                if (var->type & TYPE_AUTO)
-                        pA("%s += stack_frame;", register_name);
+                        if (var->type & TYPE_AUTO)
+                                pA("%s += stack_frame;", register_name);
+                } else {
+                        pop_stack(register_name);
+                }
         } else {
-                pop_stack_dummy();
-                pA("%s = stack_head;", register_name);
+                yyerror("syntax err: 左辺値ではない変数のアドレスを得ようとしました");
         }
 }
 
@@ -188,16 +195,25 @@ void var_read_address(struct Var* var, const char* register_name)
 
 static void var_read_array_value(struct Var* var, const char* register_name)
 {
-        var_read_array_address(var, register_name);
+        if (var->is_lvalue) {
+                var_read_array_address(var, register_name);
 
-        if (var->dim_len == 0)
-                read_mem(register_name, register_name);
+                if (var->dim_len == 0)
+                        read_mem(register_name, register_name);
+        } else {
+                yyerror("system err: var_read_array_value()");
+        }
 }
 
 static void var_read_scalar_value(struct Var* var, const char* register_name)
 {
-        var_read_scalar_address(var, register_name);
-        read_mem(register_name, register_name);
+        if (var->is_lvalue) {
+                var_read_scalar_address(var, register_name);
+                read_mem(register_name, register_name);
+        } else {
+                pop_stack_dummy();
+                pA("%s = stack_head;", register_name);
+        }
 }
 
 /* A read value from variable.
