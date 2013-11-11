@@ -606,30 +606,21 @@ void translate_ec(struct EC* ec)
                         /* const_variable because it is not recorded in
                          * var_initializer_new()
                          */
-                        pB("fixR = %d;", *((int*)(ec->var->const_variable)));
+                        pB("stack_socket = %d;", *((int*)(ec->var->const_variable)));
 
                         /* To write a value to a position to store the value.
                          */
-                        pB("fixL = %d;", tmp->base_ptr);
-                        write_mem_pB("fixR", "fixL");
+                        pB("stack_tmp = %d;", tmp->base_ptr);
+                        write_mem_pB("stack_socket", "stack_tmp");
                 }
 
-                /* Because constant should be defined always at this point,
-                 * to perform "constant reading" to "push to stack".
+                /* Because constant should be defined always at this point.
                  */
                 tmp = global_varlist_search(ec->var->iden);
                 if (tmp == NULL)
                         yyerror("system err: EC_CONSTANT");
 
                 *(ec->var) = *tmp;
-
-                pA("fixL = %d;", ec->var->base_ptr);
-                read_mem("fixR", "fixL");
-                push_stack("fixR");
-
-                /* To the RValue side. */
-                ec->var->base_ptr = -1;
-                ec->var->is_lvalue = 0;
         } else {
                 yyerror("system err: translate_ec()");
         }
