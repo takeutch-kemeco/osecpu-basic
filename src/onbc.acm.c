@@ -102,10 +102,10 @@ var_binary_operation_new(const char* areg,
                          acm_func __func_ptr)
 {
         rvar = var_normalization_type(rvar);
-        var_read_value(rvar, rreg);
+        rvar = var_realize_read_value(rvar, rreg);
 
         lvar = var_normalization_type(lvar);
-        var_read_value(lvar, lreg);
+        lvar = var_realize_read_value(lvar, lreg);
 
         struct Var* avar = new_var_binary_type_promotion(lvar, rvar);
         var_binary_implicit_type_promotion(avar, lvar, lreg, rvar, rreg);
@@ -141,7 +141,7 @@ var_unary_operation_new(const char* areg,
                         acm_func __func_ptr)
 {
         lvar = var_normalization_type(lvar);
-        var_read_value(lvar, lreg);
+        lvar = var_realize_read_value(lvar, lreg);
 
         struct Var* avar = new_var();
         *avar = *lvar;
@@ -476,10 +476,10 @@ __var_func_assignment_new(const char* areg,
                           struct Var* lvar, const char* lreg,
                           struct Var* rvar, const char* rreg)
 {
-        var_read_value(rvar, rreg);
+        rvar = var_realize_read_value(rvar, rreg);
 
         if (lvar->is_lvalue)
-                var_read_address(lvar, lreg);
+                lvar = var_pre_read_value(lvar, lreg);
         else
                 yyerror("syntax err: 有効な左辺値ではないので代入できません");
 
