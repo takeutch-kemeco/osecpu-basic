@@ -211,7 +211,7 @@ void translate_ec(struct EC* ec)
                         const int32_t else_label = cur_label_index_head++;
                         const int32_t end_label = cur_label_index_head++;
 
-                        var_read_value(ec->child_ptr[0]->var, "stack_socket");
+                        var_realize_read_value(ec->child_ptr[0]->var, "stack_socket");
                         pA("if (stack_socket == 0) {PLIMM(P3F, %d);}", else_label);
 
                         translate_ec(ec->child_ptr[1]);
@@ -234,7 +234,7 @@ void translate_ec(struct EC* ec)
                         pA("LB(0, %d);", loop_head);
 
                         translate_ec(ec->child_ptr[0]);
-                        var_read_value(ec->child_ptr[0]->var, "stack_socket");
+                        var_realize_read_value(ec->child_ptr[0]->var, "stack_socket");
                         pA("if (stack_socket == 0) {PLIMM(P3F, %d);}", loop_end);
 
                         translate_ec(ec->child_ptr[1]);
@@ -252,7 +252,7 @@ void translate_ec(struct EC* ec)
                         pA("LB(0, %d);", loop_head);
 
                         translate_ec(ec->child_ptr[1]);
-                        var_read_value(ec->child_ptr[1]->var, "stack_socket");
+                        var_realize_read_value(ec->child_ptr[1]->var, "stack_socket");
                         pA("if (stack_socket == 0) {PLIMM(P3F, %d);}", loop_end);
 
                         translate_ec(ec->child_ptr[3]);
@@ -277,7 +277,7 @@ void translate_ec(struct EC* ec)
                         if (ec->child_len == 0)
                                 pA("fixA = 0;");
                         else
-                                var_read_value(ec->child_ptr[0]->var, "fixA");
+                                var_pre_read_value(ec->child_ptr[0]->var, "fixA");
 
 #ifdef DEBUG_EC_JUMP_STATEMENT
                         pA_mes("EC_JUMP_STATEMENT, EC_OPE_RETURN: ");
@@ -301,16 +301,13 @@ void translate_ec(struct EC* ec)
                         pA_mes("INLINE ARRAY\\n");
 #endif /* DEBUG_EC_INLINE_ASSEMBLER_STATEMENT */
 
-                        if (ec->child_ptr[0]->var->is_lvalue)
-                                var_indirect_read_value(ec->child_ptr[0]->var, tmp);
-                        else
-                                var_read_value(ec->child_ptr[0]->var, tmp);
+                        var_realize_read_value(ec->child_ptr[0]->var, tmp);
                 } else if (ec->type_operator == EC_OPE_ASM_SUBST_RTOV) {
                         translate_ec(ec->child_ptr[0]);
                         const char* tmp = (char*)ec->var->const_variable;
 
                         if (ec->child_ptr[0]->var->is_lvalue) {
-                                var_read_address(ec->child_ptr[0]->var, tmp);
+                                var_pre_read_value(ec->child_ptr[0]->var, tmp);
                                 write_mem(tmp, tmp);
                         } else {
                                 yyerror("syntax err: 有効な左辺値ではありません");
@@ -420,10 +417,7 @@ void translate_ec(struct EC* ec)
                 if (ec->type_operator == EC_OPE_ADDRESS) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
-                        if (ec->var->is_lvalue == 0 && ((ec->var->type & TYPE_ARRAY) == 0))
-                                yyerror("syntax err: 有効な左辺値ではないのでアドレス取得できません");
-
-                        var_read_address(ec->var, "stack_socket");
+                        ec->var = var_read_address(ec->var, "stack_socket");
                         push_stack("stack_socket");
 
                         ec->var->indirect_len++;
@@ -441,19 +435,8 @@ void translate_ec(struct EC* ec)
                 } else if (ec->type_operator == EC_OPE_POINTER) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
-                        if (ec->var->indirect_len <= 0)
-                                yyerror("syntax err: 間接参照の深さが不正です");
-
-                        var_indirect_read_value(ec->var, "stack_socket");
+                        var_indirect_pre_read_value(ec->var, "stack_socket");
                         push_stack("stack_socket");
-
-                        ec->var->indirect_len--;
-
-                        /* This assume it the LValue which is in condition that
-                         * an address was acquired in stack.
-                         */
-                        ec->var->base_ptr = -1;
-                        ec->var->is_lvalue = 1;
                 } else if (ec->type_operator == EC_OPE_INV) {
                         ec->var = __var_func_invert_new("fixA",
                                                         ec->child_ptr[0]->var, "fixL");
@@ -479,45 +462,16 @@ void translate_ec(struct EC* ec)
                                 if (ec->child_ptr[0]->var->dim_len <= 0)
                                         yyerror("syntax err: 配列の添字次元が不正です");
 
-                                var_read_value(ec->child_ptr[1]->var, "fixR");
-                                var_read_address(ec->child_ptr[0]->var, "fixL");
-
-                                *(ec->var) = *(ec->child_ptr[0]->var);
-
-                                ec->var->unit_total_len /= ec->var->unit_len[0];
-
-                                /* To remove the subscript of the most high-dimentional
-                                 * side, To reconfigure the var->unit_len[].
-                                 */
-                                ec->var->dim_len--;
-                                int32_t i;
-                                for (i = 0; i < ec->var->dim_len; i++)
-                                        ec->var->unit_len[i] = ec->var->unit_len[i + 1];
-
-                                pA("fixL += fixR * %d;", ec->var->unit_total_len);
-                                push_stack("fixL");
-
-                                if (ec->var->dim_len == 0)
-                                        ec->var->is_lvalue = 1;
-                                else
-                                        ec->var->is_lvalue = 0;
-
-                                ec->var->base_ptr = -1;
+                                var_realize_read_value(ec->child_ptr[1]->var, "stack_socket");
+                                *(ec->var) = *(var_pre_read_value(ec->child_ptr[0]->var, "stack_socket"));
+                                push_stack("stack_socket");
                         } else if (ec->child_ptr[0]->var->indirect_len >= 1) {
                                 ec->var = __var_func_add_new("fixA",
                                                              ec->child_ptr[0]->var, "fixL",
                                                              ec->child_ptr[1]->var, "fixR");
 
-                                var_indirect_read_value(ec->var, "stack_socket");
+                                ec->var = var_indirect_pre_read_value(ec->var, "stack_socket");
                                 push_stack("stack_socket");
-
-                                ec->var->indirect_len--;
-
-                                /* This assume it the LValue which is in condition that
-                                 * an address was acquired in stack.
-                                 */
-                                ec->var->base_ptr = -1;
-                                ec->var->is_lvalue = 1;
                         } else {
                                 yyerror("syntax err: 非ポインター型スカラー変数への添字によるアクセスは不正です");
                         }
