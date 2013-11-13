@@ -148,23 +148,45 @@ void var_read_value_dummy(struct Var* var)
                 pop_stack_dummy();
 }
 
-static void var_read_array_address(struct Var* var, const char* register_name)
+/* (register_name = index) -> (register_name = address) */
+static struct Var*
+var_read_array_address(struct Var* var, const char* register_name)
 {
+        /* To remove the subscript of the most high-dimentional
+        * side, To reconfigure the var->unit_len[].
+        */
+        var->dim_len--;
+        if (var->dim_len < 0)
+                yyerror("var_read_array_address(), dim_len < 0");
+
+        var->unit_total_len /= var->unit_len[0];
+
+        pA("%s *= %d;", register_name, var->unit_total_len);
+
+        int32_t i;
+        for (i = 0; i < var->dim_len; i++)
+                var->unit_len[i] = var->unit_len[i + 1];
+
         if (var->is_lvalue) {
                 if (var->base_ptr != -1) {
-                        pA("%s = %d;", register_name, var->base_ptr);
+                        pA("%s += %d;", register_name, var->base_ptr);
 
                         if (var->type & TYPE_AUTO)
                                 pA("%s += stack_frame;", register_name);
+
+                        var->base_ptr = -1;
                 } else {
                         pop_stack(register_name);
                 }
         } else {
                 yyerror("syntax err: 左辺値ではない配列変数のアドレスを得ようとしました");
         }
+
+        return var;
 }
 
-static void var_read_scalar_address(struct Var* var, const char* register_name)
+static struct Var*
+var_read_scalar_address(struct Var* var, const char* register_name)
 {
         if (var->is_lvalue) {
                 if (var->base_ptr != -1) {
@@ -172,12 +194,16 @@ static void var_read_scalar_address(struct Var* var, const char* register_name)
 
                         if (var->type & TYPE_AUTO)
                                 pA("%s += stack_frame;", register_name);
+
+                        var->base_ptr = -1;
                 } else {
                         pop_stack(register_name);
                 }
         } else {
                 yyerror("syntax err: 左辺値ではない変数のアドレスを得ようとしました");
         }
+
+        return var;
 }
 
 /* A read address from variable.
@@ -185,54 +211,84 @@ static void var_read_scalar_address(struct Var* var, const char* register_name)
  * In the case LValue, Diverege to indirect reference or direct reference
  * depending on a value of Var->is_lvalue and Var->base_ptr.
  */
-void var_read_address(struct Var* var, const char* register_name)
+struct Var*
+var_read_address(struct Var* var, const char* register_name)
 {
         if (var->type & TYPE_ARRAY)
-                var_read_array_address(var, register_name);
+                var = var_read_array_address(var, register_name);
         else
-                var_read_scalar_address(var, register_name);
+                var = var_read_scalar_address(var, register_name);
+
+        return var;
 }
 
-static void var_read_array_value(struct Var* var, const char* register_name)
+static struct Var*
+var_pre_read_array_value(struct Var* var, const char* register_name)
 {
         if (var->is_lvalue) {
-                var_read_array_address(var, register_name);
-
-                if (var->dim_len == 0)
-                        read_mem(register_name, register_name);
+                var = var_read_array_address(var, register_name);
         } else {
-                yyerror("system err: var_read_array_value()");
+                yyerror("system err: var_pre_read_array_value()");
         }
+
+        return var;
 }
 
-static void var_read_scalar_value(struct Var* var, const char* register_name)
+static struct Var*
+var_pre_read_scalar_value(struct Var* var, const char* register_name)
 {
         if (var->is_lvalue) {
-                var_read_scalar_address(var, register_name);
-                read_mem(register_name, register_name);
+                var = var_read_scalar_address(var, register_name);
         } else {
-                pop_stack_dummy();
+                var_read_value_dummy(var);
                 pA("%s = stack_head;", register_name);
         }
+
+        return var;
 }
 
-/* A read value from variable.
- * In the case RValue, Make a pop from stack.
- * In the case LValue, Diverege to indirect reference or direct reference
- * depending on a value of Var->is_lvalue and Var->base_ptr.
+/* A pre read value from variable.
  */
-void var_read_value(struct Var* var, const char* register_name)
+struct Var*
+var_pre_read_value(struct Var* var, const char* register_name)
 {
         if (var->type & TYPE_ARRAY)
-                var_read_array_value(var, register_name);
+                var = var_pre_read_array_value(var, register_name);
         else
-                var_read_scalar_value(var, register_name);
+                var = var_pre_read_scalar_value(var, register_name);
+
+        return var;
 }
 
-void var_indirect_read_value(struct Var* var, const char* register_name)
+/* A read value of realized address from variable. 
+ */
+struct Var*
+var_realize_read_value(struct Var* var, const char* register_name)
 {
-        var_read_value(var, register_name);
+        var = var_pre_read_value(var, register_name);
+        if (var->is_lvalue) {
+                read_mem(register_name, register_name);
+                var->is_lvalue = 0;
+        }
+
+        return var;
+}
+
+/* A pre read value of indirect from variable.
+ */
+struct Var*
+var_indirect_pre_read_value(struct Var* var, const char* register_name)
+{
+        var = var_realize_read_value(var, register_name);
+        if (var->indirect_len <= 0)
+                yyerror("system err var_indirect_pre_read_value()");
+
         read_mem(register_name, register_name);
+
+        var->indirect_len--;
+        var->is_lvalue = 1;
+
+        return var;
 }
 
 /* 現在のlocal_varlist_headの値をlocal_varlist_scopeへプッシュする

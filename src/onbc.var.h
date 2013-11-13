@@ -71,10 +71,11 @@ struct Var* var_set_param(struct Var* var,
                           void* const_valiable);
 struct Var* new_var(void);
 void free_var(struct Var* var);
-void var_read_value(struct Var* var, const char* register_name);
 void var_read_value_dummy(struct Var* var);
-void var_read_address(struct Var* var, const char* register_name);
-void var_indirect_read_value(struct Var* var, const char* register_name);
+struct Var* var_read_address(struct Var* var, const char* register_name);
+struct Var* var_pre_read_value(struct Var* var, const char* register_name);
+struct Var* var_realize_read_value(struct Var* var, const char* register_name);
+struct Var* var_indirect_pre_read_value(struct Var* var, const char* register_name);
 void local_varlist_scope_push(void);
 void local_varlist_scope_pop(void);
 int32_t var_get_type_to_size(struct Var* var);
