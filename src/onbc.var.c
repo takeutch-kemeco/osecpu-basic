@@ -283,8 +283,6 @@ var_indirect_pre_read_value(struct Var* var, const char* register_name)
         if (var->indirect_len <= 0)
                 yyerror("system err var_indirect_pre_read_value()");
 
-        read_mem(register_name, register_name);
-
         var->indirect_len--;
         var->is_lvalue = 1;
 
