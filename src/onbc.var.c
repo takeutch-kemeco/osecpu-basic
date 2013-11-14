@@ -236,12 +236,10 @@ var_pre_read_array_value(struct Var* var, const char* register_name)
 static struct Var*
 var_pre_read_scalar_value(struct Var* var, const char* register_name)
 {
-        if (var->is_lvalue) {
+        if (var->is_lvalue)
                 var = var_read_scalar_address(var, register_name);
-        } else {
-                var_read_value_dummy(var);
-                pA("%s = stack_head;", register_name);
-        }
+        else
+                pop_stack(register_name);
 
         return var;
 }
