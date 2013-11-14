@@ -225,11 +225,10 @@ var_read_address(struct Var* var, const char* register_name)
 static struct Var*
 var_pre_read_array_value(struct Var* var, const char* register_name)
 {
-        if (var->is_lvalue) {
+        if (var->is_lvalue)
                 var = var_read_array_address(var, register_name);
-        } else {
+        else
                 yyerror("system err: var_pre_read_array_value()");
-        }
 
         return var;
 }
