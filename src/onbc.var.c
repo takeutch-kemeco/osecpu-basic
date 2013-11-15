@@ -166,7 +166,10 @@ var_read_array_address(struct Var* var, const char* register_name)
 
         if (var->is_lvalue) {
                 if (var->base_ptr != -1) {
-                        pA("%s += %d;", register_name, var->base_ptr);
+                        if (var->dim_len >= 1)
+                                pA("%s += %d;", register_name, var->base_ptr);
+                        else
+                                pA("%s = %d;", register_name, var->base_ptr);
 
                         if (var->type & TYPE_AUTO)
                                 pA("%s += stack_frame;", register_name);
