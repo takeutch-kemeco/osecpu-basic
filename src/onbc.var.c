@@ -263,16 +263,41 @@ var_pre_read_value(struct Var* var, const char* register_name)
         return var;
 }
 
-/* A read value of realized address from variable. 
- */
-struct Var*
-var_realize_read_value(struct Var* var, const char* register_name)
+static struct Var*
+var_realize_read_array_value(struct Var* var, const char* register_name)
+{
+        pA("%s = 0;", register_name);
+        var = var_pre_read_value(var, register_name);
+
+        if (var->dim_len == 0)
+                read_mem(register_name, register_name);
+
+        var->is_lvalue = 0;
+
+        return var;
+}
+
+static struct Var*
+var_realize_read_scalar_value(struct Var* var, const char* register_name)
 {
         var = var_pre_read_value(var, register_name);
         if (var->is_lvalue) {
                 read_mem(register_name, register_name);
                 var->is_lvalue = 0;
         }
+
+        return var;
+}
+
+/* A read value of realized address from variable.
+ */
+struct Var*
+var_realize_read_value(struct Var* var, const char* register_name)
+{
+        if (var->type & TYPE_ARRAY)
+                var = var_realize_read_array_value(var, register_name);
+        else
+                var = var_realize_read_scalar_value(var, register_name);
 
         return var;
 }
