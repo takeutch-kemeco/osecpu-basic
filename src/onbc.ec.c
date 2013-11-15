@@ -417,6 +417,9 @@ void translate_ec(struct EC* ec)
                 if (ec->type_operator == EC_OPE_ADDRESS) {
                         *(ec->var) = *(ec->child_ptr[0]->var);
 
+                        if (ec->var->type & TYPE_ARRAY)
+                                ec->var->dim_len = 0;
+
                         ec->var = var_read_address(ec->var, "stack_socket");
                         push_stack("stack_socket");
 
