@@ -156,15 +156,12 @@ var_read_array_address(struct Var* var, const char* register_name)
         * side, To reconfigure the var->unit_len[].
         */
         if (var->dim_len >= 1) {
-                var->dim_len--;
                 var->unit_total_len /= var->unit_len[0];
                 pA("%s *= %d;", register_name, var->unit_total_len);
 
                 int32_t i;
-                for (i = 0; i < var->dim_len; i++)
+                for (i = 0; i < var->dim_len - 1; i++)
                         var->unit_len[i] = var->unit_len[i + 1];
-        } else {
-                pA("%s = 0;", register_name);
         }
 
         if (var->is_lvalue) {
@@ -176,8 +173,13 @@ var_read_array_address(struct Var* var, const char* register_name)
 
                         var->base_ptr = -1;
                 } else {
-                        pop_stack("stack_tmp");
-                        pA("%s += stack_tmp;", register_name);
+                        if (var->dim_len >= 1) {
+                                var->dim_len--;
+                                pop_stack("stack_tmp");
+                                pA("%s += stack_tmp;", register_name);
+                        } else {
+                                pop_stack(register_name);
+                        }
                 }
         } else {
                 yyerror("syntax err: 左辺値ではない配列変数のアドレスを得ようとしました");
