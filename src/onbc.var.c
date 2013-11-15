@@ -163,6 +163,8 @@ var_read_array_address(struct Var* var, const char* register_name)
                 int32_t i;
                 for (i = 0; i < var->dim_len; i++)
                         var->unit_len[i] = var->unit_len[i + 1];
+        } else {
+                pA("%s = 0;", register_name);
         }
 
         if (var->is_lvalue) {
@@ -174,12 +176,8 @@ var_read_array_address(struct Var* var, const char* register_name)
 
                         var->base_ptr = -1;
                 } else {
-                        if (var->dim_len >= 1) {
-                                pop_stack("stack_tmp");
-                                pA("%s += stack_tmp;", register_name);
-                        } else {
-                                pop_stack(register_name);
-                        }
+                        pop_stack("stack_tmp");
+                        pA("%s += stack_tmp;", register_name);
                 }
         } else {
                 yyerror("syntax err: 左辺値ではない配列変数のアドレスを得ようとしました");
