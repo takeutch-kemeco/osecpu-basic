@@ -1,12 +1,11 @@
-#include "onbc.mem.h"
+#include <stdint.h>
 
 #ifndef __ONBC_WINDSTACK_H__
 #define __ONBC_WINDSTACK_H__
 
-#define WINDSTACK_BEGIN_ADDRESS (MEM_SIZE - 0x20000)
-
-void push_windstack(const char* register_name);
-void pop_windstack(const char* register_name);
+void push_windstack(const int32_t size);
+int32_t pop_windstack(void);
+void nest_windstack(void);
 void init_windstack(void);
 
 #endif /* __ONBC_WINDSTACK_H__ */

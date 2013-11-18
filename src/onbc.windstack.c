@@ -16,54 +16,46 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+#include <stdint.h>
 #include "onbc.print.h"
-#include "onbc.mem.h"
-#include "onbc.windstack.h"
 
-/* 関数呼び出し時にスタックに積まれる各引数のアドレスをスタックするための機構を提供する。
- * すなわち、各引数の実際の値の位置をプッシュ・ポップするためだけの、専用のスタック。
- * 実際には mem の WINDSTACK_BEGIN_ADDRESS 以降のメモリー領域を用いる。
- */
+#define WINDSTACK_POOL_LEN 0x10000;
+static int32_t windstack_pool[WINDSTACK_POOL_LEN];
 
-/* 任意のレジスターの値をワインドスタックにプッシュする。
- * 実際にはレジスターの値には引数のアドレスが入っている想定。
- */
-void push_windstack(const char* register_name)
+static int32_t cur_windstack_head = 0;
+
+static int32_t cur_wind_offset = 0;
+
+void push_windstack(const int32_t size)
 {
-        write_mem(register_name, "windstack_head");
-        pA("windstack_head++;");
+        cur_windstack_head++;
+        if (cur_windstack_head >= WINDSTACK_POOL_LEN)
+                yyerror("system err: push_windstack()");
 
-#ifdef DEBUG_WINDSTACK
-        pA_mes("push_windstack(): ");
-        pA_reg("windstack_head");
-        pA_mes(", ");
-        pA_reg(register_name);
-        pA_mes("\\n");
-#endif /* DEBUG_WINDSTACK */
+        cur_wind_offset += size;
+        windstack_pool[cur_windstack_head] = cur_wind_offset;
 }
 
-/* 任意のレジスターへワインドスタックからポップする。
- * 実際にはレジスターへは引数のアドレスが入る想定。（プッシュしたのが正しく引数アドレスであれば）
- */
-void pop_windstack(const char* register_name)
+int32_t pop_windstack(void)
 {
-        pA("windstack_head--;");
-        read_mem(register_name, "windstack_head");
+        const int32_t size = windstack_pool[cur_windstack_head];
 
-#ifdef DEBUG_WINDSTAC
-        pA_mes("pop_windstack(): ");
-        pA_reg("windstack_head");
-        pA_mes(", ");
-        pA_reg(register_name);
-        pA_mes("\\n");
-#endif /* DEBUG_WINDSTACK */
+        cur_windstack_head--;
+        if (cur_windstack_head < 0)
+                yyerror("system err: pop_windstack()");
+
+        cur_wind_offset = windstack_pool[cur_windstack_head];
+
+        return size;
 }
 
-/* ワインドスタックの初期化
- */
+void nest_windstack(void)
+{
+        cur_wind_offset = 0;
+}
+
 void init_windstack(void)
 {
-        pB("SInt32 windstack_head:R16;");
-
-        pB("windstack_head = %d;", WINDSTACK_BEGIN_ADDRESS);
+        cur_wind_offset = 0;
+        cur_windstack_head = 0;
 }
