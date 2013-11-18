@@ -19,7 +19,7 @@
 #include <stdint.h>
 #include "onbc.print.h"
 
-#define WINDSTACK_POOL_LEN 0x10000;
+#define WINDSTACK_POOL_LEN 0x10000
 static int32_t windstack_pool[WINDSTACK_POOL_LEN];
 
 static int32_t cur_windstack_head = 0;
