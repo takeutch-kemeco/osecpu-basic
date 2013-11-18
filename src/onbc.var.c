@@ -166,10 +166,14 @@ var_read_array_address(struct Var* var, const char* register_name)
 
         if (var->is_lvalue) {
                 if (var->base_ptr != -1) {
+                        int32_t bp = var->base_ptr;
+                        if (var->type & TYPE_WIND)
+                                bp = -bp;
+
                         if (var->dim_len >= 1)
-                                pA("%s += %d;", register_name, var->base_ptr);
+                                pA("%s += %d;", register_name, bp);
                         else
-                                pA("%s = %d;", register_name, var->base_ptr);
+                                pA("%s = %d;", register_name, bp);
 
                         if (var->type & TYPE_AUTO)
                                 pA("%s += stack_frame;", register_name);
@@ -196,7 +200,11 @@ var_read_scalar_address(struct Var* var, const char* register_name)
 {
         if (var->is_lvalue) {
                 if (var->base_ptr != -1) {
-                        pA("%s = %d;", register_name, var->base_ptr);
+                        int32_t bp = var->base_ptr;
+                        if (var->type & TYPE_WIND)
+                                bp = -bp;
+
+                        pA("%s = %d;", register_name, bp);
 
                         if (var->type & TYPE_AUTO)
                                 pA("%s += stack_frame;", register_name);
@@ -582,24 +590,6 @@ static struct Var* var_initializer_local_alloc(struct Var* var)
         return var;
 }
 
-/* Generate instance of local variable.
- * When working space setting using the address that performed pop from wind stack.
- */
-static struct Var* var_initializer_local_wind(struct Var* var)
-{
-        const int32_t type_size = get_type_to_size(var->type, var->indirect_len);
-        const int32_t total_size = var->unit_total_len * type_size;
-
-        pop_windstack("stack_tmp");
-        pA("stack_socket = stack_frame + %d;", var->base_ptr);
-        read_mem("stack_tmp", "stack_tmp");
-        write_mem("stack_tmp", "stack_socket");
-
-        pA("stack_head = stack_frame + %d;", var->base_ptr + total_size);
-
-        return var;
-}
-
 /* ローカル変数のインスタンス生成
  *
  * 配列型ローカル変数の、スタック上でのメモリーイメージ:
@@ -640,9 +630,11 @@ static struct Var* var_initializer_local_new(struct Var* var, const int32_t type
 
         /* 変数のメモリー領域の確保方法の違い */
         if (type & TYPE_WIND)
-                return var_initializer_local_wind(ret);
+                ret->base_ptr = pop_windstack();
         else
-                return var_initializer_local_alloc(ret);
+                ret = var_initializer_local_alloc(ret);
+
+        return ret;
 }
 
 /* グローバル変数のインスタンス生成
