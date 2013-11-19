@@ -23,7 +23,6 @@
 #include "onbc.print.h"
 #include "onbc.iden.h"
 #include "onbc.stack.h"
-#include "onbc.windstack.h"
 #include "onbc.var.h"
 
 /* ローカル、グローバル、それぞれの変数スペックのリスト。
@@ -591,21 +590,6 @@ static struct Var* var_initializer_local_alloc(struct Var* var)
 }
 
 /* ローカル変数のインスタンス生成
- *
- * 配列型ローカル変数の、スタック上でのメモリーイメージ:
- *      3 : ↑
- *      2 : 実際の値 x[1] の格納位置
- *      1 : 実際の値 x[0] の格納位置
- *      0 : 変数読み書き時に参照する位置。 ここにx[0]へのアドレスが入る
- *
- * 関数引数の場合(ワインドの場合)のメモリーイメージ:
- *      0 : 変数読み書き時に参照する位置。 ここに間接参照のアドレス (アドレス x + 0) が入る
- *
- *      x + 2 : ↑
- *      x + 1 : どこかに存在する、実際の値 x[1]
- *      x + 0 : どこかに存在する、実際の値 x[0]
- *
- *      p : ワインドスタックからポップした値。ここに x[0] のアドレスを得られる。
  */
 static struct Var* var_initializer_local_new(struct Var* var, const int32_t type)
 {
@@ -614,6 +598,8 @@ static struct Var* var_initializer_local_new(struct Var* var, const int32_t type
 
         if (var->dim_len >= VAR_DIM_MAX)
                 yyerror("syntax err: 配列の次元が高すぎます");
+
+        const int32_t wind_offset = var->base_ptr;
 
         /* これはコンパイル時の変数状態を設定するにすぎない。
          * 実際の動作時のメモリー確保（シーク位置レジスターの移動等）の命令は出力しない。
@@ -630,7 +616,7 @@ static struct Var* var_initializer_local_new(struct Var* var, const int32_t type
 
         /* 変数のメモリー領域の確保方法の違い */
         if (type & TYPE_WIND)
-                ret->base_ptr = pop_windstack();
+                ret->base_ptr += wind_offset;
         else
                 ret = var_initializer_local_alloc(ret);
 
