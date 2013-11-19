@@ -13,7 +13,6 @@ libonbc_la_SOURCES = onbc.print.c onbc.print.h \
                      onbc.mem.c onbc.mem.h \
                      onbc.stack.c onbc.stack.h \
                      onbc.stackframe.c onbc.stackframe.h \
-                     onbc.windstack.c onbc.windstack.h \
                      onbc.callstack.c onbc.callstack.h \
                      onbc.label.c onbc.label.h \
                      onbc.eoe.c onbc.eoe.h \
