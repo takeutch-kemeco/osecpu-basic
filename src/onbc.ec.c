@@ -24,7 +24,6 @@
 #include "onbc.mem.h"
 #include "onbc.stack.h"
 #include "onbc.stackframe.h"
-#include "onbc.windstack.h"
 #include "onbc.callstack.h"
 #include "onbc.var.h"
 #include "onbc.label.h"
@@ -35,11 +34,6 @@
  * __new_var_initializer() の引数に用いることを想定。
  */
 static int32_t cur_declaration_specifiers = 0;
-
-/* これが真の場合は EC_DECLARATOR 時の変数インスタンス生成の場合に、
- * 変数の値が格納されるメモリーアドレスとしてワインドスタックに積まれたアドレスを用いる。
- */
-static int32_t wind_argument_flag = 0;
 
 /* 白紙のECインスタンスをメモリー領域を確保して生成
  */
@@ -79,6 +73,7 @@ void translate_ec(struct EC* ec)
             (ec->type_expression != EC_DIRECT_DECLARATOR) &&
             (ec->type_expression != EC_FUNCTION_DEFINITION) &&
             (ec->type_expression != EC_PARAMETER_DECLARATION) &&
+            (ec->type_expression != EC_PARAMETER_LIST) &&
             (ec->type_expression != EC_DECLARATOR) &&
             (ec->type_expression != EC_PARAMETER_TYPE_LIST) &&
             (ec->type_expression != EC_ARGUMENT_EXPRESSION_LIST) &&
@@ -131,11 +126,6 @@ void translate_ec(struct EC* ec)
                 if (ec->var->type & TYPE_FUNCTION)
                         cur_declaration_specifiers |= TYPE_FUNCTION;
 
-                if (wind_argument_flag) {
-                        cur_declaration_specifiers |= TYPE_WIND;
-                        wind_argument_flag = 0; /* フラグはこのタイミングでクリアする */
-                }
-
                 *(ec->var) = *(var_initializer_new(ec->var, cur_declaration_specifiers));
 
                 if (ec->var->type & TYPE_FUNCTION) {
@@ -160,15 +150,24 @@ void translate_ec(struct EC* ec)
                         translate_ec(ec->child_ptr[0]);
                 }
         } else if (ec->type_expression == EC_PARAMETER_LIST) {
-                /* 何もしない */
-        } else if (ec->type_expression == EC_PARAMETER_DECLARATION) {
-                /* この後の EC_DECLARATION が、
-                 * 引数を関数ローカル変数へセットするための操作であることを示す。
-                 * この後の EC_DECLARATOR 内にて、このフラグはクリアされる。
-                 */
-                wind_argument_flag = 1;
+                if (ec->child_len == 1) {
+                        const int32_t wind_offset = 0;
+                        ec->child_ptr[0]->var->base_ptr = wind_offset;
 
-                cur_declaration_specifiers = ec->var->type;
+                        translate_ec(ec->child_ptr[0]);
+                } else if (ec->child_len == 2) {
+                        translate_ec(ec->child_ptr[0]);
+
+                        const int32_t size = var_get_type_to_size(ec->child_ptr[0]->var);
+                        const int32_t wind_offset = ec->child_ptr[0]->var->base_ptr + size;
+                        ec->child_ptr[1]->var->base_ptr = wind_offset;
+
+                        translate_ec(ec->child_ptr[1]);
+                } else {
+                        yyerror("system err: EC_PARAMETER_LIST");
+                }
+        } else if (ec->type_expression == EC_PARAMETER_DECLARATION) {
+                cur_declaration_specifiers = ec->var->type | TYPE_WIND;
                 translate_ec(ec->child_ptr[0]);
                 *(ec->var) = *(ec->child_ptr[0]->var);
 
@@ -537,9 +536,6 @@ void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_ARGUMENT_EXPRESSION_LIST) {
                 if (ec->child_len >= 1) {
-                        /* This push a current stack position to wind stack. */
-                        push_windstack("stack_head");
-
                         translate_ec(ec->child_ptr[0]);
 
 #ifdef DEBUG_EC_ARGUMENT_EXPRESSION_LIST
