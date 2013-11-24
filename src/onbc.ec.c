@@ -321,8 +321,6 @@ void translate_ec(struct EC* ec)
                         *(ec->var) = *(__var_func_assignment_new("fixA",
                                                                  ec->child_ptr[0]->var, "fixL",
                                                                  ec->child_ptr[1]->var, "fixR"));
-                } else if (ec->type_operator == EC_OPE_LIST) {
-                        /* 何もしない */
                 } else {
                         yyerror("system err: translate_ec(), EC_ASSIGNMENT");
                 }
