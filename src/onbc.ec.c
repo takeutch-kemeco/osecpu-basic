@@ -155,6 +155,7 @@ void translate_ec(struct EC* ec)
                         ec->child_ptr[0]->var->base_ptr = wind_offset;
 
                         translate_ec(ec->child_ptr[0]);
+                        *(ec->var) = *(ec->child_ptr[0]->var);
                 } else if (ec->child_len == 2) {
                         translate_ec(ec->child_ptr[0]);
 
@@ -163,6 +164,7 @@ void translate_ec(struct EC* ec)
                         ec->child_ptr[1]->var->base_ptr = wind_offset;
 
                         translate_ec(ec->child_ptr[1]);
+                        *(ec->var) = *(ec->child_ptr[1]->var);
                 } else {
                         yyerror("system err: EC_PARAMETER_LIST");
                 }
