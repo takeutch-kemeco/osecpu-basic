@@ -535,6 +535,10 @@ void translate_ec(struct EC* ec)
         } else if (ec->type_expression == EC_ARGUMENT_EXPRESSION_LIST) {
                 if (ec->child_len >= 1) {
                         translate_ec(ec->child_ptr[0]);
+                        *(ec->var) = *(ec->child_ptr[0]->var);
+
+                        var_realize_read_value(ec->var, "stack_socket");
+                        push_stack("stack_socket");
 
 #ifdef DEBUG_EC_ARGUMENT_EXPRESSION_LIST
                         pA_mes("after EC_ARGUMENT_EXPRESSION_LIST, ");
