@@ -321,8 +321,10 @@ void translate_ec(struct EC* ec)
                         *(ec->var) = *(__var_func_assignment_new("fixA",
                                                                  ec->child_ptr[0]->var, "fixL",
                                                                  ec->child_ptr[1]->var, "fixR"));
+                } else if (ec->type_operator == EC_OPE_LIST) {
+                        /* 何もしない */
                 } else {
-                        ec->var = var_realize_read_value(ec->var, "fixA");
+                        yyerror("system err: translate_ec(), EC_ASSIGNMENT");
                 }
         } else if (ec->type_expression == EC_CALC) {
                 if (ec->type_operator == EC_OPE_ADD) {

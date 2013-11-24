@@ -710,13 +710,7 @@ expression
         ;
 
 assignment_expression
-        : conditional_expression {
-                struct EC* ec = new_ec();
-                ec->type_expression = EC_ASSIGNMENT;
-                ec->child_ptr[0] = $1;
-                ec->child_len = 1;
-                $$ = ec;
-        }
+        : conditional_expression
         | unary_expression __OPE_SUBST assignment_expression {
                 struct EC* ec = new_ec();
                 ec->type_expression = EC_ASSIGNMENT;
