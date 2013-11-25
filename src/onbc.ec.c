@@ -280,7 +280,7 @@ void translate_ec(struct EC* ec)
                         if (ec->child_len == 0)
                                 pA("fixA = 0;");
                         else
-                                var_pre_read_value(ec->child_ptr[0]->var, "fixA");
+                                var_realize_read_value(ec->child_ptr[0]->var, "fixA");
 
 #ifdef DEBUG_EC_JUMP_STATEMENT
                         pA_mes("EC_JUMP_STATEMENT, EC_OPE_RETURN: ");
