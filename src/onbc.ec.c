@@ -35,6 +35,8 @@
  */
 static int32_t cur_declaration_specifiers = 0;
 
+static int32_t windoffset = 0;
+
 /* 白紙のECインスタンスをメモリー領域を確保して生成
  */
 struct EC* new_ec(void)
@@ -126,6 +128,9 @@ void translate_ec(struct EC* ec)
                 if (ec->var->type & TYPE_FUNCTION)
                         cur_declaration_specifiers |= TYPE_FUNCTION;
 
+                if (cur_declaration_specifiers & TYPE_WIND)
+                        ec->var->base_ptr = windoffset;
+
                 *(ec->var) = *(var_initializer_new(ec->var, cur_declaration_specifiers));
 
                 if (ec->var->type & TYPE_FUNCTION) {
@@ -147,21 +152,15 @@ void translate_ec(struct EC* ec)
 
                 if (ec->child_len == 1) {
                         next_local_varlist_add_set_new_scope = 1;
+                        windoffset = 0;
                         translate_ec(ec->child_ptr[0]);
                 }
         } else if (ec->type_expression == EC_PARAMETER_LIST) {
                 if (ec->child_len == 1) {
-                        const int32_t wind_offset = 0;
-                        ec->child_ptr[0]->var->base_ptr = wind_offset;
-
                         translate_ec(ec->child_ptr[0]);
                         *(ec->var) = *(ec->child_ptr[0]->var);
                 } else if (ec->child_len == 2) {
                         translate_ec(ec->child_ptr[0]);
-
-                        const int32_t size = var_get_type_to_size(ec->child_ptr[0]->var);
-                        const int32_t wind_offset = ec->child_ptr[0]->var->base_ptr + size;
-                        ec->child_ptr[1]->var->base_ptr = wind_offset;
 
                         translate_ec(ec->child_ptr[1]);
                         *(ec->var) = *(ec->child_ptr[1]->var);
@@ -169,9 +168,13 @@ void translate_ec(struct EC* ec)
                         yyerror("system err: EC_PARAMETER_LIST");
                 }
         } else if (ec->type_expression == EC_PARAMETER_DECLARATION) {
+                const int32_t old_windoffset = windoffset;
+printf("old_windoffset:[%d]\n", old_windoffset);
                 cur_declaration_specifiers = ec->var->type | TYPE_WIND;
                 translate_ec(ec->child_ptr[0]);
                 *(ec->var) = *(ec->child_ptr[0]->var);
+
+                windoffset = old_windoffset + ec->var->unit_total_len;
 
 #ifdef DEBUG_EC_PARAMETER_DECLARATION
                 pA_mes("after EC_PARAMETER_DECLARATION, ");
