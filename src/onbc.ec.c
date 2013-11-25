@@ -169,7 +169,6 @@ void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_PARAMETER_DECLARATION) {
                 const int32_t old_windoffset = windoffset;
-printf("old_windoffset:[%d]\n", old_windoffset);
                 cur_declaration_specifiers = ec->var->type | TYPE_WIND;
                 translate_ec(ec->child_ptr[0]);
                 *(ec->var) = *(ec->child_ptr[0]->var);
