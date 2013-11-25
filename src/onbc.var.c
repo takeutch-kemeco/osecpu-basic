@@ -437,6 +437,8 @@ static int32_t get_type_to_size(const int32_t type, const int32_t indirect_len)
                 return 1;
         else if (type & TYPE_DOUBLE)
                 return 1;
+        else if (type & TYPE_FUNCTION)
+                return 1;
         else
                 yyerror("system err: var_get_type_size()");
 }
