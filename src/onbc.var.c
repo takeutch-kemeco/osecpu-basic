@@ -616,7 +616,7 @@ static struct Var* var_initializer_local_new(struct Var* var, const int32_t type
 
         /* 変数のメモリー領域の確保方法の違い */
         if (type & TYPE_WIND)
-                ret->base_ptr += wind_offset;
+                ret->base_ptr = wind_offset + ret->unit_total_len;
         else
                 ret = var_initializer_local_alloc(ret);
 
