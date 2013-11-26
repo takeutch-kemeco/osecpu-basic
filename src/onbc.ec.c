@@ -398,10 +398,19 @@ void translate_ec(struct EC* ec)
                 }
         } else if (ec->type_expression == EC_CAST) {
                 translate_ec(ec->child_ptr[0]);
-                var_normalization_type(ec->var);
-                ec->var->base_ptr = ec->child_ptr[0]->var->base_ptr;
-                ec->var->unit_total_len = ec->child_ptr[0]->var->unit_total_len;
-                ec->var->is_lvalue = ec->child_ptr[0]->var->is_lvalue;
+
+                ec->child_ptr[0]->var = var_normalization_type(ec->child_ptr[0]->var);
+                ec->var = var_normalization_type(ec->var);
+
+                var_realize_read_value(ec->child_ptr[0]->var, "stack_socket");
+                cast_regval(ec->var, ec->child_ptr[0]->var, "stack_socket");
+                push_stack("stack_socket");
+
+                /* We assume it the RValue which is in condition that
+                 * an value was acquired in stack.
+                 */
+                ec->var->base_ptr = -1;
+                ec->var->is_lvalue = 0;
         } else if (ec->type_expression == EC_PRIMARY) {
                 if (ec->type_operator == EC_OPE_VARIABLE) {
                         struct Var* tmp = varlist_search(ec->var->iden);
