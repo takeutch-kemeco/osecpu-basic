@@ -96,14 +96,14 @@ void __print_int(int num)
  *
  * 戻り値: 読み込んだ値。（1ワード）
  */
-int __peek(int *address)
+int __peek(int address)
 {
         int ret;
 
         asm("tmp00" = address);
-        asm("PALMEM0(fixA, T_SINT32, mem_ptr, tmp00);");
+        asm("PALMEM0(tmp01, T_SINT32, mem_ptr, tmp00);");
 
-        asm(ret = "fixA");
+        asm(ret = "tmp01");
         return ret;
 }
 
@@ -122,7 +122,7 @@ int __peek(int *address)
  *
  * 戻り値: 無し
  */
-void __poke(int *address, int value)
+void __poke(int address, int value)
 {
         asm("tmp00" = address);
         asm("tmp01" = value);
