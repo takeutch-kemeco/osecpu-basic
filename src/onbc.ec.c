@@ -310,8 +310,8 @@ void translate_ec(struct EC* ec)
                         const char* tmp = (char*)ec->var->const_variable;
 
                         if (ec->child_ptr[0]->var->is_lvalue) {
-                                var_pre_read_value(ec->child_ptr[0]->var, tmp);
-                                write_mem(tmp, tmp);
+                                var_pre_read_value(ec->child_ptr[0]->var, "stack_socket");
+                                write_mem(tmp, "stack_socket");
                         } else {
                                 yyerror("syntax err: 有効な左辺値ではありません");
                         }
